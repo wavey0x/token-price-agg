@@ -25,7 +25,7 @@ Failure behavior:
 
 Query params:
 
-- `chain_id` (required, int)
+- `chain_id` (optional, int, default `1`)
 - `token` (required, EVM address)
 - `providers` (optional, repeated or csv)
 - `is_vault` (optional, bool, default `false`)
@@ -61,7 +61,7 @@ Key fields:
 
 Query params:
 
-- `chain_id` (required, int)
+- `chain_id` (optional, int, default `1`)
 - `token_in` (required, EVM address)
 - `token_out` (required, EVM address)
 - `amount_in` (required, positive integer string)

@@ -132,6 +132,27 @@ def test_price_endpoint_default_precedence_from_config(monkeypatch: pytest.Monke
     assert payload["price_data"]["provider"] == "defillama"
 
 
+def test_price_endpoint_defaults_chain_id_to_mainnet_when_missing() -> None:
+    token_checksum = token("USDC")
+
+    with respx.mock(assert_all_called=True) as router:
+        mock_defillama_price(router, token_checksum, "USDC")
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/v1/price",
+                params={
+                    "token": token_lower("USDC"),
+                    "providers": "defillama",
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain_id"] == 1
+    assert payload["providers"]["defillama"]["status"] == "ok"
+
+
 def test_price_endpoint_explicit_unavailable_provider_returns_result_not_http_error() -> None:
     with TestClient(app) as client:
         response = client.get(

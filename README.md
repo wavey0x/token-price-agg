@@ -268,6 +268,7 @@ Quote response mirrors this shape using:
 Notes:
 - Address inputs are case-insensitive.
 - Response addresses are always EIP-55 checksummed.
+- `chain_id` defaults to `1` (Ethereum mainnet) when omitted.
 - `is_vault` defaults to `false`.
 - `value_usd` has been removed.
 

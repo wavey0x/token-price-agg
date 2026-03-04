@@ -154,6 +154,40 @@ def test_quote_endpoint_include_route_true_preserves_route() -> None:
     assert payload["quote"]["route"] == {"hops": 2}
 
 
+def test_quote_endpoint_defaults_chain_id_to_mainnet_when_missing() -> None:
+    with respx.mock(assert_all_called=True) as router:
+        router.get("https://www.curve.finance/api/router/v1/routes").mock(
+            return_value=Response(
+                200,
+                json={
+                    "data": {
+                        "amountOut": "1000000",
+                        "amountOutMin": "990000",
+                        "estimatedGas": 210000,
+                        "priceImpact": "0.002",
+                        "route": {"hops": 2},
+                    }
+                },
+            )
+        )
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/v1/quote",
+                params={
+                    "token_in": token_lower("CRV"),
+                    "token_out": token_lower("USDC"),
+                    "amount_in": "1000000000000000000",
+                    "providers": "curve",
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain_id"] == 1
+    assert payload["providers"]["curve"]["status"] == "ok"
+
+
 def test_quote_endpoint_plugin_exception_returns_internal_error_not_http_500(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

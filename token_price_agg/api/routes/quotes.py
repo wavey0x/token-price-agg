@@ -29,10 +29,10 @@ router = APIRouter(tags=["quote"])
 @router.get("/v1/quote", response_model=QuoteAggregateResponse)
 async def quote(
     request: Request,
-    chain_id: Annotated[int, Query(gt=0)],
     token_in: Annotated[str, Query(min_length=42)],
     token_out: Annotated[str, Query(min_length=42)],
     amount_in: Annotated[str, Query()],
+    chain_id: Annotated[int, Query(gt=0)] = 1,
     providers: Annotated[list[str] | None, Query()] = None,
     include_route: bool = False,
     is_vault: bool = False,

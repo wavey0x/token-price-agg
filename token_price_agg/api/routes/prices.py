@@ -29,8 +29,8 @@ router = APIRouter(tags=["price"])
 @router.get("/v1/price", response_model=PriceAggregateResponse)
 async def price(
     request: Request,
-    chain_id: Annotated[int, Query(gt=0)],
     token: Annotated[str, Query(min_length=42)],
+    chain_id: Annotated[int, Query(gt=0)] = 1,
     providers: Annotated[list[str] | None, Query()] = None,
     is_vault: bool = False,
     aggregator: AggregatorService = Depends(get_aggregator_service),
