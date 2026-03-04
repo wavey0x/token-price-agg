@@ -1,0 +1,21 @@
+[timeouts]
+provider_request_timeout_ms = 800
+provider_max_retries = 0
+
+[concurrency]
+provider_fanout_per_request = 8
+provider_global_limit = 200
+web3_limit = 32
+
+[providers]
+enabled = ["defillama", "curve", "lifi", "enso"]
+price_priority = []
+quote_priority = []
+
+[token_metadata]
+db_path = "data/token_metadata.sqlite3"
+
+[security]
+api_key_auth_enabled = false
+api_key_db_path = "data/api_keys.sqlite3"
+api_key_rate_limit_rpm = 300

@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "token-price-agg"
+version = "0.1.0"
+description = "Ethereum token price/quote aggregator"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn>=0.34.0",
+  "httpx>=0.28.0",
+  "pydantic>=2.10.0",
+  "pydantic-settings>=2.7.0",
+  "web3>=7.8.0",
+  "eth-utils>=5.1.0",
+  "tenacity>=9.0.0",
+  "orjson>=3.10.0",
+  "prometheus-client>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.25.0",
+  "pytest-cov>=6.0.0",
+  "respx>=0.22.0",
+  "ruff>=0.9.0",
+  "mypy>=1.14.0",
+]
+docs = [
+  "mkdocs>=1.6.0,<2.0.0",
+  "mkdocs-material>=9.5.0",
+]
+
+[project.scripts]
+api-key = "token_price_agg.tools.api_key:main"
+
+[tool.setuptools.packages.find]
+include = ["token_price_agg*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q --cov=token_price_agg --cov-report=term-missing"
+asyncio_mode = "auto"
+testpaths = ["token_price_agg/tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+plugins = []
+exclude = [
+  "token_price_agg/vault/abi",
+]
+
+[[tool.mypy.overrides]]
+module = [
+  "respx",
+  "prometheus_client.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF", "C90"]
+ignore = ["B008", "UP017", "UP040", "UP042"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 13
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

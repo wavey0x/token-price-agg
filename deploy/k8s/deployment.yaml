@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: token-price-agg
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: token-price-agg
+  template:
+    metadata:
+      labels:
+        app: token-price-agg
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+        token-price-agg.io/probe-auth-note: "If API_KEY_AUTH_ENABLED=true, replace httpGet probes with authenticated exec probes."
+    spec:
+      containers:
+        - name: app
+          image: token-price-agg:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: token-price-agg-secrets
+            - configMapRef:
+                name: token-price-agg-config
+          readinessProbe:
+            httpGet:
+              path: /v1/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: token-price-agg
+spec:
+  selector:
+    app: token-price-agg
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

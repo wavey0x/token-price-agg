@@ -1,0 +1,90 @@
+groups:
+  - name: token-price-agg
+    rules:
+      - alert: TokenPriceApiHigh5xxRatio
+        expr: |
+          (
+            sum(rate(token_price_agg_http_requests_total{status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(token_price_agg_http_requests_total[5m])), 1)
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: token-price-agg
+        annotations:
+          summary: "token-price-agg high 5xx ratio"
+          description: "5xx ratio has exceeded 2% over the last 10 minutes."
+
+      - alert: TokenPriceApiPriceP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(token_price_agg_http_request_latency_seconds_bucket{endpoint="/v1/price",method="GET"}[10m])
+            )
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: token-price-agg
+        annotations:
+          summary: "token-price-agg /v1/price p95 latency high"
+          description: "p95 latency for /v1/price is above 0.9s for 10m."
+
+      - alert: TokenPriceApiQuoteP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(token_price_agg_http_request_latency_seconds_bucket{endpoint="/v1/quote",method="GET"}[10m])
+            )
+          ) > 1.2
+        for: 10m
+        labels:
+          severity: warning
+          service: token-price-agg
+        annotations:
+          summary: "token-price-agg /v1/quote p95 latency high"
+          description: "p95 latency for /v1/quote is above 1.2s for 10m."
+
+      - alert: TokenPriceApiPartialResponsesHigh
+        expr: |
+          (
+            sum(rate(token_price_agg_partial_responses_total[10m]))
+            /
+            clamp_min(
+              sum(rate(token_price_agg_http_requests_total{endpoint=~"/v1/price|/v1/quote",method="GET"}[10m])),
+              1
+            )
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: token-price-agg
+        annotations:
+          summary: "token-price-agg partial response rate high"
+          description: "Partial response rate exceeded 20% over the last 10 minutes."
+
+      - alert: TokenPriceApiProviderTimeoutSpike
+        expr: |
+          sum by (provider) (
+            rate(token_price_agg_provider_calls_total{status="timeout"}[5m])
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: token-price-agg
+        annotations:
+          summary: "token-price-agg provider timeout spike"
+          description: "Provider {{ $labels.provider }} timeout rate exceeded threshold."
+
+      - alert: TokenPriceApiProviderUnavailable
+        expr: token_price_agg_provider_available == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: token-price-agg
+        annotations:
+          summary: "token-price-agg provider unavailable"
+          description: "Provider {{ $labels.provider }} has been unavailable for more than 15 minutes."

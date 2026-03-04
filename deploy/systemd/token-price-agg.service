@@ -1,0 +1,20 @@
+[Unit]
+Description=Token Price Agg
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/token-price-agg
+EnvironmentFile=/opt/token-price-agg/.env
+ExecStart=/opt/token-price-agg/.venv/bin/uvicorn token_price_agg.app.main:app --host 0.0.0.0 --port 8000
+# If API_KEY_AUTH_ENABLED=true, ensure external health/readiness checks send
+# Authorization: Bearer <api-key> for /v1/* endpoints.
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

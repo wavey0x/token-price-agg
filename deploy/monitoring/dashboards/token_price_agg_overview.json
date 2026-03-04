@@ -1,0 +1,69 @@
+{
+  "title": "Token Price Agg Overview",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "targets": [
+        {
+          "expr": "sum by (endpoint, method) (rate(token_price_agg_http_requests_total[5m]))",
+          "legendFormat": "{{endpoint}} {{method}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Error Ratio (5xx)",
+      "targets": [
+        {
+          "expr": "sum(rate(token_price_agg_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(token_price_agg_http_requests_total[5m])), 1)",
+          "legendFormat": "5xx ratio"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 HTTP Latency",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, endpoint, method) (rate(token_price_agg_http_request_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} {{method}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider Call Rate by Status",
+      "targets": [
+        {
+          "expr": "sum by (provider, status) (rate(token_price_agg_provider_calls_total[5m]))",
+          "legendFormat": "{{provider}} {{status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Partial Response Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(token_price_agg_partial_responses_total[5m]))",
+          "legendFormat": "partial responses/s"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Provider Availability",
+      "targets": [
+        {
+          "expr": "token_price_agg_provider_available",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    }
+  ]
+}

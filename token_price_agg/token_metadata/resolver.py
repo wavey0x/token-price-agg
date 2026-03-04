@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+import logging
+
+from token_price_agg.app.config import Settings
+from token_price_agg.core.models import PriceResult, QuoteResult, TokenMetadata, TokenRef
+from token_price_agg.token_metadata.cache import TokenMetadataCache
+from token_price_agg.token_metadata.onchain import fetch_onchain_metadata
+from token_price_agg.token_metadata.policy import (
+    hints_from_refs,
+    merge_metadata,
+    resolve_logo_for_response,
+)
+from token_price_agg.web3.client import AsyncRpcClient
+
+_LOGGER = logging.getLogger("token_price_agg.token_metadata")
+
+
+class TokenMetadataResolver:
+    def __init__(self, settings: Settings) -> None:
+        self._cache = TokenMetadataCache(db_path=settings.token_metadata_db_path)
+        self._rpc = AsyncRpcClient(rpc_urls=settings.rpc_urls)
+
+    async def resolve_from_price_results(
+        self,
+        *,
+        chain_id: int,
+        request_token: TokenRef,
+        results: list[PriceResult],
+    ) -> dict[str, TokenMetadata]:
+        refs = [request_token]
+        for result in results:
+            if result.token is not None:
+                refs.append(result.token)
+            if result.vault_context is not None:
+                refs.append(
+                    TokenRef(chain_id=chain_id, address=result.vault_context.underlying_token)
+                )
+        return await self._resolve(chain_id=chain_id, refs=refs, source="provider")
+
+    async def resolve_from_quote_results(
+        self,
+        *,
+        chain_id: int,
+        request_token_in: TokenRef,
+        request_token_out: TokenRef,
+        results: list[QuoteResult],
+    ) -> dict[str, TokenMetadata]:
+        refs = [request_token_in, request_token_out]
+        for result in results:
+            if result.token_in is not None:
+                refs.append(result.token_in)
+            if result.token_out is not None:
+                refs.append(result.token_out)
+            if result.vault_context is not None:
+                refs.append(
+                    TokenRef(chain_id=chain_id, address=result.vault_context.underlying_token)
+                )
+        return await self._resolve(chain_id=chain_id, refs=refs, source="provider")
+
+    async def _resolve(
+        self,
+        *,
+        chain_id: int,
+        refs: list[TokenRef],
+        source: str,
+    ) -> dict[str, TokenMetadata]:
+        unique_addresses: list[str] = []
+        seen: set[str] = set()
+        for ref in refs:
+            if ref.address in seen:
+                continue
+            seen.add(ref.address)
+            unique_addresses.append(ref.address)
+
+        if not unique_addresses:
+            return {}
+
+        cached = self._cache.get_many(chain_id=chain_id, addresses=unique_addresses)
+        hinted = hints_from_refs(refs, chain_id=chain_id)
+
+        merged: dict[str, TokenMetadata] = {}
+        for address in unique_addresses:
+            metadata = cached.get(address)
+            hint = hinted.get(address)
+            merged[address] = merge_metadata(
+                chain_id=chain_id,
+                address=address,
+                cached=metadata,
+                hint=hint,
+                default_source=source,
+            )
+
+        unresolved = [
+            address
+            for address, metadata in merged.items()
+            if not metadata.is_native and (metadata.symbol is None or metadata.decimals is None)
+        ]
+        onchain = await self._fetch_onchain_metadata(chain_id=chain_id, addresses=unresolved)
+        for address, value in onchain.items():
+            merged[address] = merge_metadata(
+                chain_id=chain_id,
+                address=address,
+                cached=merged.get(address),
+                hint=value,
+                default_source="onchain_multicall",
+            )
+
+        for address, metadata in list(merged.items()):
+            merged[address] = resolve_logo_for_response(
+                chain_id=chain_id,
+                address=address,
+                metadata=metadata,
+                cached=cached.get(address),
+                hint=hinted.get(address),
+            )
+
+        self._cache.upsert_many(list(merged.values()))
+        return merged
+
+    async def _fetch_onchain_metadata(
+        self,
+        *,
+        chain_id: int,
+        addresses: list[str],
+    ) -> dict[str, TokenMetadata]:
+        try:
+            return await fetch_onchain_metadata(
+                chain_id=chain_id,
+                addresses=addresses,
+                rpc_client=self._rpc,
+            )
+        except Exception:
+            _LOGGER.exception("token_multicall_failed", extra={"chain_id": chain_id})
+            return {}

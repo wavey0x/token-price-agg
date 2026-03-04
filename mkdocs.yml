@@ -1,0 +1,25 @@
+site_name: Token Price Agg Docs
+site_description: Ethereum token price and quote aggregation API
+site_url: https://example.invalid/token-price-agg
+repo_name: token-price-agg
+docs_dir: docs/src
+site_dir: docs/site
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Overview: index.md
+  - API Contract: api.md
+  - Providers: providers.md
+  - Operations: operations.md
