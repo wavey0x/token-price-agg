@@ -30,6 +30,12 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 'price_priority = ["curve"]',
                 'quote_priority = ["curve"]',
                 "",
+                "[chains]",
+                "ids = [1, 10]",
+                "",
+                "[rpc]",
+                'urls = ["https://rpc.1.example", "https://rpc.10.example"]',
+                "",
                 "[security]",
                 "api_key_auth_enabled = true",
                 'api_key_db_path = "data/custom_api_keys.sqlite3"',
@@ -45,6 +51,8 @@ def test_settings_loads_toml_when_env_overrides_absent(
         "PROVIDER_MAX_RETRIES",
         "PROVIDER_FANOUT_PER_REQUEST",
         "PROVIDER_GLOBAL_LIMIT",
+        "CHAIN_IDS",
+        "RPC_URLS",
         "PROVIDERS_ENABLED",
         "PRICE_PROVIDER_PRIORITY",
         "QUOTE_PROVIDER_PRIORITY",
@@ -61,6 +69,8 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.provider_max_retries == 0
     assert settings.provider_fanout_per_request == 5
     assert settings.provider_global_limit == 99
+    assert settings.chain_ids == [1, 10]
+    assert settings.rpc_urls == ["https://rpc.1.example", "https://rpc.10.example"]
     assert settings.providers_enabled == ["curve", "defillama"]
     assert settings.price_provider_priority == ["curve"]
     assert settings.quote_provider_priority == ["curve"]

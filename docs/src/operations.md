@@ -1,23 +1,34 @@
 # Operations
 
-## Environment
+## Configuration
 
-Core settings:
+Use `config/app.toml` as the primary config source for non-secrets.
 
-- `CHAIN_IDS` (default `1`)
-- `RPC_URLS` (needed for `is_vault=true`)
+Common TOML keys:
+
+- `[chains].ids` (default `[1]`)
+- `[rpc].urls` (required for `is_vault=true`)
+- `[timeouts].provider_request_timeout_ms`
+- `[timeouts].provider_max_retries`
+- `[concurrency].provider_fanout_per_request`
+- `[concurrency].provider_global_limit`
+- `[providers].enabled`
+- `[providers].price_priority`
+- `[providers].quote_priority`
+- `[security].api_key_auth_enabled` (default `false`)
+- `[security].api_key_db_path` (default `data/api_keys.sqlite3`)
+- `[security].api_key_rate_limit_rpm` (default `300`)
+
+Use `.env` for secrets and occasional overrides:
+
 - `LIFI_API_KEY`
 - `ENSO_API_KEY`
-- `TOKEN_METADATA_DB_PATH`
-- `PROVIDER_REQUEST_TIMEOUT_MS`
-- `PROVIDER_MAX_RETRIES`
-- `PROVIDER_FANOUT_PER_REQUEST`
-- `PROVIDER_GLOBAL_LIMIT`
-- `PRICE_PROVIDER_PRIORITY`
-- `QUOTE_PROVIDER_PRIORITY`
-- `API_KEY_AUTH_ENABLED` (default `false`)
-- `API_KEY_DB_PATH` (default `data/api_keys.sqlite3`)
-- `API_KEY_RATE_LIMIT_RPM` (default `300`)
+
+Optional env overrides:
+
+- `APP_ENV`
+- `APP_VERSION` (optional; default `0.1.0`)
+- any TOML-backed setting via its env name (for example `RPC_URLS`)
 
 Observability:
 

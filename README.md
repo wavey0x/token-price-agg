@@ -35,7 +35,22 @@ uv sync --frozen
 
 ### 4) Configure environment
 
-Create runtime env file:
+Use TOML for non-secret runtime config (timeouts, providers, RPC URLs, auth/rate limits).
+
+Review and edit:
+
+```bash
+$EDITOR config/app.toml
+```
+
+Example RPC configuration in TOML:
+
+```toml
+[rpc]
+urls = ["https://mainnet.example-rpc"]
+```
+
+Create runtime env file for secrets and optional overrides:
 
 ```bash
 cp .env.example .env
@@ -43,12 +58,11 @@ cp .env.example .env
 
 Minimum fields to review in `.env`:
 
-- `APP_ENV=prod`
-- `APP_VERSION` (set your release version)
-- `API_KEY_AUTH_ENABLED=true` (recommended for production)
-- `API_KEY_RATE_LIMIT_RPM=300` (adjust as needed)
-- `RPC_URLS` (required for `is_vault=true`)
 - `LIFI_API_KEY` and `ENSO_API_KEY` (optional, required only if enabling those providers)
+
+Notes:
+- `APP_VERSION` is optional (default is `0.1.0`).
+- For production, keep non-secrets in `config/app.toml`; use `.env` mainly for secrets and one-off overrides.
 
 ### 5) Initialize API keys (if auth enabled)
 
@@ -188,6 +202,10 @@ Primary config file:
 - `config/app.toml`
 
 Key sections:
+- `[chains]`
+  - `ids = [1]`
+- `[rpc]`
+  - `urls = [...]` (required for `is_vault=true`)
 - `[timeouts]`
   - `provider_request_timeout_ms`
   - `provider_max_retries` (default `0`)
