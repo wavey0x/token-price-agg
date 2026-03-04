@@ -5,3 +5,6 @@ docs/site/
 .pytest_cache/
 .coverage
 .venv/
+data/*.sqlite3
+data/*.sqlite3-wal
+data/*.sqlite3-shm
