@@ -17,6 +17,8 @@ from token_price_agg.core.models import (
     ProviderQuoteRequest,
     QuoteResult,
     TokenRef,
+    VaultContext,
+    VaultType,
 )
 from token_price_agg.providers.base import ProviderPlugin
 from token_price_agg.providers.registry import ProviderRegistry
@@ -40,6 +42,28 @@ class StubVaultResolver:
         req: ProviderPriceRequest,
     ) -> tuple[ProviderPriceRequest, None]:
         return req, None
+
+    async def resolve_quote_request(
+        self,
+        req: ProviderQuoteRequest,
+    ) -> tuple[ProviderQuoteRequest, None]:
+        return req, None
+
+
+class StubVaultResolverWithContext:
+    async def resolve_price_request(
+        self,
+        req: ProviderPriceRequest,
+    ) -> tuple[ProviderPriceRequest, VaultContext]:
+        return (
+            req,
+            VaultContext(
+                vault_type=VaultType.ERC4626,
+                underlying_token=USDC,
+                share_to_asset_rate="3/2",
+                block_number=123,
+            ),
+        )
 
     async def resolve_quote_request(
         self,
@@ -124,6 +148,20 @@ def _build_service(plugin: ProviderPlugin, *, request_timeout_ms: int = 500) -> 
     )
 
 
+def _build_vault_service(plugin: ProviderPlugin) -> AggregatorService:
+    settings = Settings(
+        providers_enabled=[plugin.id],
+        provider_request_timeout_ms=500,
+        provider_fanout_per_request=2,
+        provider_global_limit=2,
+    )
+    return AggregatorService(
+        settings=settings,
+        registry=cast(ProviderRegistry, StubRegistry(plugin)),
+        vault_resolver=cast(VaultResolver, StubVaultResolverWithContext()),
+    )
+
+
 @pytest.mark.asyncio
 async def test_aggregate_prices_unsupported_operation_returns_provider_failure(
     price_request: ProviderPriceRequest,
@@ -188,6 +226,35 @@ async def test_aggregate_prices_plugin_exception_returns_internal_error(
     assert results[0].status == ProviderStatus.INTERNAL_ERROR
     assert results[0].error is not None
     assert results[0].error.code == "INTERNAL_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_aggregate_prices_applies_vault_share_to_asset_rate(
+    price_request: ProviderPriceRequest,
+) -> None:
+    async def _fixed_price(req: ProviderPriceRequest) -> PriceResult:
+        return PriceResult(
+            provider="dummy",
+            status=ProviderStatus.OK,
+            token=req.token,
+            price_usd=Decimal("10"),
+            latency_ms=10,
+        )
+
+    plugin = DummyPlugin(price_impl=_fixed_price)
+    service = _build_vault_service(plugin)
+
+    results, summary, partial = await service.aggregate_prices(
+        req=price_request,
+        provider_ids=[plugin.id],
+        is_vault=True,
+    )
+
+    assert partial is False
+    assert results[0].price_usd == Decimal("15")
+    assert summary.best_price == Decimal("15")
+    assert results[0].vault_context is not None
+    assert results[0].vault_context.share_to_asset_rate == "3/2"
 
 
 @pytest.mark.asyncio

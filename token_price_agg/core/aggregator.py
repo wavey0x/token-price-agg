@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from token_price_agg.app.config import Settings
 from token_price_agg.core.errors import InvalidRequestError, ProviderStatus
 from token_price_agg.core.models import (
@@ -61,8 +63,11 @@ class AggregatorService:
         )
 
         if vault_context is not None:
+            multiplier = _vault_share_to_asset_multiplier(vault_context.share_to_asset_rate)
             for result in price_results:
                 if result.status == ProviderStatus.OK:
+                    if result.price_usd is not None:
+                        result.price_usd = result.price_usd * multiplier
                     result.vault_context = vault_context
 
         ordered = sort_price_results(price_results)
@@ -105,3 +110,23 @@ class AggregatorService:
         summary = build_quote_summary(ordered)
         partial = summary.failed_providers > 0
         return ordered, summary, partial
+
+
+def _vault_share_to_asset_multiplier(rate: str) -> Decimal:
+    parts = rate.split("/", 1)
+    if len(parts) != 2:
+        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault share_to_asset_rate")
+
+    numerator_raw, denominator_raw = parts
+    try:
+        numerator = Decimal(numerator_raw)
+        denominator = Decimal(denominator_raw)
+    except InvalidOperation as exc:
+        raise InvalidRequestError(
+            "INVALID_VAULT_RATE",
+            "Invalid vault share_to_asset_rate",
+        ) from exc
+
+    if denominator == 0:
+        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault share_to_asset_rate")
+    return numerator / denominator
