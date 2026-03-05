@@ -10,7 +10,7 @@ from token_price_agg.core.models import (
     AggregatePriceSummary,
     AggregateQuoteSummary,
     ProviderCapability,
-    VaultContext,
+    VaultType,
 )
 
 
@@ -41,7 +41,7 @@ class PriceProviderEntry(BaseModel):
     as_of: datetime | None = None
     retrieved_at: datetime
     error: ErrorInfo | None = None
-    vault_context: VaultContext | None = None
+    vault_context: PriceVaultContext | None = None
 
 
 class SelectedPrice(BaseModel):
@@ -52,7 +52,7 @@ class SelectedPrice(BaseModel):
     latency_ms: int
     as_of: datetime | None = None
     retrieved_at: datetime
-    vault_context: VaultContext | None = None
+    vault_context: PriceVaultContext | None = None
 
 
 class QuoteProviderEntry(BaseModel):
@@ -70,7 +70,6 @@ class QuoteProviderEntry(BaseModel):
     retrieved_at: datetime
     error: ErrorInfo | None = None
     route: dict[str, object] | None = None
-    vault_context: VaultContext | None = None
 
 
 class SelectedQuote(BaseModel):
@@ -86,7 +85,26 @@ class SelectedQuote(BaseModel):
     as_of: datetime | None = None
     retrieved_at: datetime
     route: dict[str, object] | None = None
-    vault_context: VaultContext | None = None
+    vault_context: QuoteVaultContext | None = None
+
+
+class PriceVaultContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vault_type: VaultType | None = None
+    underlying_token: str | None = None
+    price_per_share: Decimal
+    block_number: int
+
+
+class QuoteVaultContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vault_type: VaultType | None = None
+    underlying_token_in: str | None = None
+    underlying_token_out: str | None = None
+    price_per_share: Decimal
+    block_number: int
 
 
 class PriceAggregateResponse(BaseAggregateResponse):

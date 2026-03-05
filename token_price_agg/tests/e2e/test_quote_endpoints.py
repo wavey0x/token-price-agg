@@ -60,6 +60,7 @@ def test_quote_endpoint_supports_default_quote_matrix(
     assert payload["quote"]["provider"] == "curve"
     assert payload["providers"]["curve"]["status"] == "ok"
     assert payload["providers"]["curve"]["route"] is None
+    assert "vault_context" not in payload["providers"]["curve"]
     assert payload["summary"]["high_amount_out"] == 1000000
     assert payload["summary"]["low_amount_out"] == 1000000
     assert payload["summary"]["median_amount_out"] == 1000000
@@ -190,6 +191,40 @@ def test_quote_endpoint_defaults_chain_id_to_mainnet_when_missing() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["chain_id"] == 1
+    assert payload["providers"]["curve"]["status"] == "ok"
+
+
+def test_quote_endpoint_use_underlying_is_best_effort_without_rpc() -> None:
+    with respx.mock(assert_all_called=True) as router:
+        router.get("https://www.curve.finance/api/router/v1/routes").mock(
+            return_value=Response(
+                200,
+                json={
+                    "data": {
+                        "amountOut": "1000000",
+                        "amountOutMin": "990000",
+                        "estimatedGas": 210000,
+                        "priceImpact": "0.002",
+                    }
+                },
+            )
+        )
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/v1/quote",
+                params={
+                    "chain_id": 1,
+                    "token_in": token_lower("CRV"),
+                    "token_out": token_lower("USDC"),
+                    "amount_in": "1000000000000000000",
+                    "providers": "curve",
+                    "use_underlying": "true",
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["providers"]["curve"]["status"] == "ok"
 
 

@@ -22,7 +22,7 @@ uv run --extra docs mkdocs build
 
 Required/important env vars:
 - `CHAIN_IDS` (default: `1`)
-- `RPC_URLS` (required for `use_underlying=true` flows)
+- `RPC_URLS` (enables best-effort `use_underlying=true` vault resolution)
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
 - `TOKEN_METADATA_DB_PATH` (default: `data/token_metadata.sqlite3`)
@@ -104,7 +104,7 @@ Price response:
 - `providers`: keyed map of provider results by provider ID
 - `price_data.price` and `providers.*.price` are normalized USD prices
 - with `use_underlying=true`, price is vault-share USD price
-  (`underlying_price * share_to_asset_rate`)
+  (`underlying_price * price_per_share`)
 - price summary fields: `high_price`, `low_price`, `median_price`, `deviation_bps`
 - shared summary fields: `requested_providers`, `successful_providers`, `failed_providers`
 
@@ -112,7 +112,12 @@ Quote response:
 - `token_in`, `token_out`: request token metadata
 - `quote`: top-level selected result (`null` if no successful provider)
 - `providers`: keyed map of provider results by provider ID
-- quote summary fields: `best_amount_out`, `best_provider`
+- quote summary fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
+
+`use_underlying=true` behavior (best effort):
+- If vault resolution succeeds, vault legs are converted to underlying for provider calls.
+- For vault output legs, response `amount_out`/`amount_out_min` are converted back to shares.
+- If vault detection/web3 fails or no vault is detected, request proceeds unchanged.
 
 Selection semantics:
 1. request `providers` order (if present)
@@ -305,7 +310,6 @@ uv run mypy .
 ## Common Failure Modes
 
 - `INVALID_ADDRESS`: malformed token address
-- `RPC_NOT_CONFIGURED`: `use_underlying=true` used without `RPC_URLS`
 - `UNAUTHORIZED`: invalid/revoked/expired bearer token (or missing bearer when `API_KEY_UNAUTH_ACCESS_ENABLED=false`)
 - `RATE_LIMITED`: API key exceeded per-minute budget or anonymous tier exceeded per-second budget
 - provider status `invalid_request` + `missing_api_key`

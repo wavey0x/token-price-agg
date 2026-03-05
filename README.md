@@ -215,7 +215,7 @@ Key sections:
 - `[chains]`
   - `ids = [1]`
 - `[rpc]`
-  - `urls = [...]` (required for `use_underlying=true`)
+  - `urls = [...]` (enables best-effort `use_underlying=true` resolution)
 - `[timeouts]`
   - `provider_request_timeout_ms`
   - `provider_max_retries` (default `0`)
@@ -277,16 +277,19 @@ Price response includes:
 
 Quote response mirrors this shape using:
 - `token_in`, `token_out`, `quote`, `providers`, `provider_order`, `summary`
-- quote summary fields: `best_amount_out`, `best_provider`
+- quote summary fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
 
 Notes:
 - Address inputs are case-insensitive.
 - Response addresses are always EIP-55 checksummed.
 - `chain_id` defaults to `1` (Ethereum mainnet) when omitted.
 - `use_underlying` defaults to `false`.
-- For `use_underlying=true` on `/v1/price`, returned `price` is vault-share USD price:
-  underlying USD price multiplied by share-to-asset rate
+- `use_underlying=true` is best effort on both `/v1/price` and `/v1/quote`:
+  if vault detection or web3 calls fail, request proceeds with original tokens/amounts.
+- For vault tokens on `/v1/price`, returned `price` is vault-share USD price:
+  underlying USD price multiplied by `price_per_share`
   (`pricePerShare / 10**decimals` for Yearn v2, `convertToAssets(10**decimals) / 10**decimals` for ERC-4626).
+- Vault detection/rate reads use Multicall3 when available, with per-call fallback.
 - `value_usd` has been removed.
 
 ## Provider Selection

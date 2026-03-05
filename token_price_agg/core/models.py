@@ -37,14 +37,18 @@ class VaultType(str, Enum):
 class VaultContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    vault_type: VaultType
-    underlying_token: str
-    share_to_asset_rate: str
+    vault_type: VaultType | None = None
+    underlying_token: str | None = None
+    underlying_token_in: str | None = None
+    underlying_token_out: str | None = None
+    price_per_share: Decimal
     block_number: int
 
-    @field_validator("underlying_token")
+    @field_validator("underlying_token", "underlying_token_in", "underlying_token_out")
     @classmethod
-    def _normalize_underlying(cls, value: str) -> str:
+    def _normalize_underlying(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return AddressValidator.normalize_address(value)
 
 

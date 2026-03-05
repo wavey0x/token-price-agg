@@ -30,7 +30,7 @@ Failure behavior:
 | `chain_id` | integer | no | `1` | EVM chain id. Must be `> 0`. |
 | `token` | string | yes | none | Token address to price. Case-insensitive input; output is checksummed (EIP-55). |
 | `providers` | list[string] | no | all available for price | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
-| `use_underlying` | boolean | no | `false` | If `true`, treat token as vault share when supported. The service resolves underlying token via on-chain vault methods, prices underlying, then converts back to share price using on-chain share-to-asset rate. |
+| `use_underlying` | boolean | no | `false` | Best-effort vault handling. If token is a supported vault, service prices underlying and converts back to vault share price. If vault/web3 resolution fails, request proceeds with original token unchanged. |
 
 `providers` accepted formats:
 - repeated: `providers=curve&providers=defillama`
@@ -39,11 +39,12 @@ Failure behavior:
 
 `use_underlying` behavior:
 - If token is a supported vault:
+  - On-chain vault reads use Multicall3 when available (with per-call fallback).
   - ERC-4626 conversion uses `convertToAssets(10**decimals)` (fallback `previewRedeem`).
   - Yearn v2 conversion uses `pricePerShare()`.
-  - Returned price = `underlying_price_usd * share_to_asset_rate`.
-- If token is not a supported vault: request fails with `INVALID_VAULT`.
-- If RPC URLs are not configured: request fails with `RPC_NOT_CONFIGURED`.
+  - Returned price = `underlying_price_usd * price_per_share`.
+- If token is not a supported vault: request proceeds with original token unchanged.
+- If RPC URLs are not configured or on-chain calls fail: request proceeds with original token unchanged.
 
 Example:
 
@@ -208,7 +209,7 @@ curl -s \
     "vault_context": {
       "vault_type": "yearn_v2",
       "underlying_token": "0xD533a949740bb3306d119CC777fa900bA034cd52",
-      "share_to_asset_rate": "1459948592017731652/1000000000000000000",
+      "price_per_share": "1.459948592017731652",
       "block_number": 21940623
     }
   }
@@ -231,12 +232,13 @@ curl -s \
 | `amount_in` | string (integer) | yes | none | Positive base-unit amount (for example wei). Must parse as positive integer. |
 | `providers` | list[string] | no | all available for quote | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `include_route` | boolean | no | `false` | If `true`, provider route payload is included when provider supports it. If `false`, route is omitted (`null`) in response. |
-| `use_underlying` | boolean | no | `false` | If `true`, vault tokens are converted to underlying before quoting. `token_in` share amounts are converted to underlying assets for quote requests. |
+| `use_underlying` | boolean | no | `false` | Best-effort vault handling on both legs. Supported vault legs are converted to underlying for provider quote calls, then response amounts are converted back to share units for vault output legs. If vault/web3 resolution fails, request proceeds unchanged. |
 
 `use_underlying` for quote:
 - Applies to both `token_in` and `token_out` if either is a supported vault.
-- If neither token is a supported vault: request fails with `INVALID_VAULT`.
-- If RPC URLs are not configured: request fails with `RPC_NOT_CONFIGURED`.
+- For vault `token_in`, request `amount_in` is converted shares -> underlying assets before provider calls.
+- For vault `token_out`, response `amount_out` and `amount_out_min` are converted underlying assets -> shares.
+- If vault detection/web3 fails or neither token is a supported vault: request proceeds with original tokens/amounts unchanged.
 
 Example:
 
@@ -255,8 +257,9 @@ Key fields:
 - `quote`: selected successful provider result, or `null`
 - `providers`: keyed object of per-provider results
 - `summary`: aggregate statistics
-- `summary` quote fields: `best_amount_out`, `best_provider`
+- `summary` quote fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
+- `vault_context` is included only in top-level `quote` (not repeated in `providers.*`)
 
 ### Example: Quote Success
 
@@ -311,16 +314,16 @@ curl -s \
       "as_of": "2026-03-05T02:40:11.000000Z",
       "retrieved_at": "2026-03-05T02:40:11.330000Z",
       "error": null,
-      "route": null,
-      "vault_context": null
+      "route": null
     }
   },
   "summary": {
     "requested_providers": 1,
     "successful_providers": 1,
     "failed_providers": 0,
-    "best_amount_out": 742100,
-    "best_provider": "curve"
+    "high_amount_out": 742100,
+    "low_amount_out": 742100,
+    "median_amount_out": 742100
   }
 }
 ```
@@ -338,21 +341,8 @@ Request/domain errors use:
 }
 ```
 
-Example vault error when RPC is not configured:
-
-```json
-{
-  "detail": {
-    "code": "RPC_NOT_CONFIGURED",
-    "message": "Vault resolution requires RPC_URLS"
-  }
-}
-```
-
 Common request/domain error codes:
 - `INVALID_ADDRESS`: malformed token address.
-- `INVALID_VAULT`: `use_underlying=true` but no supported vault detected.
-- `RPC_NOT_CONFIGURED`: `use_underlying=true` without configured RPC URLs.
 
 ## Provider Selection
 

@@ -34,9 +34,9 @@ class TokenMetadataResolver:
             if result.token is not None:
                 refs.append(result.token)
             if result.vault_context is not None:
-                refs.append(
-                    TokenRef(chain_id=chain_id, address=result.vault_context.underlying_token)
-                )
+                underlying = result.vault_context.underlying_token
+                if underlying is not None:
+                    refs.append(TokenRef(chain_id=chain_id, address=underlying))
         return await self._resolve(chain_id=chain_id, refs=refs, source="provider")
 
     async def resolve_from_quote_results(
@@ -54,9 +54,15 @@ class TokenMetadataResolver:
             if result.token_out is not None:
                 refs.append(result.token_out)
             if result.vault_context is not None:
-                refs.append(
-                    TokenRef(chain_id=chain_id, address=result.vault_context.underlying_token)
-                )
+                underlying = result.vault_context.underlying_token
+                if underlying is not None:
+                    refs.append(TokenRef(chain_id=chain_id, address=underlying))
+                underlying_in = result.vault_context.underlying_token_in
+                if underlying_in is not None:
+                    refs.append(TokenRef(chain_id=chain_id, address=underlying_in))
+                underlying_out = result.vault_context.underlying_token_out
+                if underlying_out is not None:
+                    refs.append(TokenRef(chain_id=chain_id, address=underlying_out))
         return await self._resolve(chain_id=chain_id, refs=refs, source="provider")
 
     async def _resolve(

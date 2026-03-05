@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+import logging
+from decimal import ROUND_FLOOR, Decimal
 
 from token_price_agg.app.config import Settings
 from token_price_agg.core.errors import InvalidRequestError, ProviderStatus
@@ -11,6 +12,7 @@ from token_price_agg.core.models import (
     ProviderPriceRequest,
     ProviderQuoteRequest,
     QuoteResult,
+    VaultContext,
 )
 from token_price_agg.core.normalizer import (
     build_price_summary,
@@ -20,7 +22,9 @@ from token_price_agg.core.normalizer import (
 )
 from token_price_agg.core.provider_runner import ProviderOperationRunner
 from token_price_agg.providers.registry import Operation, ProviderRegistry
-from token_price_agg.vault.resolver import VaultResolver
+from token_price_agg.vault.resolver import QuoteVaultResolution, VaultResolver
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class AggregatorService:
@@ -54,7 +58,17 @@ class AggregatorService:
         resolved_req = req
         vault_context = None
         if use_underlying:
-            resolved_req, vault_context = await self._vault_resolver.resolve_price_request(req)
+            try:
+                resolved_req, vault_context = await self._vault_resolver.resolve_price_request(req)
+            except Exception:
+                # Best effort: if vault resolution fails, continue with original token request.
+                _LOGGER.warning(
+                    "price_use_underlying_resolution_failed",
+                    extra={"chain_id": req.chain_id, "token": req.token.address},
+                    exc_info=True,
+                )
+                resolved_req = req
+                vault_context = None
 
         price_results = await self._runner.run_prices(
             plugins=selected,
@@ -63,9 +77,17 @@ class AggregatorService:
         )
 
         if vault_context is not None:
-            multiplier = _vault_share_to_asset_multiplier(vault_context.share_to_asset_rate)
+            try:
+                multiplier = _vault_share_to_asset_multiplier(vault_context.price_per_share)
+            except InvalidRequestError:
+                _LOGGER.warning(
+                    "price_use_underlying_invalid_rate",
+                    extra={"chain_id": req.chain_id, "token": req.token.address},
+                    exc_info=True,
+                )
+                multiplier = None
             for result in price_results:
-                if result.status == ProviderStatus.OK:
+                if result.status == ProviderStatus.OK and multiplier is not None:
                     if result.price_usd is not None:
                         result.price_usd = result.price_usd * multiplier
                     result.vault_context = vault_context
@@ -91,9 +113,25 @@ class AggregatorService:
             raise InvalidRequestError("NO_PROVIDERS", "No providers available for this request")
 
         resolved_req = req
-        vault_context = None
+        quote_resolution: QuoteVaultResolution | None = None
         if use_underlying:
-            resolved_req, vault_context = await self._vault_resolver.resolve_quote_request(req)
+            try:
+                resolved_req, quote_resolution = await self._vault_resolver.resolve_quote_request(
+                    req
+                )
+            except Exception:
+                # Best effort: if vault resolution fails, continue with original quote request.
+                _LOGGER.warning(
+                    "quote_use_underlying_resolution_failed",
+                    extra={
+                        "chain_id": req.chain_id,
+                        "token_in": req.token_in.address,
+                        "token_out": req.token_out.address,
+                    },
+                    exc_info=True,
+                )
+                resolved_req = req
+                quote_resolution = None
 
         quote_results = await self._runner.run_quotes(
             plugins=selected,
@@ -101,10 +139,38 @@ class AggregatorService:
             deadline_ms=self._settings.aggregate_quote_deadline_ms,
         )
 
-        if vault_context is not None:
+        if quote_resolution is not None:
+            input_context = quote_resolution.input_vault_context
+            output_context = quote_resolution.output_vault_context
             for result in quote_results:
                 if result.status == ProviderStatus.OK:
-                    result.vault_context = vault_context
+                    # Keep response amount_in aligned with client request units.
+                    result.amount_in = req.amount_in
+                    if output_context is not None:
+                        try:
+                            if result.amount_out is not None:
+                                result.amount_out = _vault_assets_to_shares(
+                                    result.amount_out,
+                                    output_context.price_per_share,
+                                )
+                            if result.amount_out_min is not None:
+                                result.amount_out_min = _vault_assets_to_shares(
+                                    result.amount_out_min,
+                                    output_context.price_per_share,
+                                )
+                        except InvalidRequestError:
+                            _LOGGER.warning(
+                                "quote_use_underlying_invalid_output_rate",
+                                extra={
+                                    "chain_id": req.chain_id,
+                                    "token_out": req.token_out.address,
+                                },
+                                exc_info=True,
+                            )
+                    result.vault_context = _quote_vault_context(
+                        input_context=input_context,
+                        output_context=output_context,
+                    )
 
         ordered = sort_quote_results(quote_results)
         summary = build_quote_summary(ordered)
@@ -112,21 +178,52 @@ class AggregatorService:
         return ordered, summary, partial
 
 
-def _vault_share_to_asset_multiplier(rate: str) -> Decimal:
-    parts = rate.split("/", 1)
-    if len(parts) != 2:
-        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault share_to_asset_rate")
+def _vault_share_to_asset_multiplier(price_per_share: Decimal) -> Decimal:
+    if price_per_share <= 0:
+        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
+    return price_per_share
 
-    numerator_raw, denominator_raw = parts
-    try:
-        numerator = Decimal(numerator_raw)
-        denominator = Decimal(denominator_raw)
-    except InvalidOperation as exc:
-        raise InvalidRequestError(
-            "INVALID_VAULT_RATE",
-            "Invalid vault share_to_asset_rate",
-        ) from exc
 
-    if denominator == 0:
-        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault share_to_asset_rate")
-    return numerator / denominator
+def _vault_assets_to_shares(assets: int, price_per_share: Decimal) -> int:
+    if price_per_share <= 0:
+        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
+    return int((Decimal(assets) / price_per_share).to_integral_value(rounding=ROUND_FLOOR))
+
+
+def _quote_vault_context(
+    *,
+    input_context: VaultContext | None,
+    output_context: VaultContext | None,
+) -> VaultContext | None:
+    if input_context is None and output_context is None:
+        return None
+
+    if input_context is not None and output_context is None:
+        return input_context.model_copy(
+            update={
+                "underlying_token": None,
+                "underlying_token_in": input_context.underlying_token,
+                "underlying_token_out": None,
+            }
+        )
+
+    if input_context is None and output_context is not None:
+        return output_context.model_copy(
+            update={
+                "underlying_token": None,
+                "underlying_token_in": None,
+                "underlying_token_out": output_context.underlying_token,
+            }
+        )
+
+    assert input_context is not None and output_context is not None
+    return VaultContext(
+        vault_type=input_context.vault_type
+        if input_context.vault_type == output_context.vault_type
+        else None,
+        underlying_token=None,
+        underlying_token_in=input_context.underlying_token,
+        underlying_token_out=output_context.underlying_token,
+        price_per_share=input_context.price_per_share,
+        block_number=input_context.block_number,
+    )

@@ -14,11 +14,13 @@ from token_price_agg.api.schemas.requests import QuoteRequest
 from token_price_agg.api.schemas.responses import (
     QuoteAggregateResponse,
     QuoteProviderEntry,
+    QuoteVaultContext,
     SelectedQuote,
 )
 from token_price_agg.app.config import Settings, get_settings
 from token_price_agg.app.dependencies import get_aggregator_service, get_token_metadata_resolver
 from token_price_agg.core.aggregator import AggregatorService
+from token_price_agg.core.models import VaultContext
 from token_price_agg.core.normalizer import normalize_quote_request
 from token_price_agg.core.selection import index_quote_results, select_quote_result
 from token_price_agg.token_metadata.resolver import TokenMetadataResolver
@@ -35,7 +37,17 @@ async def quote(
     chain_id: Annotated[int, Query(gt=0)] = 1,
     providers: Annotated[list[str] | None, Query()] = None,
     include_route: bool = False,
-    use_underlying: bool = False,
+    use_underlying: Annotated[
+        bool,
+        Query(
+            description=(
+                "Best-effort vault resolution for both token_in and token_out. "
+                "Supported vault legs are converted to underlying before quoting "
+                "and converted back to share units in response. "
+                "If vault/web3 resolution fails, request proceeds with original tokens unchanged."
+            )
+        ),
+    ] = False,
     aggregator: AggregatorService = Depends(get_aggregator_service),
     token_metadata_resolver: TokenMetadataResolver = Depends(get_token_metadata_resolver),
     settings: Settings = Depends(get_settings),
@@ -114,7 +126,6 @@ async def _handle_quote_request(
             retrieved_at=provider_result.retrieved_at,
             error=provider_result.error,
             route=provider_result.route,
-            vault_context=provider_result.vault_context,
         )
 
     selected = select_quote_result(provider_order=provider_order, by_provider=by_provider)
@@ -131,7 +142,7 @@ async def _handle_quote_request(
             as_of=selected.as_of,
             retrieved_at=selected.retrieved_at,
             route=selected.route,
-            vault_context=selected.vault_context,
+            vault_context=_to_quote_vault_context(selected.vault_context),
         )
 
     token_in_meta = metadata_for_address(metadata=token_metadata, token=normalized.token_in)
@@ -146,4 +157,16 @@ async def _handle_quote_request(
         quote=selected_quote,
         providers=providers_payload,
         summary=summary,
+    )
+
+
+def _to_quote_vault_context(vault_context: VaultContext | None) -> QuoteVaultContext | None:
+    if vault_context is None:
+        return None
+    return QuoteVaultContext(
+        vault_type=vault_context.vault_type,
+        underlying_token_in=vault_context.underlying_token_in,
+        underlying_token_out=vault_context.underlying_token_out,
+        price_per_share=vault_context.price_per_share,
+        block_number=vault_context.block_number,
     )
