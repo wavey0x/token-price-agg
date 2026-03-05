@@ -106,9 +106,11 @@ class Settings(BaseSettings):
             AliasPath("security", "api_key_unauth_access_enabled"),
         ),
     )
-    api_key_unauth_rate_limit_rps: int = Field(
+    api_key_unauth_min_interval_seconds: int = Field(
         default=1,
         validation_alias=AliasChoices(
+            "api_key_unauth_min_interval_seconds",
+            AliasPath("security", "api_key_unauth_min_interval_seconds"),
             "api_key_unauth_rate_limit_rps",
             AliasPath("security", "api_key_unauth_rate_limit_rps"),
         ),
@@ -242,8 +244,8 @@ class Settings(BaseSettings):
             raise ValueError("WEB3_LIMIT must be > 0")
         if self.api_key_rate_limit_rpm <= 0:
             raise ValueError("API_KEY_RATE_LIMIT_RPM must be > 0")
-        if self.api_key_unauth_rate_limit_rps <= 0:
-            raise ValueError("API_KEY_UNAUTH_RATE_LIMIT_RPS must be > 0")
+        if self.api_key_unauth_min_interval_seconds <= 0:
+            raise ValueError("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS must be > 0")
 
         return self
 

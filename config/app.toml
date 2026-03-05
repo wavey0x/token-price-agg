@@ -27,4 +27,4 @@ api_key_auth_enabled = true
 api_key_db_path = "data/api_keys.sqlite3"
 api_key_rate_limit_rpm = 300
 api_key_unauth_access_enabled = true
-api_key_unauth_rate_limit_rps = 1
+api_key_unauth_min_interval_seconds = 5

@@ -183,7 +183,7 @@ def _authorize_and_rate_limit_if_needed(
         limiter = get_anonymous_rate_limiter()
         rate_limit_result = limiter.consume(
             client_id=_anonymous_client_id(request),
-            limit_rps=settings.api_key_unauth_rate_limit_rps,
+            min_interval_seconds=settings.api_key_unauth_min_interval_seconds,
         )
         if rate_limit_result.allowed:
             return None, rate_limit_result

@@ -35,7 +35,7 @@ Required/important env vars:
 - `API_KEY_DB_PATH` (default: `data/api_keys.sqlite3`)
 - `API_KEY_RATE_LIMIT_RPM` (default: `300`)
 - `API_KEY_UNAUTH_ACCESS_ENABLED` (default: `true`)
-- `API_KEY_UNAUTH_RATE_LIMIT_RPS` (default: `1`)
+- `API_KEY_UNAUTH_MIN_INTERVAL_SECONDS` (default: `1`)
 
 Config file:
 - `config/app.toml`
@@ -62,7 +62,7 @@ Observability env vars:
 Auth behavior (when enabled):
 - send `Authorization: Bearer <api_key>` for authenticated tier
 - valid API keys are rate-limited by `API_KEY_RATE_LIMIT_RPM` unless per-key override is set via CLI
-- missing authorization is allowed only when `API_KEY_UNAUTH_ACCESS_ENABLED=true` and is rate-limited by `API_KEY_UNAUTH_RATE_LIMIT_RPS` per client IP
+- missing authorization is allowed only when `API_KEY_UNAUTH_ACCESS_ENABLED=true` and is limited to one request per `API_KEY_UNAUTH_MIN_INTERVAL_SECONDS` per client IP
 - invalid/revoked/expired key returns `401` with:
   - `WWW-Authenticate: Bearer`
   - `{"detail":{"code":"UNAUTHORIZED","message":"..."}}`

@@ -19,7 +19,7 @@ Common TOML keys:
 - `[security].api_key_db_path` (default `data/api_keys.sqlite3`)
 - `[security].api_key_rate_limit_rpm` (default `300`)
 - `[security].api_key_unauth_access_enabled` (default `true`)
-- `[security].api_key_unauth_rate_limit_rps` (default `1`)
+- `[security].api_key_unauth_min_interval_seconds` (default `1`)
 
 Use `.env` for secrets and occasional overrides:
 
@@ -40,7 +40,7 @@ Observability:
 
 Auth behavior (when enabled):
 - valid bearer keys use `api_key_rate_limit_rpm` by default, with optional per-key override via CLI
-- missing authorization is allowed at `api_key_unauth_rate_limit_rps` per client IP when `api_key_unauth_access_enabled=true`
+- missing authorization is limited to one request per `api_key_unauth_min_interval_seconds` per client IP when `api_key_unauth_access_enabled=true`
 - invalid/revoked/expired authorization returns `401`
 - `/metrics` remains public
 - auth failures return `401` with `WWW-Authenticate: Bearer`

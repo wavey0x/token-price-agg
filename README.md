@@ -180,7 +180,7 @@ Yes, docs can be hosted directly on Vercel as static files.
 
 When `API_KEY_AUTH_ENABLED=true`:
 - valid bearer keys use `API_KEY_RATE_LIMIT_RPM` by default, with optional per-key overrides via CLI
-- requests without `Authorization` are allowed at `API_KEY_UNAUTH_RATE_LIMIT_RPS` per client IP when `API_KEY_UNAUTH_ACCESS_ENABLED=true`
+- requests without `Authorization` are allowed only once per `API_KEY_UNAUTH_MIN_INTERVAL_SECONDS` per client IP when `API_KEY_UNAUTH_ACCESS_ENABLED=true`
 - invalid/revoked/expired authorization headers still return `401`
 - `/metrics` stays unauthenticated
 
@@ -231,7 +231,7 @@ Key sections:
   - `api_key_db_path = "data/api_keys.sqlite3"`
   - `api_key_rate_limit_rpm = 300`
   - `api_key_unauth_access_enabled = true`
-  - `api_key_unauth_rate_limit_rps = 1`
+  - `api_key_unauth_min_interval_seconds = 1`
 
 Settings precedence:
 1. environment variables

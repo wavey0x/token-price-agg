@@ -5,7 +5,6 @@ import time
 
 from token_price_agg.security.models import RateLimitResult
 
-_WINDOW_SECONDS = 1
 _RETENTION_SECONDS = 3
 _CLEANUP_INTERVAL_SECONDS = 10
 
@@ -20,14 +19,14 @@ class AnonymousRateLimiter:
         self,
         *,
         client_id: str,
-        limit_rps: int,
+        min_interval_seconds: int,
         now_ts: int | None = None,
     ) -> RateLimitResult:
-        if limit_rps <= 0:
-            raise ValueError("limit_rps must be > 0")
+        if min_interval_seconds <= 0:
+            raise ValueError("min_interval_seconds must be > 0")
 
         now = now_ts if now_ts is not None else int(time.time())
-        window_start = now
+        window_start = (now // min_interval_seconds) * min_interval_seconds
         bucket_key = client_id or "unknown"
 
         with self._lock:
@@ -39,25 +38,25 @@ class AnonymousRateLimiter:
             self._windows[bucket_key] = (window_start, request_count)
 
             if now >= self._next_cleanup_ts:
-                self._cleanup(now=now)
+                self._cleanup(now=now, min_interval_seconds=min_interval_seconds)
                 self._next_cleanup_ts = now + _CLEANUP_INTERVAL_SECONDS
 
-        reset_epoch = window_start + _WINDOW_SECONDS
+        reset_epoch = window_start + min_interval_seconds
         retry_after = max(reset_epoch - now, 0)
-        allowed = request_count <= limit_rps
-        remaining = max(limit_rps - request_count, 0)
+        allowed = request_count <= 1
+        remaining = max(1 - request_count, 0)
 
         return RateLimitResult(
             allowed=allowed,
-            limit=limit_rps,
+            limit=1,
             remaining=remaining,
             reset_epoch=reset_epoch,
             retry_after_seconds=retry_after,
             request_count=request_count,
         )
 
-    def _cleanup(self, *, now: int) -> None:
-        cutoff = now - _RETENTION_SECONDS
+    def _cleanup(self, *, now: int, min_interval_seconds: int) -> None:
+        cutoff = now - max(_RETENTION_SECONDS, min_interval_seconds * 3)
         stale_keys = [
             key
             for key, (window_start, _) in self._windows.items()

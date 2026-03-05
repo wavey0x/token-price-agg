@@ -41,7 +41,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 'api_key_db_path = "data/custom_api_keys.sqlite3"',
                 "api_key_rate_limit_rpm = 123",
                 "api_key_unauth_access_enabled = true",
-                "api_key_unauth_rate_limit_rps = 1",
+                "api_key_unauth_min_interval_seconds = 1",
                 "",
             ]
         ),
@@ -62,7 +62,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
         "API_KEY_DB_PATH",
         "API_KEY_RATE_LIMIT_RPM",
         "API_KEY_UNAUTH_ACCESS_ENABLED",
-        "API_KEY_UNAUTH_RATE_LIMIT_RPS",
+        "API_KEY_UNAUTH_MIN_INTERVAL_SECONDS",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -82,7 +82,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.api_key_db_path == "data/custom_api_keys.sqlite3"
     assert settings.api_key_rate_limit_rpm == 123
     assert settings.api_key_unauth_access_enabled is True
-    assert settings.api_key_unauth_rate_limit_rps == 1
+    assert settings.api_key_unauth_min_interval_seconds == 1
     assert settings.aggregate_price_deadline_ms == 750
     assert settings.aggregate_quote_deadline_ms == 950
 
@@ -97,6 +97,6 @@ def test_api_key_rate_limit_must_be_positive() -> None:
         Settings(api_key_rate_limit_rpm=0)
 
 
-def test_api_key_unauth_rate_limit_must_be_positive() -> None:
-    with pytest.raises(ValueError, match="API_KEY_UNAUTH_RATE_LIMIT_RPS must be > 0"):
-        Settings(api_key_unauth_rate_limit_rps=0)
+def test_api_key_unauth_min_interval_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="API_KEY_UNAUTH_MIN_INTERVAL_SECONDS must be > 0"):
+        Settings(api_key_unauth_min_interval_seconds=0)

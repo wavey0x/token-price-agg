@@ -18,7 +18,7 @@ def test_auth_enabled_allows_missing_authorization_at_limited_rate(
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
     monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "true")
-    monkeypatch.setenv("API_KEY_UNAUTH_RATE_LIMIT_RPS", "1")
+    monkeypatch.setenv("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS", "1")
     key = issue_test_api_key("auth-e2e")
 
     with TestClient(app) as client:
