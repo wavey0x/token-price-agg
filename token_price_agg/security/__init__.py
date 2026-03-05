@@ -5,8 +5,8 @@ from token_price_agg.security.models import (
     ApiKeyRecord,
     AuthFailureReason,
     AuthResult,
-    InvalidateResult,
-    InvalidateStatus,
+    DeleteResult,
+    DeleteStatus,
     RateLimitResult,
 )
 from token_price_agg.security.store import ApiKeyStore
@@ -17,7 +17,7 @@ __all__ = [
     "ApiKeyStore",
     "AuthFailureReason",
     "AuthResult",
-    "InvalidateResult",
-    "InvalidateStatus",
+    "DeleteResult",
+    "DeleteStatus",
     "RateLimitResult",
 ]

@@ -16,8 +16,8 @@ from token_price_agg.security.models import (
     ApiKeyRecord,
     AuthFailureReason,
     AuthResult,
-    InvalidateResult,
-    InvalidateStatus,
+    DeleteResult,
+    DeleteStatus,
     RateLimitResult,
 )
 
@@ -38,7 +38,7 @@ INSERT INTO api_keys (
 """
 
 _SQL_SELECT_AUTH_ROW = """
-SELECT public_id, label, secret_hash, revoked_at, expires_at
+SELECT public_id, label, secret_hash, revoked_at, expires_at, rate_limit_rpm
 FROM api_keys
 WHERE public_id = ?
 """
@@ -46,13 +46,14 @@ WHERE public_id = ?
 _SQL_TOUCH_LAST_USED = "UPDATE api_keys SET last_used_at = ? WHERE public_id = ?"
 
 _SQL_SELECT_KEYS_BASE = """
-SELECT public_id, label, key_prefix, created_at, last_used_at, revoked_at,
+SELECT public_id, label, key_prefix, created_at, rate_limit_rpm, last_used_at, revoked_at,
        revoked_reason, expires_at
 FROM api_keys
 """
 
-_SQL_SELECT_INVALIDATE_ROW = "SELECT revoked_at, revoked_reason FROM api_keys WHERE public_id = ?"
+_SQL_SELECT_DELETE_ROW = "SELECT revoked_at, revoked_reason FROM api_keys WHERE public_id = ?"
 _SQL_REVOKE_KEY = "UPDATE api_keys SET revoked_at = ?, revoked_reason = ? WHERE public_id = ?"
+_SQL_UPDATE_KEY_RATE_LIMIT = "UPDATE api_keys SET rate_limit_rpm = ? WHERE public_id = ?"
 
 _SQL_UPSERT_RATE_WINDOW = """
 INSERT INTO api_key_rate_windows (public_id, window_start, request_count)
@@ -71,12 +72,14 @@ CREATE TABLE IF NOT EXISTS api_keys (
     secret_hash TEXT NOT NULL,
     key_prefix TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    rate_limit_rpm INTEGER,
     last_used_at INTEGER,
     revoked_at INTEGER,
     revoked_reason TEXT,
     expires_at INTEGER
 )
 """
+_SQL_ALTER_API_KEYS_ADD_RATE_LIMIT_RPM = "ALTER TABLE api_keys ADD COLUMN rate_limit_rpm INTEGER"
 
 _SQL_CREATE_RATE_WINDOWS_TABLE = """
 CREATE TABLE IF NOT EXISTS api_key_rate_windows (
@@ -173,8 +176,13 @@ class ApiKeyStore:
             conn.execute(_SQL_TOUCH_LAST_USED, (now, public_id))
             conn.commit()
             label = str(row["label"])
+            rate_limit_rpm = _to_optional_int(row["rate_limit_rpm"])
 
-        return AuthResult.success(public_id=public_id, label=label)
+        return AuthResult.success(
+            public_id=public_id,
+            label=label,
+            rate_limit_rpm=rate_limit_rpm,
+        )
 
     def list_keys(self, *, include_revoked: bool = False) -> list[ApiKeyRecord]:
         query = _SQL_SELECT_KEYS_BASE
@@ -188,27 +196,27 @@ class ApiKeyStore:
 
         return [_api_key_record_from_row(row) for row in rows]
 
-    def invalidate_key(
+    def delete_key(
         self,
         *,
         public_id: str,
         reason: str | None = None,
         now_ts: int | None = None,
-    ) -> InvalidateResult:
+    ) -> DeleteResult:
         now = _resolve_now(now_ts)
         normalized_reason = _normalize_reason(reason)
 
         with self._lock, closing(self._connect()) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(_SQL_SELECT_INVALIDATE_ROW, (public_id,)).fetchone()
+            row = conn.execute(_SQL_SELECT_DELETE_ROW, (public_id,)).fetchone()
             if row is None:
-                return InvalidateResult(status=InvalidateStatus.NOT_FOUND, public_id=public_id)
+                return DeleteResult(status=DeleteStatus.NOT_FOUND, public_id=public_id)
 
             revoked_at = _to_optional_int(row["revoked_at"])
             if revoked_at is not None:
                 existing_reason = str(row["revoked_reason"]) if row["revoked_reason"] else None
-                return InvalidateResult(
-                    status=InvalidateStatus.ALREADY_REVOKED,
+                return DeleteResult(
+                    status=DeleteStatus.ALREADY_DELETED,
                     public_id=public_id,
                     revoked_at=revoked_at,
                     revoked_reason=existing_reason,
@@ -217,12 +225,26 @@ class ApiKeyStore:
             conn.execute(_SQL_REVOKE_KEY, (now, normalized_reason, public_id))
             conn.commit()
 
-        return InvalidateResult(
-            status=InvalidateStatus.REVOKED,
+        return DeleteResult(
+            status=DeleteStatus.DELETED,
             public_id=public_id,
             revoked_at=now,
             revoked_reason=normalized_reason,
         )
+
+    def set_key_rate_limit(
+        self,
+        *,
+        public_id: str,
+        rate_limit_rpm: int,
+    ) -> bool:
+        if rate_limit_rpm <= 0:
+            raise ValueError("rate_limit_rpm must be > 0")
+
+        with self._lock, closing(self._connect()) as conn:
+            cursor = conn.execute(_SQL_UPDATE_KEY_RATE_LIMIT, (rate_limit_rpm, public_id))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def consume_rate_limit(
         self,
@@ -264,6 +286,7 @@ class ApiKeyStore:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock, closing(self._connect()) as conn:
             conn.execute(_SQL_CREATE_API_KEYS_TABLE)
+            _ensure_api_keys_columns(conn)
             conn.execute(_SQL_CREATE_RATE_WINDOWS_TABLE)
             conn.execute(_SQL_CREATE_RATE_WINDOWS_INDEX)
             conn.commit()
@@ -334,12 +357,22 @@ def _auth_row_failure_reason(
     return None
 
 
+def _ensure_api_keys_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(api_keys)").fetchall()
+    }
+    if "rate_limit_rpm" not in columns:
+        conn.execute(_SQL_ALTER_API_KEYS_ADD_RATE_LIMIT_RPM)
+
+
 def _api_key_record_from_row(row: sqlite3.Row) -> ApiKeyRecord:
     return ApiKeyRecord(
         public_id=str(row["public_id"]),
         label=str(row["label"]),
         key_prefix=str(row["key_prefix"]),
         created_at=int(row["created_at"]),
+        rate_limit_rpm=_to_optional_int(row["rate_limit_rpm"]),
         last_used_at=_to_optional_int(row["last_used_at"]),
         revoked_at=_to_optional_int(row["revoked_at"]),
         revoked_reason=str(row["revoked_reason"]) if row["revoked_reason"] else None,

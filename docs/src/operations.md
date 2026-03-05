@@ -18,6 +18,8 @@ Common TOML keys:
 - `[security].api_key_auth_enabled` (default `false`)
 - `[security].api_key_db_path` (default `data/api_keys.sqlite3`)
 - `[security].api_key_rate_limit_rpm` (default `300`)
+- `[security].api_key_unauth_access_enabled` (default `true`)
+- `[security].api_key_unauth_rate_limit_rps` (default `1`)
 
 Use `.env` for secrets and occasional overrides:
 
@@ -37,7 +39,9 @@ Observability:
 - `ENABLE_READINESS_STRICT` (`true`/`false`)
 
 Auth behavior (when enabled):
-- `/v1/*` requires `Authorization: Bearer <api-key>`
+- valid bearer keys use `api_key_rate_limit_rpm` by default, with optional per-key override via CLI
+- missing authorization is allowed at `api_key_unauth_rate_limit_rps` per client IP when `api_key_unauth_access_enabled=true`
+- invalid/revoked/expired authorization returns `401`
 - `/metrics` remains public
 - auth failures return `401` with `WWW-Authenticate: Bearer`
 - rate-limit failures return `429` with `Retry-After` and `X-RateLimit-*` headers
@@ -55,7 +59,8 @@ curl -s http://localhost:8000/metrics
 ```bash
 api-key generate
 api-key list
-api-key invalidate <key_id>
+api-key delete <key_id>
+api-key set-rate-limit <key_id> <rpm>
 ```
 
 ## Development Validation
@@ -83,3 +88,33 @@ Yes, this docs site can run directly on Vercel as a static deployment.
 - Output directory: `docs/site`
 
 Runtime API process (`uvicorn`) is separate from docs hosting.
+
+## Downstream Health Dashboard (Grafana)
+
+Use dashboard JSON:
+
+- `deploy/monitoring/dashboards/token_price_agg_overview.json`
+
+This dashboard is focused on downstream provider health (independent of top-level selection):
+
+- success: `status="ok"`
+- failure: `status!="ok"`
+- window: `rate(...[12h])`
+
+Top row includes separate gauges for:
+
+- Price Success %
+- Price Failure %
+- Quote Success %
+- Quote Failure %
+
+Prometheus scrape target for single-server local deployment:
+
+- `127.0.0.1:18743`
+
+Validation checklist:
+
+1. Prometheus target is `UP` at `/targets` for `job="token-price-agg"`.
+2. Import dashboard JSON into Grafana and select Prometheus datasource.
+3. Generate `/v1/price` and `/v1/quote` traffic and verify provider calls increment by `provider,operation,status`.
+4. Confirm any non-`ok` outcome increases failure % gauges.

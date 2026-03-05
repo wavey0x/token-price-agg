@@ -9,7 +9,7 @@ from token_price_agg.app.config import Settings, get_settings
 router = APIRouter(tags=["observability"])
 
 
-@router.get("/metrics")
+@router.get("/metrics", include_in_schema=False)
 async def metrics(settings: Settings = Depends(get_settings)) -> Response:
     if not settings.metrics_enabled:
         raise HTTPException(status_code=404, detail="Metrics are disabled")

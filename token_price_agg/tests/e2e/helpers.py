@@ -5,6 +5,7 @@ from httpx import Response
 
 from token_price_agg.app.dependencies import (
     get_aggregator_service,
+    get_anonymous_rate_limiter,
     get_api_key_store,
     get_provider_registry,
     get_token_metadata_resolver,
@@ -24,6 +25,7 @@ def clear_singletons() -> None:
 
     get_settings.cache_clear()
     get_api_key_store.cache_clear()
+    get_anonymous_rate_limiter.cache_clear()
     get_provider_registry.cache_clear()
     get_vault_resolver.cache_clear()
     get_aggregator_service.cache_clear()

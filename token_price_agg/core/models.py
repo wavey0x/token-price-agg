@@ -4,10 +4,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from token_price_agg.core.errors import ErrorInfo, ProviderStatus
-from token_price_agg.core.validator import NATIVE_TOKEN_ALIAS, AddressValidator
+from token_price_agg.core.validator import AddressValidator
 
 
 def utc_now() -> datetime:
@@ -19,7 +19,6 @@ class TokenRef(BaseModel):
 
     chain_id: int
     address: str
-    is_native: bool = False
     symbol: str | None = None
     decimals: int | None = None
     logo_url: str | None = None
@@ -28,17 +27,6 @@ class TokenRef(BaseModel):
     @classmethod
     def _normalize_address(cls, value: str) -> str:
         return AddressValidator.normalize_address(value)
-
-    @field_validator("is_native", mode="after")
-    @classmethod
-    def _ensure_native_flag(cls, value: bool, info: ValidationInfo) -> bool:
-        data = info.data
-        if not isinstance(data, dict):
-            return value
-        address = data.get("address")
-        if isinstance(address, str) and address.lower() == NATIVE_TOKEN_ALIAS.lower():
-            return True
-        return value
 
 
 class VaultType(str, Enum):
@@ -138,7 +126,6 @@ class TokenMetadata(BaseModel):
 
     chain_id: int
     address: str
-    is_native: bool = False
     symbol: str | None = None
     decimals: int | None = None
     logo_url: str | None = None
@@ -151,17 +138,6 @@ class TokenMetadata(BaseModel):
     @classmethod
     def _normalize_address(cls, value: str) -> str:
         return AddressValidator.normalize_address(value)
-
-    @field_validator("is_native", mode="after")
-    @classmethod
-    def _set_native_flag(cls, value: bool, info: ValidationInfo) -> bool:
-        data = info.data
-        if not isinstance(data, dict):
-            return value
-        address = data.get("address")
-        if isinstance(address, str) and address.lower() == NATIVE_TOKEN_ALIAS.lower():
-            return True
-        return value
 
     @field_validator("logo_status", mode="after")
     @classmethod
@@ -178,7 +154,6 @@ class AggregatePriceSummary(BaseModel):
     requested_providers: int
     successful_providers: int
     failed_providers: int
-    best_price: Decimal | None = None
     high_price: Decimal | None = None
     low_price: Decimal | None = None
     median_price: Decimal | None = None

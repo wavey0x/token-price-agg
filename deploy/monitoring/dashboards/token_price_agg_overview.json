@@ -1,69 +1,184 @@
 {
-  "title": "Token Price Agg Overview",
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" }
+  ],
+  "title": "Token Price Agg - Ops",
+  "uid": "token-price-agg-ops",
   "timezone": "browser",
-  "schemaVersion": 38,
-  "version": 1,
+  "schemaVersion": 39,
+  "version": 3,
   "refresh": "30s",
+  "time": { "from": "now-7d", "to": "now" },
   "panels": [
     {
-      "type": "timeseries",
-      "title": "HTTP Request Rate",
-      "targets": [
-        {
-          "expr": "sum by (endpoint, method) (rate(token_price_agg_http_requests_total[5m]))",
-          "legendFormat": "{{endpoint}} {{method}}"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "HTTP Error Ratio (5xx)",
-      "targets": [
-        {
-          "expr": "sum(rate(token_price_agg_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(token_price_agg_http_requests_total[5m])), 1)",
-          "legendFormat": "5xx ratio"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "p95 HTTP Latency",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (le, endpoint, method) (rate(token_price_agg_http_request_latency_seconds_bucket[5m])))",
-          "legendFormat": "{{endpoint}} {{method}}"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Provider Call Rate by Status",
-      "targets": [
-        {
-          "expr": "sum by (provider, status) (rate(token_price_agg_provider_calls_total[5m]))",
-          "legendFormat": "{{provider}} {{status}}"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Partial Response Rate",
-      "targets": [
-        {
-          "expr": "sum(rate(token_price_agg_partial_responses_total[5m]))",
-          "legendFormat": "partial responses/s"
-        }
-      ]
-    },
-    {
+      "id": 1,
       "type": "stat",
-      "title": "Provider Availability",
-      "targets": [
-        {
-          "expr": "token_price_agg_provider_available",
-          "legendFormat": "{{provider}}"
-        }
-      ]
+      "title": "Requests / sec (5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "refId": "A", "expr": "sum(rate(token_price_agg_http_requests_total[5m]))" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "5xx Ratio (5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "refId": "A", "expr": "sum(rate(token_price_agg_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(token_price_agg_http_requests_total[5m])), 1)" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "In-Flight Requests",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "refId": "A", "expr": "token_price_agg_http_inflight_requests" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Provider Calls / sec (5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "refId": "A", "expr": "sum(rate(token_price_agg_provider_calls_total[5m]))" }]
+    },
+
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Price Success % (12h)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 5 },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(token_price_agg_provider_calls_total{operation=\"price\",status=\"ok\"}[12h])) / clamp_min(sum(rate(token_price_agg_provider_calls_total{operation=\"price\"}[12h])), 1e-9)" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Price Failure % (12h)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 5 },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(token_price_agg_provider_calls_total{operation=\"price\",status!=\"ok\"}[12h])) / clamp_min(sum(rate(token_price_agg_provider_calls_total{operation=\"price\"}[12h])), 1e-9)" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Quote Success % (12h)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 5 },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(token_price_agg_provider_calls_total{operation=\"quote\",status=\"ok\"}[12h])) / clamp_min(sum(rate(token_price_agg_provider_calls_total{operation=\"quote\"}[12h])), 1e-9)" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Quote Failure % (12h)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 5 },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(token_price_agg_provider_calls_total{operation=\"quote\",status!=\"ok\"}[12h])) / clamp_min(sum(rate(token_price_agg_provider_calls_total{operation=\"quote\"}[12h])), 1e-9)" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "HTTP Request Rate by Status Class",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "targets": [{ "refId": "A", "expr": "sum by (status_class) (rate(token_price_agg_http_requests_total[5m]))", "legendFormat": "{{status_class}}" }]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "p95 /v1/price Latency (s)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(token_price_agg_http_request_latency_seconds_bucket{endpoint=\"/v1/price\",method=\"GET\"}[5m])))" }],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Price Attempts/sec by Provider (12h rate)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "targets": [{ "refId": "A", "expr": "sum by (provider) (rate(token_price_agg_provider_calls_total{operation=\"price\"}[12h]))", "legendFormat": "{{provider}}" }]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Quote Attempts/sec by Provider (12h rate)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "targets": [{ "refId": "A", "expr": "sum by (provider) (rate(token_price_agg_provider_calls_total{operation=\"quote\"}[12h]))", "legendFormat": "{{provider}}" }]
+    },
+
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Price Success % by Provider (12h)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+      "targets": [{ "refId": "A", "expr": "100 * sum by (provider) (rate(token_price_agg_provider_calls_total{operation=\"price\",status=\"ok\"}[12h])) / clamp_min(sum by (provider) (rate(token_price_agg_provider_calls_total{operation=\"price\"}[12h])), 1e-9)", "legendFormat": "{{provider}}" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Quote Success % by Provider (12h)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+      "targets": [{ "refId": "A", "expr": "100 * sum by (provider) (rate(token_price_agg_provider_calls_total{operation=\"quote\",status=\"ok\"}[12h])) / clamp_min(sum by (provider) (rate(token_price_agg_provider_calls_total{operation=\"quote\"}[12h])), 1e-9)", "legendFormat": "{{provider}}" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Price Failures by Provider + Status (12h rate)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "targets": [{ "refId": "A", "expr": "sum by (provider, status) (rate(token_price_agg_provider_calls_total{operation=\"price\",status!=\"ok\"}[12h]))", "legendFormat": "{{provider}} {{status}}" }]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Quote Failures by Provider + Status (12h rate)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "targets": [{ "refId": "A", "expr": "sum by (provider, status) (rate(token_price_agg_provider_calls_total{operation=\"quote\",status!=\"ok\"}[12h]))", "legendFormat": "{{provider}} {{status}}" }]
+    },
+
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Provider Timeout Rate by Provider (5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+      "targets": [{ "refId": "A", "expr": "sum by (provider) (rate(token_price_agg_provider_calls_total{status=\"timeout\"}[5m]))", "legendFormat": "{{provider}}" }]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Auth Results Rate (5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 42 },
+      "targets": [{ "refId": "A", "expr": "sum by (result) (rate(token_price_agg_auth_total[5m]))", "legendFormat": "{{result}}" }]
     }
   ]
 }

@@ -103,7 +103,6 @@ async def fetch_onchain_metadata(
         result[address] = TokenMetadata(
             chain_id=chain_id,
             address=address,
-            is_native=False,
             symbol=payload.get("symbol"),
             decimals=payload.get("decimals"),
             logo_url=None,

@@ -56,7 +56,6 @@ def metadata_for_address(
         value = TokenMetadata(
             chain_id=token.chain_id,
             address=token.address,
-            is_native=token.is_native,
             symbol=token.symbol,
             decimals=token.decimals,
             logo_url=token.logo_url,
@@ -66,7 +65,6 @@ def metadata_for_address(
     return TokenMetadataResponse(
         chain_id=value.chain_id,
         address=value.address,
-        is_native=value.is_native,
         symbol=value.symbol,
         decimals=value.decimals,
         logo_url=value.logo_url,

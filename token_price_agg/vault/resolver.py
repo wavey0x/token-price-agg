@@ -171,7 +171,6 @@ def _underlying_token_ref(base: TokenRef, underlying_address: str) -> TokenRef:
     return TokenRef(
         chain_id=base.chain_id,
         address=underlying_address,
-        is_native=False,
         symbol=base.symbol,
         decimals=base.decimals,
     )

@@ -99,6 +99,20 @@ class Settings(BaseSettings):
             AliasPath("security", "api_key_rate_limit_rpm"),
         ),
     )
+    api_key_unauth_access_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "api_key_unauth_access_enabled",
+            AliasPath("security", "api_key_unauth_access_enabled"),
+        ),
+    )
+    api_key_unauth_rate_limit_rps: int = Field(
+        default=1,
+        validation_alias=AliasChoices(
+            "api_key_unauth_rate_limit_rps",
+            AliasPath("security", "api_key_unauth_rate_limit_rps"),
+        ),
+    )
 
     providers_enabled: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["defillama", "curve", "lifi", "enso"],
@@ -228,6 +242,8 @@ class Settings(BaseSettings):
             raise ValueError("WEB3_LIMIT must be > 0")
         if self.api_key_rate_limit_rpm <= 0:
             raise ValueError("API_KEY_RATE_LIMIT_RPM must be > 0")
+        if self.api_key_unauth_rate_limit_rps <= 0:
+            raise ValueError("API_KEY_UNAUTH_RATE_LIMIT_RPS must be > 0")
 
         return self
 

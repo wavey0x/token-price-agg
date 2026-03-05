@@ -4,6 +4,7 @@ import logging
 
 from token_price_agg.app.config import Settings
 from token_price_agg.core.models import PriceResult, QuoteResult, TokenMetadata, TokenRef
+from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.cache import TokenMetadataCache
 from token_price_agg.token_metadata.onchain import fetch_onchain_metadata
 from token_price_agg.token_metadata.policy import (
@@ -94,7 +95,8 @@ class TokenMetadataResolver:
         unresolved = [
             address
             for address, metadata in merged.items()
-            if not metadata.is_native and (metadata.symbol is None or metadata.decimals is None)
+            if not AddressValidator.is_native_alias(metadata.address)
+            and (metadata.symbol is None or metadata.decimals is None)
         ]
         onchain = await self._fetch_onchain_metadata(chain_id=chain_id, addresses=unresolved)
         for address, value in onchain.items():

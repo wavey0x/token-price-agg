@@ -16,7 +16,11 @@ from token_price_agg.api.routes.providers import router as providers_router
 from token_price_agg.api.routes.quotes import router as quotes_router
 from token_price_agg.api.routes.ready import router as ready_router
 from token_price_agg.app.config import Settings, get_settings
-from token_price_agg.app.dependencies import get_api_key_store, get_provider_registry
+from token_price_agg.app.dependencies import (
+    get_anonymous_rate_limiter,
+    get_api_key_store,
+    get_provider_registry,
+)
 from token_price_agg.observability.logging import (
     RequestContextToken,
     bind_request_context,
@@ -139,43 +143,70 @@ def _authorize_and_rate_limit_if_needed(
 
     store = get_api_key_store()
     auth_result = store.authenticate_bearer_header(request.headers.get("Authorization"))
-    if not auth_result.authenticated:
-        _record_auth_failure_metrics(
-            metrics_enabled=settings.metrics_enabled,
-            failure_reason=auth_result.failure_reason,
+    if auth_result.authenticated:
+        if settings.metrics_enabled:
+            record_auth_result(result="ok")
+
+        request.state.api_key_id = auth_result.public_id
+        request.state.api_key_label = auth_result.label
+
+        effective_limit_rpm = (
+            auth_result.rate_limit_rpm
+            if auth_result.rate_limit_rpm is not None
+            else settings.api_key_rate_limit_rpm
         )
-        unauthorized = _unauthorized_response(failure_reason=auth_result.failure_reason)
-        unauthorized.headers["X-Request-ID"] = request_id
-        return unauthorized, None
+        rate_limit_result = store.consume_rate_limit(
+            public_id=str(auth_result.public_id),
+            limit_rpm=effective_limit_rpm,
+        )
+        if rate_limit_result.allowed:
+            return None, rate_limit_result
 
-    if settings.metrics_enabled:
-        record_auth_result(result="ok")
+        if settings.metrics_enabled:
+            record_rate_limited(endpoint=request.url.path)
+        return (
+            _rate_limited_response(
+                message="API key rate limit exceeded",
+                rate_limit_result=rate_limit_result,
+                request_id=request_id,
+            ),
+            None,
+        )
 
-    request.state.api_key_id = auth_result.public_id
-    request.state.api_key_label = auth_result.label
+    if _should_allow_unauthenticated_request(
+        failure_reason=auth_result.failure_reason,
+        settings=settings,
+    ):
+        if settings.metrics_enabled:
+            record_auth_result(result="unauth_ok")
 
-    rate_limit_result = store.consume_rate_limit(
-        public_id=str(auth_result.public_id),
-        limit_rpm=settings.api_key_rate_limit_rpm,
+        limiter = get_anonymous_rate_limiter()
+        rate_limit_result = limiter.consume(
+            client_id=_anonymous_client_id(request),
+            limit_rps=settings.api_key_unauth_rate_limit_rps,
+        )
+        if rate_limit_result.allowed:
+            return None, rate_limit_result
+
+        if settings.metrics_enabled:
+            record_auth_result(result="unauth_rate_limited")
+            record_rate_limited(endpoint=request.url.path)
+        return (
+            _rate_limited_response(
+                message="Anonymous rate limit exceeded",
+                rate_limit_result=rate_limit_result,
+                request_id=request_id,
+            ),
+            None,
+        )
+
+    _record_auth_failure_metrics(
+        metrics_enabled=settings.metrics_enabled,
+        failure_reason=auth_result.failure_reason,
     )
-    if rate_limit_result.allowed:
-        return None, rate_limit_result
-
-    if settings.metrics_enabled:
-        record_rate_limited(endpoint=request.url.path)
-    limited = JSONResponse(
-        status_code=429,
-        content={
-            "detail": {
-                "code": "RATE_LIMITED",
-                "message": "API key rate limit exceeded",
-            }
-        },
-    )
-    for key, value in rate_limit_result.headers().items():
-        limited.headers[key] = value
-    limited.headers["X-Request-ID"] = request_id
-    return limited, None
+    unauthorized = _unauthorized_response(failure_reason=auth_result.failure_reason)
+    unauthorized.headers["X-Request-ID"] = request_id
+    return unauthorized, None
 
 
 def _record_auth_failure_metrics(
@@ -193,6 +224,24 @@ def _record_auth_failure_metrics(
     record_auth_result(result=result)
 
 
+def _should_allow_unauthenticated_request(
+    *,
+    failure_reason: AuthFailureReason | None,
+    settings: Settings,
+) -> bool:
+    return (
+        settings.api_key_unauth_access_enabled
+        and failure_reason == AuthFailureReason.MISSING_AUTHORIZATION
+    )
+
+
+def _anonymous_client_id(request: Request) -> str:
+    client = request.client
+    if client is None or not client.host:
+        return "unknown"
+    return client.host
+
+
 def _apply_response_headers(
     *,
     response: Response,
@@ -204,6 +253,27 @@ def _apply_response_headers(
         return
     for key, value in rate_limit_result.headers().items():
         response.headers[key] = value
+
+
+def _rate_limited_response(
+    *,
+    message: str,
+    rate_limit_result: RateLimitResult,
+    request_id: str,
+) -> JSONResponse:
+    limited = JSONResponse(
+        status_code=429,
+        content={
+            "detail": {
+                "code": "RATE_LIMITED",
+                "message": message,
+            }
+        },
+    )
+    for key, value in rate_limit_result.headers().items():
+        limited.headers[key] = value
+    limited.headers["X-Request-ID"] = request_id
+    return limited
 
 
 def _finalize_observability(

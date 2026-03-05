@@ -128,7 +128,7 @@ sudo journalctl -u token-price-agg -f
 
 - Put the service behind Nginx/Caddy and expose only 80/443 publicly.
 - Keep port `8000` bound to localhost or restricted network where possible.
-- If `API_KEY_AUTH_ENABLED=true`, ensure any external health/readiness checks include a bearer token for `/v1/*`.
+- If `API_KEY_AUTH_ENABLED=true` and `API_KEY_UNAUTH_ACCESS_ENABLED=false`, ensure external health/readiness checks include a bearer token for `/v1/*`.
 
 ## Local Run
 
@@ -179,7 +179,9 @@ Yes, docs can be hosted directly on Vercel as static files.
 - `GET /metrics`
 
 When `API_KEY_AUTH_ENABLED=true`:
-- all `/v1/*` endpoints require `Authorization: Bearer <api-key>`
+- valid bearer keys use `API_KEY_RATE_LIMIT_RPM` by default, with optional per-key overrides via CLI
+- requests without `Authorization` are allowed at `API_KEY_UNAUTH_RATE_LIMIT_RPS` per client IP when `API_KEY_UNAUTH_ACCESS_ENABLED=true`
+- invalid/revoked/expired authorization headers still return `401`
 - `/metrics` stays unauthenticated
 
 ## Request Examples
@@ -228,6 +230,8 @@ Key sections:
   - `api_key_auth_enabled = false`
   - `api_key_db_path = "data/api_keys.sqlite3"`
   - `api_key_rate_limit_rpm = 300`
+  - `api_key_unauth_access_enabled = true`
+  - `api_key_unauth_rate_limit_rps = 1`
 
 Settings precedence:
 1. environment variables
@@ -246,7 +250,8 @@ Manage consumer API keys locally:
 ```bash
 api-key generate
 api-key list
-api-key invalidate <key_id>
+api-key delete <key_id>
+api-key set-rate-limit <key_id> <rpm>
 ```
 
 Optional machine-readable output:
@@ -254,7 +259,8 @@ Optional machine-readable output:
 ```bash
 api-key generate --label "ops" --json
 api-key list --all --json
-api-key invalidate <key_id> --reason "rotation" --json
+api-key delete <key_id> --reason "rotation" --json
+api-key set-rate-limit <key_id> 120 --json
 ```
 
 ## Response Contract
@@ -266,7 +272,7 @@ Price response includes:
 - `providers`: keyed map of per-provider results (includes failures)
 - `summary`: aggregate stats
 - `price_data.price` and `providers.*.price` are normalized USD prices
-- price summary fields: `best_price`, `high_price`, `low_price`, `median_price`, `deviation_bps`
+- price summary fields: `high_price`, `low_price`, `median_price`, `deviation_bps`
 - shared summary fields: `requested_providers`, `successful_providers`, `failed_providers`
 
 Quote response mirrors this shape using:

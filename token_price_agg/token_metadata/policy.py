@@ -3,18 +3,16 @@ from __future__ import annotations
 from typing import Any
 
 from token_price_agg.core.models import TokenMetadata, TokenRef
-from token_price_agg.core.validator import NATIVE_TOKEN_ALIAS
+from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.logo_urls import build_logo_candidates
 
 
 def hints_from_refs(refs: list[TokenRef], *, chain_id: int) -> dict[str, TokenMetadata]:
     out: dict[str, TokenMetadata] = {}
     for ref in refs:
-        native = ref.is_native or ref.address.lower() == NATIVE_TOKEN_ALIAS.lower()
         hint = TokenMetadata(
             chain_id=chain_id,
             address=ref.address,
-            is_native=native,
             symbol=ref.symbol,
             decimals=ref.decimals,
             logo_url=ref.logo_url,
@@ -62,7 +60,6 @@ def merge_metadata(
     return TokenMetadata(
         chain_id=chain_id,
         address=address,
-        is_native=native,
         symbol=symbol,
         decimals=decimals,
         logo_url=logo_url,
@@ -117,11 +114,11 @@ def normalized_logo_status(value: str | None) -> str:
 
 
 def _is_native(*, address: str, cached: TokenMetadata | None, hint: TokenMetadata | None) -> bool:
-    if cached is not None and cached.is_native:
+    if cached is not None and AddressValidator.is_native_alias(cached.address):
         return True
-    if hint is not None and hint.is_native:
+    if hint is not None and AddressValidator.is_native_alias(hint.address):
         return True
-    return address.lower() == NATIVE_TOKEN_ALIAS.lower()
+    return AddressValidator.is_native_alias(address)
 
 
 def _pick_first(*values: Any) -> Any:

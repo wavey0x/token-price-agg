@@ -65,14 +65,12 @@ def build_price_summary(results: list[PriceResult]) -> AggregatePriceSummary:
     prices = [result.price_usd for result in successful if result.price_usd is not None]
     high_price = max(prices) if prices else None
     low_price = min(prices) if prices else None
-    best_price = high_price
     median_price = Decimal(str(median(prices))) if prices else None
 
     return AggregatePriceSummary(
         requested_providers=len(results),
         successful_providers=len(successful),
         failed_providers=len(results) - len(successful),
-        best_price=best_price,
         high_price=high_price,
         low_price=low_price,
         median_price=median_price,

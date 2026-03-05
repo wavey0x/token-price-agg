@@ -63,7 +63,7 @@ Key fields:
 - `providers`: keyed object of per-provider results
 - `summary`: aggregate statistics
 - `price` fields in `price_data` and `providers.*` are normalized USD prices
-- `summary` price fields: `best_price`, `high_price`, `low_price`, `median_price`, `deviation_bps`
+- `summary` price fields: `high_price`, `low_price`, `median_price`, `deviation_bps`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
 
 `value_usd` is removed from response.
@@ -83,7 +83,6 @@ curl -s \
   "token": {
     "chain_id": 1,
     "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    "is_native": false,
     "symbol": "USDC",
     "decimals": 6,
     "logo_url": "https://assets.smold.app/api/token/1/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo-128.png"
@@ -123,7 +122,6 @@ curl -s \
     "requested_providers": 2,
     "successful_providers": 2,
     "failed_providers": 0,
-    "best_price": "1.0002",
     "high_price": "1.0002",
     "low_price": "1.0001",
     "median_price": "1.00015",
@@ -141,7 +139,6 @@ curl -s \
   "token": {
     "chain_id": 1,
     "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
-    "is_native": false,
     "symbol": "CRV",
     "decimals": 18,
     "logo_url": null
@@ -184,7 +181,6 @@ curl -s \
     "requested_providers": 2,
     "successful_providers": 1,
     "failed_providers": 1,
-    "best_price": "0.7421",
     "high_price": "0.7421",
     "low_price": "0.7421",
     "median_price": "0.7421",
@@ -277,7 +273,6 @@ curl -s \
   "token_in": {
     "chain_id": 1,
     "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
-    "is_native": false,
     "symbol": "CRV",
     "decimals": 18,
     "logo_url": null
@@ -285,7 +280,6 @@ curl -s \
   "token_out": {
     "chain_id": 1,
     "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    "is_native": false,
     "symbol": "USDC",
     "decimals": 6,
     "logo_url": null

@@ -9,7 +9,7 @@ from token_price_agg.app.config import get_settings
 from token_price_agg.tools import api_key
 
 
-def test_api_key_cli_generate_list_invalidate_json(
+def test_api_key_cli_generate_list_delete_json(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
@@ -29,10 +29,20 @@ def test_api_key_cli_generate_list_invalidate_json(
     listed = json.loads(capsys.readouterr().out)
     assert listed["count"] == 1
     assert listed["keys"][0]["id"] == key_id
+    assert listed["keys"][0]["rate_limit_rpm"] is None
 
-    assert api_key.main(["invalidate", key_id, "--reason", "rotate", "--json"]) == 0
+    assert api_key.main(["set-rate-limit", key_id, "42", "--json"]) == 0
+    updated = json.loads(capsys.readouterr().out)
+    assert updated["status"] == "updated"
+    assert updated["rate_limit_rpm"] == 42
+
+    assert api_key.main(["list", "--json"]) == 0
+    listed_with_override = json.loads(capsys.readouterr().out)
+    assert listed_with_override["keys"][0]["rate_limit_rpm"] == 42
+
+    assert api_key.main(["delete", key_id, "--reason", "rotate", "--json"]) == 0
     revoked = json.loads(capsys.readouterr().out)
-    assert revoked["status"] == "revoked"
+    assert revoked["status"] == "deleted"
     assert revoked["reason"] == "rotate"
 
     assert api_key.main(["list", "--json"]) == 0
@@ -60,7 +70,7 @@ def test_api_key_cli_generate_interactive_label(
     assert generated["label"] == "operator"
 
 
-def test_api_key_cli_invalidate_unknown_is_non_destructive(
+def test_api_key_cli_delete_unknown_is_non_destructive(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
@@ -68,6 +78,19 @@ def test_api_key_cli_invalidate_unknown_is_non_destructive(
     monkeypatch.setenv("API_KEY_DB_PATH", str(tmp_path / "api_keys.sqlite3"))
     get_settings.cache_clear()
 
-    assert api_key.main(["invalidate", "deadbeefdeadbeef", "--json"]) == 0
+    assert api_key.main(["delete", "deadbeefdeadbeef", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "not_found"
+
+
+def test_api_key_cli_rate_limit_update_unknown_is_non_destructive(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    capsys: CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("API_KEY_DB_PATH", str(tmp_path / "api_keys.sqlite3"))
+    get_settings.cache_clear()
+
+    assert api_key.main(["set-rate-limit", "deadbeefdeadbeef", "10", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "not_found"

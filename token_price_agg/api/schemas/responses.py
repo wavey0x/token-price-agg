@@ -26,7 +26,6 @@ class TokenMetadataResponse(BaseModel):
 
     chain_id: int
     address: str
-    is_native: bool
     symbol: str | None = None
     decimals: int | None = None
     logo_url: str | None = None

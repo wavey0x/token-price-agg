@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from token_price_agg.security.models import AuthFailureReason, InvalidateStatus
+from token_price_agg.security.models import AuthFailureReason, DeleteStatus
 from token_price_agg.security.store import ApiKeyStore
 
 
@@ -30,12 +30,12 @@ def test_api_key_store_lifecycle(tmp_path: Path) -> None:
     refreshed_rows = store.list_keys()
     assert refreshed_rows[0].last_used_at == 1_700_000_010
 
-    revoked = store.invalidate_key(
+    revoked = store.delete_key(
         public_id=issued.public_id,
         reason="manual revoke",
         now_ts=1_700_000_020,
     )
-    assert revoked.status == InvalidateStatus.REVOKED
+    assert revoked.status == DeleteStatus.DELETED
     assert revoked.revoked_at == 1_700_000_020
     assert revoked.revoked_reason == "manual revoke"
 
@@ -50,11 +50,11 @@ def test_api_key_store_lifecycle(tmp_path: Path) -> None:
     assert len(all_rows) == 1
     assert all_rows[0].revoked_at == 1_700_000_020
 
-    already = store.invalidate_key(public_id=issued.public_id, now_ts=1_700_000_022)
-    assert already.status == InvalidateStatus.ALREADY_REVOKED
+    already = store.delete_key(public_id=issued.public_id, now_ts=1_700_000_022)
+    assert already.status == DeleteStatus.ALREADY_DELETED
 
-    missing = store.invalidate_key(public_id="deadbeefdeadbeef", now_ts=1_700_000_023)
-    assert missing.status == InvalidateStatus.NOT_FOUND
+    missing = store.delete_key(public_id="deadbeefdeadbeef", now_ts=1_700_000_023)
+    assert missing.status == DeleteStatus.NOT_FOUND
 
 
 def test_api_key_auth_rejects_invalid_or_missing_authorization(tmp_path: Path) -> None:
@@ -104,3 +104,20 @@ def test_fixed_window_rate_limit_rollover(tmp_path: Path) -> None:
     next_window = store.consume_rate_limit(public_id=key_id, limit_rpm=3, now_ts=1_700_000_061)
     assert next_window.allowed is True
     assert next_window.request_count == 1
+
+
+def test_key_rate_limit_override_lifecycle(tmp_path: Path) -> None:
+    store = ApiKeyStore(db_path=str(tmp_path / "api_keys.sqlite3"))
+    issued = store.issue_key(label="dave", now_ts=1_700_000_000)
+
+    updated = store.set_key_rate_limit(public_id=issued.public_id, rate_limit_rpm=12)
+    assert updated is True
+
+    auth = store.authenticate_key(issued.key, now_ts=1_700_000_001)
+    assert auth.authenticated is True
+    assert auth.rate_limit_rpm == 12
+
+    rows = store.list_keys()
+    assert rows[0].rate_limit_rpm == 12
+
+    assert store.set_key_rate_limit(public_id="deadbeefdeadbeef", rate_limit_rpm=42) is False

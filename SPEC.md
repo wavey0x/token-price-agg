@@ -167,7 +167,6 @@ Notes:
   "token": {
     "chain_id": 1,
     "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
-    "is_native": false,
     "symbol": "CRV",
     "decimals": 18,
     "logo_url": "https://assets.smold.app/api/token/1/0xD533a949740bb3306d119CC777fa900bA034cd52/logo-128.png"
@@ -226,7 +225,6 @@ Notes:
 ### 8.1 Canonical TokenRef
 - `chain_id: int`
 - `address: str` (EIP-55 checksum)
-- `is_native: bool`
 - `symbol: str | None`
 - `decimals: int | None`
 
@@ -328,8 +326,7 @@ Example:
 ### 10.3 Aggregation Semantics
 - Price requests return all provider results plus summary fields.
 - Summary fields for price:
-  - `best_price`: max non-null price
-  - `median_price`: median of non-null prices
+    - `median_price`: median of non-null prices
   - `deviation_bps`: spread between min and max (if >=2 successful providers)
 - Quote requests return all provider results plus:
   - `best_amount_out`: max non-null `amount_out`
@@ -588,7 +585,7 @@ Mitigations:
 - Clear response metadata so consumers understand differences.
 
 ## 20. Open Questions (Need Your Decision)
-1. Should the API return only per-provider raw-normalized results, or also compute a "best" aggregate answer (`best_price` / `best_quote`) in MVP?
+1. Should the API return only per-provider raw-normalized results, or also compute a "best" aggregate answer ("best" summary fields) in MVP?
 2. For `use_underlying=true`, should conversion apply to both `token_in` and `token_out` automatically, or only for the specific token field explicitly marked by caller?
 3. Should quote responses include provider route details by default, or only behind a debug flag to keep payloads small?
 4. Do you want strict fail behavior (`HTTP 4xx/5xx`) when all providers fail, or always `200` with per-provider failures?

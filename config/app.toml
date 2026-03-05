@@ -26,3 +26,5 @@ db_path = "data/token_metadata.sqlite3"
 api_key_auth_enabled = false
 api_key_db_path = "data/api_keys.sqlite3"
 api_key_rate_limit_rpm = 300
+api_key_unauth_access_enabled = true
+api_key_unauth_rate_limit_rps = 1

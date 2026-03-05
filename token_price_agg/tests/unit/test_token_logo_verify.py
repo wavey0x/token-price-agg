@@ -43,7 +43,6 @@ def test_cache_migration_adds_logo_columns(tmp_path: Path) -> None:
         CREATE TABLE token_metadata (
             chain_id INTEGER NOT NULL,
             address TEXT NOT NULL,
-            is_native INTEGER NOT NULL DEFAULT 0,
             symbol TEXT,
             decimals INTEGER,
             logo_url TEXT,

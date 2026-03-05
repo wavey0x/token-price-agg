@@ -48,7 +48,6 @@ def test_price_endpoint_returns_new_shape_for_default_symbols(symbol: str) -> No
     assert payload["provider_order"] == ["defillama"]
     assert payload["price_data"]["provider"] == "defillama"
     assert payload["providers"]["defillama"]["status"] == "ok"
-    assert "best_price" in payload["summary"]
     assert "high_price" in payload["summary"]
     assert "low_price" in payload["summary"]
     assert "median_price" in payload["summary"]
@@ -96,7 +95,6 @@ def test_price_endpoint_provider_query_styles(provider_params: list[tuple[str, s
     payload = response.json()
     assert payload["summary"]["requested_providers"] == 2
     assert payload["summary"]["successful_providers"] == 2
-    assert Decimal(str(payload["summary"]["best_price"])) == Decimal("1.01")
     assert Decimal(str(payload["summary"]["high_price"])) == Decimal("1.01")
     assert Decimal(str(payload["summary"]["low_price"])) == Decimal("1.00")
     assert payload["provider_order"] == ["curve", "defillama"]

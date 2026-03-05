@@ -252,7 +252,7 @@ async def test_aggregate_prices_applies_vault_share_to_asset_rate(
 
     assert partial is False
     assert results[0].price_usd == Decimal("15")
-    assert summary.best_price == Decimal("15")
+    assert summary.high_price == Decimal("15")
     assert results[0].vault_context is not None
     assert results[0].vault_context.share_to_asset_rate == "3/2"
 

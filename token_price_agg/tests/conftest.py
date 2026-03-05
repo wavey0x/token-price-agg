@@ -7,6 +7,7 @@ import pytest
 from token_price_agg.app.config import get_settings
 from token_price_agg.app.dependencies import (
     get_aggregator_service,
+    get_anonymous_rate_limiter,
     get_api_key_store,
     get_provider_registry,
     get_vault_resolver,
@@ -17,6 +18,7 @@ from token_price_agg.app.dependencies import (
 def _clear_cached_singletons() -> None:
     get_settings.cache_clear()
     get_api_key_store.cache_clear()
+    get_anonymous_rate_limiter.cache_clear()
     get_provider_registry.cache_clear()
     get_vault_resolver.cache_clear()
     get_aggregator_service.cache_clear()
@@ -34,6 +36,8 @@ def _set_default_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENABLE_READINESS_STRICT", "false")
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "false")
     monkeypatch.setenv("API_KEY_RATE_LIMIT_RPM", "300")
+    monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "true")
+    monkeypatch.setenv("API_KEY_UNAUTH_RATE_LIMIT_RPS", "1")
     monkeypatch.setenv("PROVIDERS_ENABLED", "defillama,curve,lifi,enso")
     # Explicitly override .env values so tests can assert missing-key behavior.
     monkeypatch.setenv("LIFI_API_KEY", "")

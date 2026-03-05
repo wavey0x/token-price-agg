@@ -34,6 +34,8 @@ Required/important env vars:
 - `API_KEY_AUTH_ENABLED` (default: `false`)
 - `API_KEY_DB_PATH` (default: `data/api_keys.sqlite3`)
 - `API_KEY_RATE_LIMIT_RPM` (default: `300`)
+- `API_KEY_UNAUTH_ACCESS_ENABLED` (default: `true`)
+- `API_KEY_UNAUTH_RATE_LIMIT_RPS` (default: `1`)
 
 Config file:
 - `config/app.toml`
@@ -50,19 +52,21 @@ Observability env vars:
 
 ## Runtime Endpoints
 
-- `GET /v1/health` liveness (`/v1/*` is API-key protected when `API_KEY_AUTH_ENABLED=true`)
-- `GET /v1/ready` readiness (`/v1/*` is API-key protected when `API_KEY_AUTH_ENABLED=true`)
-- `GET /v1/providers` provider capabilities and availability (`/v1/*` is API-key protected when enabled)
+- `GET /v1/health` liveness (`/v1/*` uses authenticated tier and optional unauthenticated tier when `API_KEY_AUTH_ENABLED=true`)
+- `GET /v1/ready` readiness (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
+- `GET /v1/providers` provider capabilities and availability (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
 - `GET /metrics` Prometheus scrape endpoint
-- `GET /v1/price` aggregated price response (`/v1/*` is API-key protected when enabled)
-- `GET /v1/quote` aggregated quote response (`/v1/*` is API-key protected when enabled)
+- `GET /v1/price` aggregated price response (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
+- `GET /v1/quote` aggregated quote response (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
 
 Auth behavior (when enabled):
-- send `Authorization: Bearer <api_key>`
-- missing/invalid/revoked key returns `401` with:
+- send `Authorization: Bearer <api_key>` for authenticated tier
+- valid API keys are rate-limited by `API_KEY_RATE_LIMIT_RPM` unless per-key override is set via CLI
+- missing authorization is allowed only when `API_KEY_UNAUTH_ACCESS_ENABLED=true` and is rate-limited by `API_KEY_UNAUTH_RATE_LIMIT_RPS` per client IP
+- invalid/revoked/expired key returns `401` with:
   - `WWW-Authenticate: Bearer`
   - `{"detail":{"code":"UNAUTHORIZED","message":"..."}}`
-- rate-limited key returns `429` with:
+- rate-limited responses return `429` with:
   - `Retry-After`
   - `X-RateLimit-Limit`
   - `X-RateLimit-Remaining`
@@ -101,7 +105,7 @@ Price response:
 - `price_data.price` and `providers.*.price` are normalized USD prices
 - with `use_underlying=true`, price is vault-share USD price
   (`underlying_price * share_to_asset_rate`)
-- price summary fields: `best_price`, `high_price`, `low_price`, `median_price`, `deviation_bps`
+- price summary fields: `high_price`, `low_price`, `median_price`, `deviation_bps`
 - shared summary fields: `requested_providers`, `successful_providers`, `failed_providers`
 
 Quote response:
@@ -302,8 +306,8 @@ uv run mypy .
 
 - `INVALID_ADDRESS`: malformed token address
 - `RPC_NOT_CONFIGURED`: `use_underlying=true` used without `RPC_URLS`
-- `UNAUTHORIZED`: missing/invalid/revoked bearer token
-- `RATE_LIMITED`: API key exceeded per-minute request budget
+- `UNAUTHORIZED`: invalid/revoked/expired bearer token (or missing bearer when `API_KEY_UNAUTH_ACCESS_ENABLED=false`)
+- `RATE_LIMITED`: API key exceeded per-minute budget or anonymous tier exceeded per-second budget
 - provider status `invalid_request` + `missing_api_key`
 - provider status `timeout`/`upstream_error`
 - readiness `not_ready` with reason `no_available_providers` in strict mode
@@ -331,14 +335,21 @@ api-key list
 api-key list --all
 ```
 
-Invalidate key:
+Delete key:
 
 ```bash
-api-key invalidate <key_id>
+api-key delete <key_id>
+```
+
+Set per-key rate limit override (rpm):
+
+```bash
+api-key set-rate-limit <key_id> 120
 ```
 
 ## Deployment Notes for Probes
 
-When `API_KEY_AUTH_ENABLED=true`, Kubernetes `httpGet` probes on `/v1/health` and `/v1/ready`
-will fail without auth headers. Update probes to an authenticated strategy (for example an
-`exec` probe that includes `Authorization: Bearer ...`) or keep auth disabled for those paths.
+When `API_KEY_AUTH_ENABLED=true` and `API_KEY_UNAUTH_ACCESS_ENABLED=false`, Kubernetes `httpGet`
+probes on `/v1/health` and `/v1/ready` will fail without auth headers. Update probes to an
+authenticated strategy (for example an `exec` probe that includes `Authorization: Bearer ...`) or
+enable unauthenticated access with low RPS for probe traffic.

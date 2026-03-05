@@ -21,7 +21,7 @@ class TokenMetadataCache:
 
         placeholders = ",".join("?" for _ in addresses)
         query = (
-            "SELECT chain_id, address, is_native, symbol, decimals, logo_url, "
+            "SELECT chain_id, address, symbol, decimals, logo_url, "
             "logo_status, logo_checked_at, logo_http_status, source "
             f"FROM token_metadata WHERE chain_id = ? AND address IN ({placeholders})"
         )
@@ -36,7 +36,6 @@ class TokenMetadataCache:
             metadata = TokenMetadata(
                 chain_id=int(row["chain_id"]),
                 address=str(row["address"]),
-                is_native=bool(row["is_native"]),
                 symbol=str(row["symbol"]) if row["symbol"] is not None else None,
                 decimals=int(row["decimals"]) if row["decimals"] is not None else None,
                 logo_url=str(row["logo_url"]) if row["logo_url"] is not None else None,
@@ -63,7 +62,6 @@ class TokenMetadataCache:
             (
                 item.chain_id,
                 item.address,
-                1 if item.is_native else 0,
                 item.symbol,
                 item.decimals,
                 item.logo_url,
@@ -82,7 +80,6 @@ class TokenMetadataCache:
                 INSERT INTO token_metadata (
                     chain_id,
                     address,
-                    is_native,
                     symbol,
                     decimals,
                     logo_url,
@@ -91,9 +88,8 @@ class TokenMetadataCache:
                     logo_http_status,
                     source,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(chain_id, address) DO UPDATE SET
-                    is_native = excluded.is_native,
                     symbol = excluded.symbol,
                     decimals = excluded.decimals,
                     logo_url = excluded.logo_url,
@@ -115,7 +111,6 @@ class TokenMetadataCache:
                 CREATE TABLE IF NOT EXISTS token_metadata (
                     chain_id INTEGER NOT NULL,
                     address TEXT NOT NULL,
-                    is_native INTEGER NOT NULL DEFAULT 0,
                     symbol TEXT,
                     decimals INTEGER,
                     logo_url TEXT,
