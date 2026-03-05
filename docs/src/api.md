@@ -66,6 +66,7 @@ Key fields:
 - `price` fields in `price_data` and `providers.*` are normalized USD prices
 - `summary` price fields: `high_price`, `low_price`, `median_price`, `deviation_bps`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
+- `vault_context` is included only in top-level `price_data` (not repeated in `providers.*`)
 
 `value_usd` is removed from response.
 
@@ -105,8 +106,7 @@ curl -s \
       "latency_ms": 37,
       "as_of": "2026-03-05T02:30:08.000000Z",
       "retrieved_at": "2026-03-05T02:30:08.123456Z",
-      "error": null,
-      "vault_context": null
+      "error": null
     },
     "curve": {
       "status": "ok",
@@ -115,8 +115,7 @@ curl -s \
       "latency_ms": 52,
       "as_of": "2026-03-05T02:30:08.000000Z",
       "retrieved_at": "2026-03-05T02:30:08.138901Z",
-      "error": null,
-      "vault_context": null
+      "error": null
     }
   },
   "summary": {
@@ -161,8 +160,7 @@ curl -s \
       "latency_ms": 91,
       "as_of": "2026-03-05T02:32:11.000000Z",
       "retrieved_at": "2026-03-05T02:32:11.450000Z",
-      "error": null,
-      "vault_context": null
+      "error": null
     },
     "defillama": {
       "status": "timeout",
@@ -174,8 +172,7 @@ curl -s \
       "error": {
         "code": "DEADLINE_EXCEEDED",
         "message": "Provider request exceeded deadline"
-      },
-      "vault_context": null
+      }
     }
   },
   "summary": {

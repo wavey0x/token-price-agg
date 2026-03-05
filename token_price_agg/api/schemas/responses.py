@@ -41,7 +41,6 @@ class PriceProviderEntry(BaseModel):
     as_of: datetime | None = None
     retrieved_at: datetime
     error: ErrorInfo | None = None
-    vault_context: PriceVaultContext | None = None
 
 
 class SelectedPrice(BaseModel):

@@ -48,6 +48,7 @@ def test_price_endpoint_returns_new_shape_for_default_symbols(symbol: str) -> No
     assert payload["provider_order"] == ["defillama"]
     assert payload["price_data"]["provider"] == "defillama"
     assert payload["providers"]["defillama"]["status"] == "ok"
+    assert "vault_context" not in payload["providers"]["defillama"]
     assert "high_price" in payload["summary"]
     assert "low_price" in payload["summary"]
     assert "median_price" in payload["summary"]
@@ -298,3 +299,12 @@ def test_price_endpoint_one_provider_fails_other_succeeds(monkeypatch: pytest.Mo
     assert payload["providers"]["curve"]["status"] == "internal_error"
     assert payload["providers"]["defillama"]["status"] == "ok"
     assert payload["price_data"]["provider"] == "defillama"
+
+
+def test_openapi_price_provider_entry_does_not_include_vault_context() -> None:
+    with TestClient(app) as client:
+        response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    schema = response.json()["components"]["schemas"]["PriceProviderEntry"]["properties"]
+    assert "vault_context" not in schema

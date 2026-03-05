@@ -107,7 +107,6 @@ async def _handle_price_request(
             as_of=result.as_of,
             retrieved_at=result.retrieved_at,
             error=result.error,
-            vault_context=_to_price_vault_context(result.vault_context),
         )
 
     selected = select_price_result(provider_order=provider_order, by_provider=by_provider)
