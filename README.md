@@ -59,6 +59,7 @@ cp .env.example .env
 Minimum fields to review in `.env`:
 
 - `LIFI_API_KEY` and `ENSO_API_KEY` (optional, required only if enabling those providers)
+- `odos` does not require an API key
 
 Notes:
 - `APP_VERSION` is optional (default is `0.1.0`).

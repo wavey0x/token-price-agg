@@ -7,7 +7,7 @@ from typing import Literal
 import httpx
 
 from token_price_agg.core.errors import ProviderStatus
-from token_price_agg.providers.clients.http import HttpClient, HttpResponse, QueryParams
+from token_price_agg.providers.clients.http import HttpClient, HttpResponse, JsonBody, QueryParams
 from token_price_agg.providers.utils import status_from_http_code
 
 FailureReason = Literal["timeout", "http_error", "non_200", "invalid_json"]
@@ -46,6 +46,34 @@ async def timed_get(
     started = time.perf_counter()
     try:
         response = await client.get(url=url, params=params, headers=headers)
+    except httpx.TimeoutException:
+        return HttpCallResult(
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            timeout=True,
+        )
+    except httpx.HTTPError as exc:
+        return HttpCallResult(
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            http_error=exc,
+        )
+
+    return HttpCallResult(
+        latency_ms=int((time.perf_counter() - started) * 1000),
+        response=response,
+    )
+
+
+async def timed_post(
+    *,
+    client: HttpClient,
+    url: str,
+    json: JsonBody | None = None,
+    params: QueryParams | None = None,
+    headers: dict[str, str] | None = None,
+) -> HttpCallResult:
+    started = time.perf_counter()
+    try:
+        response = await client.post(url=url, json=json, params=params, headers=headers)
     except httpx.TimeoutException:
         return HttpCallResult(
             latency_ms=int((time.perf_counter() - started) * 1000),

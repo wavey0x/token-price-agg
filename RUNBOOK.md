@@ -28,7 +28,7 @@ Required/important env vars:
 - `TOKEN_METADATA_DB_PATH` (default: `data/token_metadata.sqlite3`)
 - `PROVIDER_REQUEST_TIMEOUT_MS` (default: `800`)
 - `PROVIDER_MAX_RETRIES` (default: `0`)
-- `PROVIDERS_ENABLED` (default: `defillama,curve,lifi,enso`)
+- `PROVIDERS_ENABLED` (default: `defillama,curve,odos,lifi,enso`)
 - `PRICE_PROVIDER_PRIORITY` (optional default precedence)
 - `QUOTE_PROVIDER_PRIORITY` (optional default precedence)
 - `API_KEY_AUTH_ENABLED` (default: `false`)

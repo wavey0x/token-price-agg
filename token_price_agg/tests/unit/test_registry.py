@@ -33,4 +33,4 @@ def test_default_providers_enabled_are_built() -> None:
     registry = ProviderRegistry(settings)
 
     capabilities = sorted(item.id for item in registry.capabilities())
-    assert capabilities == ["curve", "defillama", "enso", "lifi"]
+    assert capabilities == ["curve", "defillama", "enso", "lifi", "odos"]

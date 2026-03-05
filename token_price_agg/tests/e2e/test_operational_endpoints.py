@@ -18,6 +18,7 @@ def test_providers_endpoint_shows_missing_api_keys() -> None:
     assert providers["lifi"]["available"] is False
     assert providers["lifi"]["unavailable_reason"] == "missing_api_key"
     assert providers["enso"]["available"] is False
+    assert providers["odos"]["available"] is True
 
 
 def test_removed_plural_and_post_paths_return_404() -> None:

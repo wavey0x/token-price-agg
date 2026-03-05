@@ -4,6 +4,7 @@
 
 - `curve` (price + quote)
 - `defillama` (price only)
+- `odos` (price + quote, no API key required)
 - `lifi` (price + quote, requires `LIFI_API_KEY`)
 - `enso` (price + quote, requires `ENSO_API_KEY`)
 

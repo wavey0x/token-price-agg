@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     )
 
     providers_enabled: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["defillama", "curve", "lifi", "enso"],
+        default_factory=lambda: ["defillama", "curve", "odos", "lifi", "enso"],
         validation_alias=AliasChoices("providers_enabled", AliasPath("providers", "enabled")),
     )
 

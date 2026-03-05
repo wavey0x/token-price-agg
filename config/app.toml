@@ -15,7 +15,7 @@ provider_global_limit = 200
 web3_limit = 32
 
 [providers]
-enabled = ["defillama", "curve", "lifi", "enso"]
+enabled = ["defillama", "curve", "odos", "lifi", "enso"]
 price_priority = []
 quote_priority = []
 

@@ -7,6 +7,7 @@ import httpx
 
 ParamScalar: TypeAlias = str | int | float | bool | None
 QueryParams: TypeAlias = dict[str, ParamScalar]
+JsonBody: TypeAlias = dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -33,8 +34,33 @@ class HttpClient:
         params: QueryParams | None = None,
         headers: dict[str, str] | None = None,
     ) -> HttpResponse:
-        response = await self._retryable_get(url=url, params=params, headers=headers)
+        response = await self._retryable_request(
+            method="GET",
+            url=url,
+            params=params,
+            headers=headers,
+        )
+        return self._to_http_response(response)
 
+    async def post(
+        self,
+        *,
+        url: str,
+        json: JsonBody | None = None,
+        params: QueryParams | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> HttpResponse:
+        response = await self._retryable_request(
+            method="POST",
+            url=url,
+            params=params,
+            headers=headers,
+            json=json,
+        )
+        return self._to_http_response(response)
+
+    @staticmethod
+    def _to_http_response(response: httpx.Response) -> HttpResponse:
         json_data: dict[str, object] | list[object] | None = None
         try:
             parsed = response.json()
@@ -47,17 +73,25 @@ class HttpClient:
             status_code=response.status_code, json_data=json_data, text=response.text
         )
 
-    async def _retryable_get(
+    async def _retryable_request(
         self,
         *,
+        method: str,
         url: str,
         params: QueryParams | None,
         headers: dict[str, str] | None,
+        json: JsonBody | None = None,
     ) -> httpx.Response:
         last_exc: Exception | None = None
         for _ in range(self._attempts):
             try:
-                return await self._client.get(url, params=params, headers=headers)
+                return await self._client.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    headers=headers,
+                    json=json,
+                )
             except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as exc:
                 last_exc = exc
                 continue

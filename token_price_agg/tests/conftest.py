@@ -38,7 +38,7 @@ def _set_default_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_KEY_RATE_LIMIT_RPM", "300")
     monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "true")
     monkeypatch.setenv("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS", "1")
-    monkeypatch.setenv("PROVIDERS_ENABLED", "defillama,curve,lifi,enso")
+    monkeypatch.setenv("PROVIDERS_ENABLED", "defillama,curve,odos,lifi,enso")
     # Explicitly override .env values so tests can assert missing-key behavior.
     monkeypatch.setenv("LIFI_API_KEY", "")
     monkeypatch.setenv("ENSO_API_KEY", "")
