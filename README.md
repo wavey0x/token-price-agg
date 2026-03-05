@@ -161,6 +161,14 @@ Docs config and content are at:
 - `docs/src/` (source)
 - `docs/site/` (generated build output)
 
+Deploy docs on Vercel (static MkDocs build):
+
+1. Build command: `uv run --extra docs mkdocs build`
+2. Output directory: `docs/site`
+3. Install command: `uv sync --frozen --extra docs`
+
+Yes, docs can be hosted directly on Vercel as static files.
+
 ## API
 
 - `GET /v1/price`
@@ -270,6 +278,9 @@ Notes:
 - Response addresses are always EIP-55 checksummed.
 - `chain_id` defaults to `1` (Ethereum mainnet) when omitted.
 - `is_vault` defaults to `false`.
+- For `is_vault=true` on `/v1/price`, returned `price` is vault-share USD price:
+  underlying USD price multiplied by share-to-asset rate
+  (`pricePerShare / 10**decimals` for Yearn v2, `convertToAssets(10**decimals) / 10**decimals` for ERC-4626).
 - `value_usd` has been removed.
 
 ## Provider Selection
@@ -294,6 +305,14 @@ Logo URL behavior:
 - `logo_status=valid` in cache: return validated logo URL.
 - `logo_status=invalid` in cache: return `logo_url=null`.
 - `logo_status=unknown`: return first candidate URL (best-effort).
+
+Repository hygiene:
+- SQLite files under `data/` are runtime state and should stay untracked.
+- If `data/token_metadata.sqlite3` was tracked in your branch, untrack it once:
+
+```bash
+git rm --cached data/token_metadata.sqlite3
+```
 
 Force-refresh a token logo on demand:
 

@@ -1,0 +1,5 @@
+{
+  "installCommand": "uv sync --frozen --extra docs",
+  "buildCommand": "uv run --extra docs mkdocs build",
+  "outputDirectory": "docs/site"
+}

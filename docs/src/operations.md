@@ -73,3 +73,13 @@ Uses shared token matrix from `token_price_agg/tests/fixtures/ethereum_tokens.py
 ```bash
 uv run python token_price_agg/tests/manual/smoke_get_live.py --base-url http://localhost:8000
 ```
+
+## Docs on Vercel
+
+Yes, this docs site can run directly on Vercel as a static deployment.
+
+- Install command: `uv sync --frozen --extra docs`
+- Build command: `uv run --extra docs mkdocs build`
+- Output directory: `docs/site`
+
+Runtime API process (`uvicorn`) is separate from docs hosting.

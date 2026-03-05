@@ -50,6 +50,10 @@ Key fields:
 - `price` fields in `price_data` and `providers.*` are normalized USD prices
 - `summary` price fields: `best_price`, `high_price`, `low_price`, `median_price`, `deviation_bps`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
+- When `is_vault=true`, returned `price` is vault-share USD price:
+  underlying USD price multiplied by vault share-to-asset conversion.
+  - ERC-4626: `convertToAssets(10**decimals) / 10**decimals`
+  - Yearn v2: `pricePerShare / 10**decimals`
 
 `value_usd` is removed from response.
 

@@ -99,6 +99,8 @@ Price response:
 - `price_data`: top-level selected result (`null` if no successful provider)
 - `providers`: keyed map of provider results by provider ID
 - `price_data.price` and `providers.*.price` are normalized USD prices
+- with `is_vault=true`, price is vault-share USD price
+  (`underlying_price * share_to_asset_rate`)
 - price summary fields: `best_price`, `high_price`, `low_price`, `median_price`, `deviation_bps`
 - shared summary fields: `requested_providers`, `successful_providers`, `failed_providers`
 
@@ -137,6 +139,18 @@ uv run python -m token_price_agg.tools.verify_logo --chain-id 1 --token 0x222222
 ```
 
 This command force-refreshes one token and persists valid/invalid logo status.
+
+SQLite runtime files:
+- `data/*.sqlite3` are local runtime state and should remain untracked.
+- If `data/token_metadata.sqlite3` is tracked in a branch, untrack once:
+  `git rm --cached data/token_metadata.sqlite3`
+
+## Docs Deployment
+
+Docs can be deployed directly to Vercel as a static site:
+- install: `uv sync --frozen --extra docs`
+- build: `uv run --extra docs mkdocs build`
+- output: `docs/site`
 
 ## Logging
 
