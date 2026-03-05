@@ -277,6 +277,7 @@ Price response includes:
 
 Quote response mirrors this shape using:
 - `token_in`, `token_out`, `quote`, `providers`, `provider_order`, `summary`
+- `amount_in`, `amount_out`, `amount_out_min` are strict base-unit integers (wei-style), never human-decimal strings
 - quote summary fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
 - quote `vault_context` (top-level `quote` only) uses:
   - `underlying_token_in`, `underlying_token_out`

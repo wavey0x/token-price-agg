@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
 from token_price_agg.core.models import TokenRef
 
@@ -35,6 +35,31 @@ def parse_int(value: object) -> int | None:
     if isinstance(value, float) and value.is_integer():
         return int(value)
     return None
+
+
+def parse_base_unit_amount(value: object, *, token_decimals: int | None) -> int | None:
+    """Parse a token amount into base units (wei-style integer).
+
+    Accepts:
+    - integer/base-unit values directly
+    - decimal human-unit values when token_decimals is available
+    """
+    parsed_int = parse_int(value)
+    if parsed_int is not None:
+        return parsed_int
+
+    parsed_decimal = parse_decimal(value)
+    if parsed_decimal is None or parsed_decimal < 0:
+        return None
+
+    if parsed_decimal == parsed_decimal.to_integral_value():
+        return int(parsed_decimal)
+
+    if token_decimals is None or token_decimals < 0:
+        return None
+
+    scaled = parsed_decimal * (Decimal(10) ** token_decimals)
+    return int(scaled.to_integral_value(rounding=ROUND_DOWN))
 
 
 def parse_datetime(value: object) -> datetime | None:

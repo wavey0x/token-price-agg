@@ -17,6 +17,7 @@ from token_price_agg.providers.parsing import (
     decimal_to_bps,
     get_first,
     get_nested,
+    parse_base_unit_amount,
     parse_datetime,
     parse_decimal,
     parse_int,
@@ -122,10 +123,25 @@ class EnsoProvider(ProviderPlugin):
         latency_ms = transport.latency_ms
 
         payload = payload_data_or_root(response_payload)
+        token_out_payload = first_nested_dict(
+            payload, paths=[["tokenOut"], ["toToken"], ["outputToken"]]
+        )
+        token_out = with_token_metadata(req.token_out, token_out_payload)
+        token_out_decimals = token_out.decimals
+        token_in = with_token_metadata(
+            req.token_in,
+            first_nested_dict(payload, paths=[["tokenIn"], ["fromToken"], ["inputToken"]]),
+        )
 
-        amount_out = parse_int(get_first(payload, ["amountOut", "toAmount", "outputAmount"]))
+        amount_out = parse_base_unit_amount(
+            get_first(payload, ["amountOut", "toAmount", "outputAmount"]),
+            token_decimals=token_out_decimals,
+        )
         if amount_out is None:
-            amount_out = parse_int(get_nested(payload, ["route", "amountOut"]))
+            amount_out = parse_base_unit_amount(
+                get_nested(payload, ["route", "amountOut"]),
+                token_decimals=token_out_decimals,
+            )
 
         if amount_out is None:
             return QuoteResult(
@@ -144,14 +160,6 @@ class EnsoProvider(ProviderPlugin):
 
         route_data = payload.get("route")
         route = route_data if isinstance(route_data, dict) else None
-        token_in = with_token_metadata(
-            req.token_in,
-            first_nested_dict(payload, paths=[["tokenIn"], ["fromToken"], ["inputToken"]]),
-        )
-        token_out = with_token_metadata(
-            req.token_out,
-            first_nested_dict(payload, paths=[["tokenOut"], ["toToken"], ["outputToken"]]),
-        )
 
         return QuoteResult(
             provider=self.id,
@@ -160,8 +168,9 @@ class EnsoProvider(ProviderPlugin):
             token_out=token_out,
             amount_in=req.amount_in,
             amount_out=amount_out,
-            amount_out_min=parse_int(
-                get_first(payload, ["minAmountOut", "amountOutMin", "toAmountMin"])
+            amount_out_min=parse_base_unit_amount(
+                get_first(payload, ["minAmountOut", "amountOutMin", "toAmountMin"]),
+                token_decimals=token_out_decimals,
             ),
             estimated_gas=parse_int(get_first(payload, ["gas", "estimatedGas"])),
             price_impact_bps=price_impact_bps,

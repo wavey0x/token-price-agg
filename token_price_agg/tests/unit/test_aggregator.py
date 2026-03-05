@@ -604,3 +604,66 @@ async def test_aggregate_quotes_output_vault_only_converts_amounts_back_to_share
     assert results[0].vault_context.price_per_share is None
     assert results[0].vault_context.price_per_share_token_in is None
     assert results[0].vault_context.price_per_share_token_out == Decimal("2")
+
+
+@pytest.mark.asyncio
+async def test_aggregate_quotes_uses_exact_output_assets_to_shares_converter_when_provided(
+    quote_request: ProviderQuoteRequest,
+) -> None:
+    class OutputVaultResolver:
+        async def resolve_price_request(
+            self, req: ProviderPriceRequest
+        ) -> tuple[ProviderPriceRequest, VaultContext]:
+            return req, VaultContext(
+                vault_type=VaultType.ERC4626,
+                underlying_token=req.token.address,
+                price_per_share=Decimal("1"),
+                block_number=1,
+            )
+
+        async def resolve_quote_request(
+            self, req: ProviderQuoteRequest
+        ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution]:
+            converted = ProviderQuoteRequest(
+                chain_id=req.chain_id,
+                token_in=req.token_in,
+                token_out=TokenRef(chain_id=req.chain_id, address=USDC),
+                amount_in=req.amount_in,
+            )
+            return converted, QuoteVaultResolution(
+                input_vault_context=None,
+                output_vault_context=VaultContext(
+                    vault_type=VaultType.ERC4626,
+                    underlying_token=USDC,
+                    # Intentionally misleading fallback rate; exact converter must win.
+                    price_per_share=Decimal("1.098367"),
+                    block_number=123,
+                ),
+                output_assets_to_shares=lambda assets: assets * (10**12),
+            )
+
+    async def _quote_impl(req: ProviderQuoteRequest) -> QuoteResult:
+        # Provider quoted USDC underlying (6 decimals); should map to 18-decimal shares.
+        return QuoteResult(
+            provider="dummy",
+            status=ProviderStatus.OK,
+            token_in=req.token_in,
+            token_out=req.token_out,
+            amount_in=req.amount_in,
+            amount_out=900_000,
+            amount_out_min=890_000,
+            latency_ms=10,
+        )
+
+    plugin = DummyPlugin(quote_impl=_quote_impl)
+    service = _build_service_with_resolver(plugin, resolver=OutputVaultResolver())
+    results, summary, partial = await service.aggregate_quotes(
+        req=quote_request,
+        provider_ids=[plugin.id],
+        use_underlying=True,
+    )
+
+    assert partial is False
+    assert summary.successful_providers == 1
+    assert results[0].amount_out == 900_000_000_000_000_000
+    assert results[0].amount_out_min == 890_000_000_000_000_000

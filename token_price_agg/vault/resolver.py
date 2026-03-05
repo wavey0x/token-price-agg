@@ -112,6 +112,9 @@ class VaultResolver:
             output_vault_context=(
                 _vault_context(vault_out, block_number) if vault_out is not None else None
             ),
+            output_assets_to_shares=(
+                vault_out.convert_assets_to_shares if vault_out is not None else None
+            ),
         )
         vault_type = _resolved_vault_type(vault_in=vault_in, vault_out=vault_out)
         record_vault_resolution(
@@ -138,6 +141,7 @@ class VaultResolver:
 class QuoteVaultResolution:
     input_vault_context: VaultContext | None = None
     output_vault_context: VaultContext | None = None
+    output_assets_to_shares: Callable[[int], int] | None = None
 
 
 class _VaultInfo:

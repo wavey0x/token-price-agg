@@ -257,6 +257,7 @@ Key fields:
 - `quote`: selected successful provider result, or `null`
 - `providers`: keyed object of per-provider results
 - `summary`: aggregate statistics
+- quote amounts are returned as strict base-unit integers (`amount_in`, `amount_out`, `amount_out_min`), not human-formatted decimals
 - `summary` quote fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
 - `vault_context` is included only in top-level `quote` (not repeated in `providers.*`)

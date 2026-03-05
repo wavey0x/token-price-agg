@@ -142,6 +142,7 @@ class AggregatorService:
         if quote_resolution is not None:
             input_context = quote_resolution.input_vault_context
             output_context = quote_resolution.output_vault_context
+            output_assets_to_shares = quote_resolution.output_assets_to_shares
             for result in quote_results:
                 if result.status == ProviderStatus.OK:
                     # Keep response amount_in aligned with client request units.
@@ -149,15 +150,23 @@ class AggregatorService:
                     if output_context is not None:
                         try:
                             if result.amount_out is not None:
-                                result.amount_out = _vault_assets_to_shares(
-                                    result.amount_out,
-                                    output_context.price_per_share,
-                                )
+                                if output_assets_to_shares is not None:
+                                    result.amount_out = output_assets_to_shares(result.amount_out)
+                                else:
+                                    result.amount_out = _vault_assets_to_shares(
+                                        result.amount_out,
+                                        output_context.price_per_share,
+                                    )
                             if result.amount_out_min is not None:
-                                result.amount_out_min = _vault_assets_to_shares(
-                                    result.amount_out_min,
-                                    output_context.price_per_share,
-                                )
+                                if output_assets_to_shares is not None:
+                                    result.amount_out_min = output_assets_to_shares(
+                                        result.amount_out_min
+                                    )
+                                else:
+                                    result.amount_out_min = _vault_assets_to_shares(
+                                        result.amount_out_min,
+                                        output_context.price_per_share,
+                                    )
                         except InvalidRequestError:
                             _LOGGER.warning(
                                 "quote_use_underlying_invalid_output_rate",

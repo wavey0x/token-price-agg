@@ -15,6 +15,7 @@ from token_price_agg.providers.parsing import (
     decimal_to_bps,
     get_first,
     get_nested,
+    parse_base_unit_amount,
     parse_datetime,
     parse_decimal,
     parse_int,
@@ -128,32 +129,6 @@ class LiFiProvider(ProviderPlugin):
         payload = transport.payload
         assert payload is not None
         latency_ms = transport.latency_ms
-
-        amount_out = parse_int(get_nested(payload, ["estimate", "toAmount"]))
-        if amount_out is None:
-            amount_out = parse_int(get_first(payload, ["toAmount", "amountOut"]))
-
-        if amount_out is None:
-            return QuoteResult(
-                provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
-                token_in=req.token_in,
-                token_out=req.token_out,
-                amount_in=req.amount_in,
-                latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "No route found"),
-            )
-
-        min_out = parse_int(get_nested(payload, ["estimate", "toAmountMin"]))
-        gas = parse_int(get_nested(payload, ["estimate", "data", "estimatedGas"]))
-
-        price_impact = parse_decimal(get_nested(payload, ["estimate", "priceImpact"]))
-        price_impact_bps = decimal_to_bps(price_impact)
-
-        route_obj = payload.get("route")
-        route = route_obj if isinstance(route_obj, dict) else None
-
-        as_of = parse_datetime(get_first(payload, ["timestamp", "updatedAt"]))
         token_in = with_token_metadata(
             req.token_in,
             first_nested_dict(
@@ -176,6 +151,42 @@ class LiFiProvider(ProviderPlugin):
                 ],
             ),
         )
+        token_out_decimals = token_out.decimals
+
+        amount_out = parse_base_unit_amount(
+            get_nested(payload, ["estimate", "toAmount"]),
+            token_decimals=token_out_decimals,
+        )
+        if amount_out is None:
+            amount_out = parse_base_unit_amount(
+                get_first(payload, ["toAmount", "amountOut"]),
+                token_decimals=token_out_decimals,
+            )
+
+        if amount_out is None:
+            return QuoteResult(
+                provider=self.id,
+                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                token_in=req.token_in,
+                token_out=req.token_out,
+                amount_in=req.amount_in,
+                latency_ms=latency_ms,
+                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "No route found"),
+            )
+
+        min_out = parse_base_unit_amount(
+            get_nested(payload, ["estimate", "toAmountMin"]),
+            token_decimals=token_out_decimals,
+        )
+        gas = parse_int(get_nested(payload, ["estimate", "data", "estimatedGas"]))
+
+        price_impact = parse_decimal(get_nested(payload, ["estimate", "priceImpact"]))
+        price_impact_bps = decimal_to_bps(price_impact)
+
+        route_obj = payload.get("route")
+        route = route_obj if isinstance(route_obj, dict) else None
+
+        as_of = parse_datetime(get_first(payload, ["timestamp", "updatedAt"]))
 
         return QuoteResult(
             provider=self.id,
