@@ -8,7 +8,7 @@ class BaseAggregatorRequest(BaseModel):
 
     chain_id: int = Field(gt=0)
     providers: list[str] | None = None
-    is_vault: bool = False
+    use_underlying: bool = False
 
     @field_validator("providers")
     @classmethod

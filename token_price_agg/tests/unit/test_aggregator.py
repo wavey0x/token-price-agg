@@ -172,7 +172,7 @@ async def test_aggregate_prices_unsupported_operation_returns_provider_failure(
     results, summary, partial = await service.aggregate_prices(
         req=price_request,
         provider_ids=[plugin.id],
-        is_vault=False,
+        use_underlying=False,
     )
 
     assert summary.requested_providers == 1
@@ -193,7 +193,7 @@ async def test_aggregate_prices_unavailable_provider_returns_provider_failure(
     results, summary, partial = await service.aggregate_prices(
         req=price_request,
         provider_ids=[plugin.id],
-        is_vault=False,
+        use_underlying=False,
     )
 
     assert summary.requested_providers == 1
@@ -217,7 +217,7 @@ async def test_aggregate_prices_plugin_exception_returns_internal_error(
     results, summary, partial = await service.aggregate_prices(
         req=price_request,
         provider_ids=[plugin.id],
-        is_vault=False,
+        use_underlying=False,
     )
 
     assert summary.requested_providers == 1
@@ -247,7 +247,7 @@ async def test_aggregate_prices_applies_vault_share_to_asset_rate(
     results, summary, partial = await service.aggregate_prices(
         req=price_request,
         provider_ids=[plugin.id],
-        is_vault=True,
+        use_underlying=True,
     )
 
     assert partial is False
@@ -280,7 +280,7 @@ async def test_aggregate_quotes_deadline_timeout_returns_timeout_result(
     results, summary, partial = await service.aggregate_quotes(
         req=quote_request,
         provider_ids=[plugin.id],
-        is_vault=False,
+        use_underlying=False,
     )
     elapsed = time.perf_counter() - started
 

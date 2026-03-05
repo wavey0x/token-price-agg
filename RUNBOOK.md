@@ -22,7 +22,7 @@ uv run --extra docs mkdocs build
 
 Required/important env vars:
 - `CHAIN_IDS` (default: `1`)
-- `RPC_URLS` (required for `is_vault=true` flows)
+- `RPC_URLS` (required for `use_underlying=true` flows)
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
 - `TOKEN_METADATA_DB_PATH` (default: `data/token_metadata.sqlite3`)
@@ -75,7 +75,7 @@ Auth behavior (when enabled):
 - `chain_id` (int, required)
 - `token` (EVM address, required)
 - `providers` (optional, repeated or comma-separated)
-- `is_vault` (bool, optional, default `false`)
+- `use_underlying` (bool, optional, default `false`)
 
 `GET /v1/quote` query params:
 - `chain_id` (int, required)
@@ -83,7 +83,7 @@ Auth behavior (when enabled):
 - `amount_in` (positive integer string, required)
 - `providers` (optional, repeated or comma-separated)
 - `include_route` (bool, optional, default `false`)
-- `is_vault` (bool, optional, default `false`)
+- `use_underlying` (bool, optional, default `false`)
 
 Providers query examples:
 - repeated: `providers=curve&providers=defillama`
@@ -99,7 +99,7 @@ Price response:
 - `price_data`: top-level selected result (`null` if no successful provider)
 - `providers`: keyed map of provider results by provider ID
 - `price_data.price` and `providers.*.price` are normalized USD prices
-- with `is_vault=true`, price is vault-share USD price
+- with `use_underlying=true`, price is vault-share USD price
   (`underlying_price * share_to_asset_rate`)
 - price summary fields: `best_price`, `high_price`, `low_price`, `median_price`, `deviation_bps`
 - shared summary fields: `requested_providers`, `successful_providers`, `failed_providers`
@@ -301,7 +301,7 @@ uv run mypy .
 ## Common Failure Modes
 
 - `INVALID_ADDRESS`: malformed token address
-- `RPC_NOT_CONFIGURED`: `is_vault=true` used without `RPC_URLS`
+- `RPC_NOT_CONFIGURED`: `use_underlying=true` used without `RPC_URLS`
 - `UNAUTHORIZED`: missing/invalid/revoked bearer token
 - `RATE_LIMITED`: API key exceeded per-minute request budget
 - provider status `invalid_request` + `missing_api_key`

@@ -96,7 +96,8 @@ class VaultResolver:
             )
             raise InvalidRequestError(
                 "INVALID_VAULT",
-                "is_vault=true provided but neither token_in nor token_out is a supported vault",
+                "use_underlying=true provided but neither token_in nor token_out "
+                "is a supported vault",
             )
 
         converted = ProviderQuoteRequest(

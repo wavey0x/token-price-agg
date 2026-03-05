@@ -12,7 +12,7 @@ The service must:
 - Return per-provider results for `price` and `quote` requests.
 - Support selecting one provider, a subset of providers, or default to all enabled providers.
 - Handle unsupported tokens gracefully per provider.
-- Support `is_vault=true` to resolve and value vault shares via on-chain data (ERC-4626 and Yearn v2 style vaults).
+- Support `use_underlying=true` to resolve and value vault shares via on-chain data (ERC-4626 and Yearn v2 style vaults).
 
 ## 2. Scope
 ### 2.1 MVP (as soon as functional)
@@ -27,7 +27,7 @@ The service must:
   - `ENSO_API_KEY`
 - Parallel fan-out across providers.
 - Standard normalized response shape with per-provider status.
-- Vault-aware conversion (`is_vault`) using web3.py:
+- Vault-aware conversion (`use_underlying`) using web3.py:
   - ERC-4626 vaults: `asset()`, conversion functions.
   - Yearn v2 style vaults: `token()`, `pricePerShare()`.
 - Strong input validation and deterministic error handling.
@@ -108,8 +108,8 @@ graph TD
 - `chain_id` (int, required): MVP supports `1` only.
 - `providers` (list[str], optional): default all enabled providers.
   - Supports repeated query params and comma-separated values.
-- `is_vault` (bool, optional, default `false`): enables vault conversion logic.
-- If `is_vault` is omitted, service behaves as `is_vault=false`.
+- `use_underlying` (bool, optional, default `false`): enables vault conversion logic.
+- If `use_underlying` is omitted, service behaves as `use_underlying=false`.
 
 ### 7.2.1 Address Casing Rules (MVP)
 - Request token addresses are case-insensitive (`0xabc...`, `0xAbC...`, `0xABC...` all accepted if otherwise valid).
@@ -131,14 +131,14 @@ Startup behavior:
 - `chain_id` (required)
 - `token` (required)
 - `providers` (optional)
-- `is_vault` (optional, default `false`)
+- `use_underlying` (optional, default `false`)
 
 Example:
 `/v1/price?chain_id=1&token=0xD533a949740bb3306d119CC777fa900bA034cd52&providers=defillama,curve`
 
 Notes:
-- `is_vault` is optional; if omitted it defaults to `false`.
-- With `is_vault=true`, `token` is interpreted as vault share token and valued via underlying.
+- `use_underlying` is optional; if omitted it defaults to `false`.
+- With `use_underlying=true`, `token` is interpreted as vault share token and valued via underlying.
 
 ### 7.4 Quote Request
 `GET /v1/quote` query params:
@@ -148,7 +148,7 @@ Notes:
 - `amount_in` (required)
 - `providers` (optional)
 - `include_route` (optional, default `false`)
-- `is_vault` (optional, default `false`)
+- `use_underlying` (optional, default `false`)
 
 Example:
 `/v1/quote?chain_id=1&token_in=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&token_out=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amount_in=1000000000000000000&providers=curve,enso`
@@ -156,8 +156,8 @@ Example:
 Notes:
 - MVP quote mode is exact-in only.
 - `amount_in` is required and in base units.
-- `is_vault` is optional; if omitted it defaults to `false`.
-- With `is_vault=true`, vault tokens are converted to underlying for provider quoting; output includes conversion details.
+- `use_underlying` is optional; if omitted it defaults to `false`.
+- With `use_underlying=true`, vault tokens are converted to underlying for provider quoting; output includes conversion details.
 
 ### 7.5 Unified Response Shape
 ```json
@@ -312,7 +312,7 @@ Example:
 ### 10.1 Price Flow
 1. Validate request.
 2. Normalize token format (including case-insensitive address -> EIP-55 checksum).
-3. If `is_vault=true`, resolve underlying token + share conversion via Vault Resolver.
+3. If `use_underlying=true`, resolve underlying token + share conversion via Vault Resolver.
 4. Fan out async calls to selected providers supporting price.
 5. Normalize provider responses.
 6. Return merged results + partial indicator.
@@ -320,7 +320,7 @@ Example:
 ### 10.2 Quote Flow
 1. Validate request.
 2. Normalize token/amount inputs (including case-insensitive address -> EIP-55 checksum).
-3. If `is_vault=true`, resolve and convert vault tokens to underlying for quote.
+3. If `use_underlying=true`, resolve and convert vault tokens to underlying for quote.
 4. Fan out async calls to selected providers supporting quote.
 5. Normalize and convert back when output token is vault (if needed).
 6. Return merged results + partial indicator.
@@ -348,7 +348,7 @@ Example:
 - Yearn v2 style vaults (`token()`, `pricePerShare()`).
 
 ### 11.2 Detection Strategy
-For a token address when `is_vault=true`:
+For a token address when `use_underlying=true`:
 1. Attempt ERC-4626 detection:
    - Call `asset()` and `decimals()`.
    - Call `convertToAssets(10**share_decimals)` (or `previewRedeem` fallback).
@@ -519,7 +519,7 @@ token_price_agg/
 ### 17.2 Integration Tests
 - Mock upstream providers (httpx + respx) for success/failure/timeout cases.
 - Verify partial responses and deterministic sorting.
-- Verify `is_vault=true` workflows with mocked web3 calls.
+- Verify `use_underlying=true` workflows with mocked web3 calls.
 - Verify provider enable/disable behavior when `LIFI_API_KEY` / `ENSO_API_KEY` are present or missing.
 
 ### 17.3 Chain-aware Tests
@@ -570,7 +570,7 @@ token_price_agg/
 - All four provider plugins implemented with contract tests.
 - `prices` and `quotes` endpoints stable and documented.
 - `lifi` and `enso` credential handling implemented via `LIFI_API_KEY` and `ENSO_API_KEY`.
-- `is_vault=true` supports ERC-4626 and Yearn v2 on mainnet with integration tests.
+- `use_underlying=true` supports ERC-4626 and Yearn v2 on mainnet with integration tests.
 - Partial failure handling verified by fault-injection integration tests.
 - CI green on unit + integration + e2e suites.
 - Basic runbook and configuration docs available.
@@ -580,7 +580,7 @@ token_price_agg/
 - Quote comparability: providers may include different fee/gas assumptions.
 - Native token conventions differ (`0xeeee...`, zero address, symbol aliases).
 - Vault math edge cases vary by implementation and decimals.
-- RPC instability directly impacts `is_vault=true` reliability.
+- RPC instability directly impacts `use_underlying=true` reliability.
 
 Mitigations:
 - Strict per-plugin mappers + schema validation.
@@ -589,7 +589,7 @@ Mitigations:
 
 ## 20. Open Questions (Need Your Decision)
 1. Should the API return only per-provider raw-normalized results, or also compute a "best" aggregate answer (`best_price` / `best_quote`) in MVP?
-2. For `is_vault=true`, should conversion apply to both `token_in` and `token_out` automatically, or only for the specific token field explicitly marked by caller?
+2. For `use_underlying=true`, should conversion apply to both `token_in` and `token_out` automatically, or only for the specific token field explicitly marked by caller?
 3. Should quote responses include provider route details by default, or only behind a debug flag to keep payloads small?
 4. Do you want strict fail behavior (`HTTP 4xx/5xx`) when all providers fail, or always `200` with per-provider failures?
 5. Is Ethereum mainnet-only sufficient for MVP, or should we make chain support pluggable now even if only `chain_id=1` is enabled?

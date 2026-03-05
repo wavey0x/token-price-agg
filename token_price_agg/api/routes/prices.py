@@ -32,7 +32,7 @@ async def price(
     token: Annotated[str, Query(min_length=42)],
     chain_id: Annotated[int, Query(gt=0)] = 1,
     providers: Annotated[list[str] | None, Query()] = None,
-    is_vault: bool = False,
+    use_underlying: bool = False,
     aggregator: AggregatorService = Depends(get_aggregator_service),
     token_metadata_resolver: TokenMetadataResolver = Depends(get_token_metadata_resolver),
     settings: Settings = Depends(get_settings),
@@ -41,7 +41,7 @@ async def price(
         chain_id=chain_id,
         token=token,
         providers=parse_provider_query_values(providers),
-        is_vault=is_vault,
+        use_underlying=use_underlying,
     )
     return await _handle_price_request(
         request=request,
@@ -69,7 +69,7 @@ async def _handle_price_request(
         aggregate_call=aggregator.aggregate_prices(
             req=normalized,
             provider_ids=payload.providers,
-            is_vault=payload.is_vault,
+            use_underlying=payload.use_underlying,
         ),
         requested_provider_ids=payload.providers,
         default_priority=settings.price_provider_priority,

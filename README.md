@@ -189,7 +189,7 @@ When `API_KEY_AUTH_ENABLED=true`:
 ```bash
 curl -s \
   -H "Authorization: Bearer ${API_KEY}" \
-  'http://localhost:8000/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=curve,defillama&is_vault=false'
+  'http://localhost:8000/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=curve,defillama&use_underlying=false'
 ```
 
 ### Quote
@@ -213,7 +213,7 @@ Key sections:
 - `[chains]`
   - `ids = [1]`
 - `[rpc]`
-  - `urls = [...]` (required for `is_vault=true`)
+  - `urls = [...]` (required for `use_underlying=true`)
 - `[timeouts]`
   - `provider_request_timeout_ms`
   - `provider_max_retries` (default `0`)
@@ -277,8 +277,8 @@ Notes:
 - Address inputs are case-insensitive.
 - Response addresses are always EIP-55 checksummed.
 - `chain_id` defaults to `1` (Ethereum mainnet) when omitted.
-- `is_vault` defaults to `false`.
-- For `is_vault=true` on `/v1/price`, returned `price` is vault-share USD price:
+- `use_underlying` defaults to `false`.
+- For `use_underlying=true` on `/v1/price`, returned `price` is vault-share USD price:
   underlying USD price multiplied by share-to-asset rate
   (`pricePerShare / 10**decimals` for Yearn v2, `convertToAssets(10**decimals) / 10**decimals` for ERC-4626).
 - `value_usd` has been removed.

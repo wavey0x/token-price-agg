@@ -41,7 +41,7 @@ class AggregatorService:
         *,
         req: ProviderPriceRequest,
         provider_ids: list[str] | None,
-        is_vault: bool,
+        use_underlying: bool,
     ) -> tuple[list[PriceResult], AggregatePriceSummary, bool]:
         selected = self._registry.resolve(
             provider_ids=provider_ids,
@@ -53,7 +53,7 @@ class AggregatorService:
 
         resolved_req = req
         vault_context = None
-        if is_vault:
+        if use_underlying:
             resolved_req, vault_context = await self._vault_resolver.resolve_price_request(req)
 
         price_results = await self._runner.run_prices(
@@ -80,7 +80,7 @@ class AggregatorService:
         *,
         req: ProviderQuoteRequest,
         provider_ids: list[str] | None,
-        is_vault: bool,
+        use_underlying: bool,
     ) -> tuple[list[QuoteResult], AggregateQuoteSummary, bool]:
         selected = self._registry.resolve(
             provider_ids=provider_ids,
@@ -92,7 +92,7 @@ class AggregatorService:
 
         resolved_req = req
         vault_context = None
-        if is_vault:
+        if use_underlying:
             resolved_req, vault_context = await self._vault_resolver.resolve_quote_request(req)
 
         quote_results = await self._runner.run_quotes(

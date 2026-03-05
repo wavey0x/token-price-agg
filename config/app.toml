@@ -2,7 +2,7 @@
 ids = [1]
 
 [rpc]
-# Required for `is_vault=true` resolution.
+# Required for `use_underlying=true` resolution.
 urls = []
 
 [timeouts]

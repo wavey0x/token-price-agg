@@ -21,13 +21,13 @@ Project guidance for contributors working in `/Users/wavey/yearn/token-price-api
 
 - Token address input is case-insensitive.
 - All token addresses returned in API responses must be EIP-55 checksummed.
-- `is_vault` is optional and defaults to `false`.
+- `use_underlying` is optional and defaults to `false`.
 - `providers` is optional and defaults to all available providers for the requested operation.
 - If a provider does not support a requested token or operation, return a provider-level failure result, not a global request failure.
 
 ## Vault Handling
 
-- `is_vault=true` means resolve vault share token to underlying value.
+- `use_underlying=true` means resolve vault share token to underlying value.
 - Support ERC-4626 and Yearn V2 style vaults (`token()`, `pricePerShare()` style flows).
 - Vault resolution should be explicit, typed, and observable (logs + metrics).
 
