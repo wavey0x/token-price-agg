@@ -357,6 +357,7 @@ async def test_aggregate_quotes_applies_underlying_for_both_legs() -> None:
                     price_per_share=Decimal("2"),
                     block_number=123,
                 ),
+                output_assets_to_shares=lambda assets: assets // 2,
             )
             return converted, resolution
 
@@ -570,6 +571,7 @@ async def test_aggregate_quotes_output_vault_only_converts_amounts_back_to_share
                     price_per_share=Decimal("2"),
                     block_number=123,
                 ),
+                output_assets_to_shares=lambda assets: assets // 2,
             )
 
     async def _quote_impl(req: ProviderQuoteRequest) -> QuoteResult:
@@ -667,3 +669,68 @@ async def test_aggregate_quotes_uses_exact_output_assets_to_shares_converter_whe
     assert summary.successful_providers == 1
     assert results[0].amount_out == 900_000_000_000_000_000
     assert results[0].amount_out_min == 890_000_000_000_000_000
+
+
+@pytest.mark.asyncio
+async def test_aggregate_quotes_missing_output_converter_marks_provider_failed(
+    quote_request: ProviderQuoteRequest,
+) -> None:
+    class OutputVaultResolverMissingConverter:
+        async def resolve_price_request(
+            self, req: ProviderPriceRequest
+        ) -> tuple[ProviderPriceRequest, VaultContext]:
+            return req, VaultContext(
+                vault_type=VaultType.ERC4626,
+                underlying_token=req.token.address,
+                price_per_share=Decimal("1"),
+                block_number=1,
+            )
+
+        async def resolve_quote_request(
+            self, req: ProviderQuoteRequest
+        ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution]:
+            converted = ProviderQuoteRequest(
+                chain_id=req.chain_id,
+                token_in=req.token_in,
+                token_out=TokenRef(chain_id=req.chain_id, address=USDC),
+                amount_in=req.amount_in,
+            )
+            return converted, QuoteVaultResolution(
+                input_vault_context=None,
+                output_vault_context=VaultContext(
+                    vault_type=VaultType.ERC4626,
+                    underlying_token=USDC,
+                    price_per_share=Decimal("1.098367"),
+                    block_number=123,
+                ),
+                output_assets_to_shares=None,
+            )
+
+    async def _quote_impl(req: ProviderQuoteRequest) -> QuoteResult:
+        return QuoteResult(
+            provider="dummy",
+            status=ProviderStatus.OK,
+            token_in=req.token_in,
+            token_out=req.token_out,
+            amount_in=req.amount_in,
+            amount_out=900_000,
+            amount_out_min=890_000,
+            latency_ms=10,
+        )
+
+    plugin = DummyPlugin(quote_impl=_quote_impl)
+    service = _build_service_with_resolver(plugin, resolver=OutputVaultResolverMissingConverter())
+    results, summary, partial = await service.aggregate_quotes(
+        req=quote_request,
+        provider_ids=[plugin.id],
+        use_underlying=True,
+    )
+
+    assert partial is True
+    assert summary.successful_providers == 0
+    assert summary.failed_providers == 1
+    assert results[0].status == ProviderStatus.INTERNAL_ERROR
+    assert results[0].amount_out is None
+    assert results[0].amount_out_min is None
+    assert results[0].error is not None
+    assert results[0].error.code == "INVALID_VAULT_CONVERSION"

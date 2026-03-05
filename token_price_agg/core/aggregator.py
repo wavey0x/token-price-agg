@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-from decimal import ROUND_FLOOR, Decimal
+from decimal import Decimal
 
 from token_price_agg.app.config import Settings
-from token_price_agg.core.errors import InvalidRequestError, ProviderStatus
+from token_price_agg.core.errors import ErrorInfo, InvalidRequestError, ProviderStatus
 from token_price_agg.core.models import (
     AggregatePriceSummary,
     AggregateQuoteSummary,
@@ -143,39 +143,45 @@ class AggregatorService:
             input_context = quote_resolution.input_vault_context
             output_context = quote_resolution.output_vault_context
             output_assets_to_shares = quote_resolution.output_assets_to_shares
+            missing_output_converter = (
+                output_context is not None and output_assets_to_shares is None
+            )
+            if missing_output_converter:
+                _LOGGER.error(
+                    "quote_use_underlying_missing_output_converter",
+                    extra={
+                        "chain_id": req.chain_id,
+                        "token_out": req.token_out.address,
+                    },
+                )
             for result in quote_results:
                 if result.status == ProviderStatus.OK:
                     # Keep response amount_in aligned with client request units.
                     result.amount_in = req.amount_in
+                    if missing_output_converter:
+                        _mark_quote_conversion_failure(result)
+                        continue
                     if output_context is not None:
+                        assert output_assets_to_shares is not None
                         try:
                             if result.amount_out is not None:
-                                if output_assets_to_shares is not None:
-                                    result.amount_out = output_assets_to_shares(result.amount_out)
-                                else:
-                                    result.amount_out = _vault_assets_to_shares(
-                                        result.amount_out,
-                                        output_context.price_per_share,
-                                    )
+                                result.amount_out = output_assets_to_shares(result.amount_out)
                             if result.amount_out_min is not None:
-                                if output_assets_to_shares is not None:
-                                    result.amount_out_min = output_assets_to_shares(
-                                        result.amount_out_min
-                                    )
-                                else:
-                                    result.amount_out_min = _vault_assets_to_shares(
-                                        result.amount_out_min,
-                                        output_context.price_per_share,
-                                    )
-                        except InvalidRequestError:
+                                result.amount_out_min = output_assets_to_shares(
+                                    result.amount_out_min
+                                )
+                        except Exception:
                             _LOGGER.warning(
-                                "quote_use_underlying_invalid_output_rate",
+                                "quote_use_underlying_output_conversion_failed",
                                 extra={
                                     "chain_id": req.chain_id,
                                     "token_out": req.token_out.address,
+                                    "provider": result.provider,
                                 },
                                 exc_info=True,
                             )
+                            _mark_quote_conversion_failure(result)
+                            continue
                     result.vault_context = _quote_vault_context(
                         input_context=input_context,
                         output_context=output_context,
@@ -193,10 +199,14 @@ def _vault_share_to_asset_multiplier(price_per_share: Decimal | None) -> Decimal
     return price_per_share
 
 
-def _vault_assets_to_shares(assets: int, price_per_share: Decimal | None) -> int:
-    if price_per_share is None or price_per_share <= 0:
-        raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
-    return int((Decimal(assets) / price_per_share).to_integral_value(rounding=ROUND_FLOOR))
+def _mark_quote_conversion_failure(result: QuoteResult) -> None:
+    result.status = ProviderStatus.INTERNAL_ERROR
+    result.amount_out = None
+    result.amount_out_min = None
+    result.error = ErrorInfo(
+        code="INVALID_VAULT_CONVERSION",
+        message="Failed to convert output amount into vault share base units",
+    )
 
 
 def _quote_vault_context(
