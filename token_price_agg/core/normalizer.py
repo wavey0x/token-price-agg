@@ -80,18 +80,22 @@ def build_price_summary(results: list[PriceResult]) -> AggregatePriceSummary:
 
 def build_quote_summary(results: list[QuoteResult]) -> AggregateQuoteSummary:
     successful = [result for result in results if result.status == ProviderStatus.OK]
-
-    best: tuple[str, int] | None = None
-    for result in successful:
-        if result.amount_out is None:
-            continue
-        if best is None or result.amount_out > best[1]:
-            best = (result.provider, result.amount_out)
+    amounts = sorted(result.amount_out for result in successful if result.amount_out is not None)
+    high_amount_out = max(amounts) if amounts else None
+    low_amount_out = min(amounts) if amounts else None
+    median_amount_out: int | None = None
+    if amounts:
+        mid = len(amounts) // 2
+        if len(amounts) % 2 == 1:
+            median_amount_out = amounts[mid]
+        else:
+            median_amount_out = (amounts[mid - 1] + amounts[mid]) // 2
 
     return AggregateQuoteSummary(
         requested_providers=len(results),
         successful_providers=len(successful),
         failed_providers=len(results) - len(successful),
-        best_amount_out=best[1] if best is not None else None,
-        best_provider=best[0] if best is not None else None,
+        high_amount_out=high_amount_out,
+        low_amount_out=low_amount_out,
+        median_amount_out=median_amount_out,
     )

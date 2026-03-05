@@ -166,5 +166,6 @@ class AggregateQuoteSummary(BaseModel):
     requested_providers: int
     successful_providers: int
     failed_providers: int
-    best_amount_out: int | None = None
-    best_provider: str | None = None
+    high_amount_out: int | None = None
+    low_amount_out: int | None = None
+    median_amount_out: int | None = None

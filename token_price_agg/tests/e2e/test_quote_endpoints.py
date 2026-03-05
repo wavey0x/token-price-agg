@@ -60,6 +60,11 @@ def test_quote_endpoint_supports_default_quote_matrix(
     assert payload["quote"]["provider"] == "curve"
     assert payload["providers"]["curve"]["status"] == "ok"
     assert payload["providers"]["curve"]["route"] is None
+    assert payload["summary"]["high_amount_out"] == 1000000
+    assert payload["summary"]["low_amount_out"] == 1000000
+    assert payload["summary"]["median_amount_out"] == 1000000
+    assert "best_amount_out" not in payload["summary"]
+    assert "best_provider" not in payload["summary"]
     assert "partial" not in payload
     assert "query_type" not in payload
 
