@@ -1,6 +1,6 @@
 site_name: Token Price Agg Docs
 site_description: Ethereum token price and quote aggregation API
-site_url: https://example.invalid/token-price-agg
+site_url: https://token-price-agg.vercel.app
 repo_name: token-price-agg
 docs_dir: docs/src
 site_dir: docs/site
