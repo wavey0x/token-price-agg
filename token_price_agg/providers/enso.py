@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from token_price_agg.core.errors import ProviderStatus
 from token_price_agg.core.models import (
     PriceResult,
@@ -22,7 +24,7 @@ from token_price_agg.providers.parsing import (
 )
 from token_price_agg.providers.utils import error_from_status
 
-_ENSO_DUMMY_ADDRESS = "0x0000000000000000000000000000000000000001"
+_ENSO_QUERY_ADDRESS = "0x1111111111111111111111111111111111111111"
 
 
 class EnsoProvider(ProviderPlugin):
@@ -95,7 +97,7 @@ class EnsoProvider(ProviderPlugin):
             url="https://api.enso.build/api/v1/shortcuts/route",
             params={
                 "chainId": req.chain_id,
-                "fromAddress": _ENSO_DUMMY_ADDRESS,
+                "fromAddress": _ENSO_QUERY_ADDRESS,
                 "tokenIn": req.token_in.address,
                 "tokenOut": req.token_out.address,
                 "amountIn": str(req.amount_in),
@@ -136,8 +138,9 @@ class EnsoProvider(ProviderPlugin):
                 error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "No route found"),
             )
 
-        price_impact_raw = parse_decimal(get_first(payload, ["priceImpact", "price_impact"]))
-        price_impact_bps = decimal_to_bps(price_impact_raw)
+        price_impact_bps = _parse_enso_price_impact_bps(
+            get_first(payload, ["priceImpact", "price_impact"])
+        )
 
         route_data = payload.get("route")
         route = route_data if isinstance(route_data, dict) else None
@@ -166,3 +169,14 @@ class EnsoProvider(ProviderPlugin):
             as_of=parse_datetime(get_first(payload, ["timestamp", "updatedAt"])),
             route=route,
         )
+
+
+def _parse_enso_price_impact_bps(value: object) -> int | None:
+    parsed = parse_decimal(value)
+    if parsed is None:
+        return None
+
+    # Enso may return fractional values (0.0012) or integer bps (23).
+    if parsed > Decimal("1"):
+        return int(parsed.to_integral_value())
+    return decimal_to_bps(parsed)

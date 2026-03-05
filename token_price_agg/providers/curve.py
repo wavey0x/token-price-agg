@@ -10,7 +10,11 @@ from token_price_agg.core.models import (
 from token_price_agg.core.validator import NATIVE_TOKEN_ALIAS
 from token_price_agg.providers.base import ProviderPlugin
 from token_price_agg.providers.clients.http import HttpClient
-from token_price_agg.providers.http_helpers import json_transport_outcome, timed_get
+from token_price_agg.providers.http_helpers import (
+    json_transport_outcome,
+    non_200_status,
+    timed_get,
+)
 from token_price_agg.providers.parsing import (
     decimal_to_bps,
     get_first,
@@ -93,30 +97,70 @@ class CurveProvider(ProviderPlugin):
                 "router": "curve",
             },
         )
-        transport = json_transport_outcome(call=call, provider_name="Curve")
-        if transport.failure is not None:
+        if call.timeout:
             return QuoteResult(
                 provider=self.id,
-                status=transport.failure.status,
+                status=ProviderStatus.TIMEOUT,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
-                latency_ms=transport.failure.latency_ms,
-                error=error_from_status(transport.failure.status, transport.failure.message),
+                latency_ms=call.latency_ms,
+                error=error_from_status(ProviderStatus.TIMEOUT, "Curve request timed out"),
+            )
+        if call.http_error is not None:
+            return QuoteResult(
+                provider=self.id,
+                status=ProviderStatus.UPSTREAM_ERROR,
+                token_in=req.token_in,
+                token_out=req.token_out,
+                amount_in=req.amount_in,
+                latency_ms=call.latency_ms,
+                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, str(call.http_error)),
             )
 
-        payload = transport.payload
-        assert payload is not None
-        latency_ms = transport.latency_ms
+        response = call.response
+        if response is None:
+            return QuoteResult(
+                provider=self.id,
+                status=ProviderStatus.UPSTREAM_ERROR,
+                token_in=req.token_in,
+                token_out=req.token_out,
+                amount_in=req.amount_in,
+                latency_ms=call.latency_ms,
+                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, "Curve response missing"),
+            )
 
-        data = payload.get("data")
-        payload_obj = data if isinstance(data, dict) else payload
+        status_failure = non_200_status(response=response, provider_name="Curve")
+        if status_failure is not None:
+            status, message = status_failure
+            return QuoteResult(
+                provider=self.id,
+                status=status,
+                token_in=req.token_in,
+                token_out=req.token_out,
+                amount_in=req.amount_in,
+                latency_ms=call.latency_ms,
+                error=error_from_status(status, message),
+            )
+
+        payload_obj = _extract_curve_quote_payload(response.json_data)
+        if payload_obj is None:
+            return QuoteResult(
+                provider=self.id,
+                status=ProviderStatus.UPSTREAM_ERROR,
+                token_in=req.token_in,
+                token_out=req.token_out,
+                amount_in=req.amount_in,
+                latency_ms=call.latency_ms,
+                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, "Invalid JSON response"),
+            )
+        latency_ms = call.latency_ms
 
         amount_out_value = get_first(payload_obj, ["amountOut", "output", "toAmount"])
         if amount_out_value is None:
             amount_out_value = get_nested(payload_obj, ["bestRoute", "output"])
 
-        amount_out = parse_int(amount_out_value)
+        amount_out = _parse_curve_amount(amount_out_value)
         if amount_out is None:
             return QuoteResult(
                 provider=self.id,
@@ -134,10 +178,10 @@ class CurveProvider(ProviderPlugin):
         price_impact = parse_decimal(get_first(payload_obj, ["priceImpact", "price_impact"]))
         price_impact_bps = decimal_to_bps(price_impact)
 
-        timestamp_val = get_first(payload_obj, ["timestamp", "asOf"])
+        timestamp_val = get_first(payload_obj, ["timestamp", "asOf", "createdAt"])
 
         route_data = get_first(payload_obj, ["route", "routes", "bestRoute"])
-        route = route_data if isinstance(route_data, dict) else None
+        route = _normalize_route(route_data)
 
         return QuoteResult(
             provider=self.id,
@@ -146,7 +190,9 @@ class CurveProvider(ProviderPlugin):
             token_out=req.token_out,
             amount_in=req.amount_in,
             amount_out=amount_out,
-            amount_out_min=parse_int(get_first(payload_obj, ["amountOutMin", "toAmountMin"])),
+            amount_out_min=_parse_curve_amount(
+                get_first(payload_obj, ["amountOutMin", "toAmountMin"])
+            ),
             price_impact_bps=price_impact_bps,
             estimated_gas=gas,
             latency_ms=latency_ms,
@@ -159,3 +205,32 @@ def _to_curve_native_alias(address: str) -> str:
     if address.lower() == NATIVE_TOKEN_ALIAS.lower():
         return "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     return address
+
+
+def _extract_curve_quote_payload(json_data: object) -> dict[str, object] | None:
+    if isinstance(json_data, dict):
+        data = json_data.get("data")
+        return data if isinstance(data, dict) else json_data
+    if isinstance(json_data, list):
+        for item in json_data:
+            if isinstance(item, dict):
+                return item
+    return None
+
+
+def _parse_curve_amount(value: object) -> int | None:
+    if isinstance(value, list):
+        for item in value:
+            parsed = parse_int(item)
+            if parsed is not None:
+                return parsed
+        return None
+    return parse_int(value)
+
+
+def _normalize_route(value: object) -> dict[str, object] | None:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        return {"steps": value}
+    return None

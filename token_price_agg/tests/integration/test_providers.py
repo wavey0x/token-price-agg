@@ -72,14 +72,7 @@ async def test_curve_quote_success() -> None:
         router.get("https://www.curve.finance/api/router/v1/routes").mock(
             return_value=Response(
                 200,
-                json={
-                    "data": {
-                        "amountOut": "999000",
-                        "estimatedGas": 345000,
-                        "priceImpact": "0.0015",
-                        "route": {"hops": 2},
-                    }
-                },
+                json=[{"amountOut": ["999000"], "priceImpact": 0, "route": [{"hop": 1}]}],
             )
         )
 
@@ -89,8 +82,9 @@ async def test_curve_quote_success() -> None:
 
     assert result.status == ProviderStatus.OK
     assert result.amount_out == 999000
-    assert result.estimated_gas == 345000
-    assert result.price_impact_bps == 15
+    assert result.estimated_gas is None
+    assert result.price_impact_bps == 0
+    assert result.route == {"steps": [{"hop": 1}]}
 
 
 @pytest.mark.asyncio
@@ -157,3 +151,48 @@ async def test_enso_price_success_with_millisecond_timestamp() -> None:
     assert result.price_usd is not None
     assert result.as_of is not None
     assert result.as_of.year == 2026
+
+
+@pytest.mark.asyncio
+async def test_enso_quote_uses_valid_from_address() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = EnsoProvider(client=client, api_key="dummy", available=True)
+    req = ProviderQuoteRequest(
+        chain_id=1,
+        token_in=TokenRef(chain_id=1, address="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
+        token_out=TokenRef(chain_id=1, address="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        amount_in=10**18,
+    )
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://api.enso.build/api/v1/shortcuts/route",
+            params={
+                "chainId": "1",
+                "fromAddress": "0x1111111111111111111111111111111111111111",
+                "tokenIn": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+                "tokenOut": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+                "amountIn": str(10**18),
+                "slippage": "300",
+            },
+        ).mock(
+            return_value=Response(
+                200,
+                json={
+                    "amountOut": "2125000000",
+                    "minAmountOut": "2061000000",
+                    "gas": "1602414",
+                    "priceImpact": 23,
+                },
+            )
+        )
+
+        result = await provider.get_quote(req)
+
+    await client.close()
+
+    assert result.status == ProviderStatus.OK
+    assert result.amount_out == 2125000000
+    assert result.amount_out_min == 2061000000
+    assert result.estimated_gas == 1602414
+    assert result.price_impact_bps == 23
