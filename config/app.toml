@@ -6,7 +6,7 @@ ids = [1]
 urls = []
 
 [timeouts]
-provider_request_timeout_ms = 800
+provider_request_timeout_ms = 1100
 provider_max_retries = 0
 
 [concurrency]

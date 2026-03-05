@@ -178,14 +178,14 @@ class AggregatorService:
         return ordered, summary, partial
 
 
-def _vault_share_to_asset_multiplier(price_per_share: Decimal) -> Decimal:
-    if price_per_share <= 0:
+def _vault_share_to_asset_multiplier(price_per_share: Decimal | None) -> Decimal:
+    if price_per_share is None or price_per_share <= 0:
         raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
     return price_per_share
 
 
-def _vault_assets_to_shares(assets: int, price_per_share: Decimal) -> int:
-    if price_per_share <= 0:
+def _vault_assets_to_shares(assets: int, price_per_share: Decimal | None) -> int:
+    if price_per_share is None or price_per_share <= 0:
         raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
     return int((Decimal(assets) / price_per_share).to_integral_value(rounding=ROUND_FLOOR))
 
@@ -204,6 +204,9 @@ def _quote_vault_context(
                 "underlying_token": None,
                 "underlying_token_in": input_context.underlying_token,
                 "underlying_token_out": None,
+                "price_per_share": None,
+                "price_per_share_token_in": input_context.price_per_share,
+                "price_per_share_token_out": None,
             }
         )
 
@@ -213,6 +216,9 @@ def _quote_vault_context(
                 "underlying_token": None,
                 "underlying_token_in": None,
                 "underlying_token_out": output_context.underlying_token,
+                "price_per_share": None,
+                "price_per_share_token_in": None,
+                "price_per_share_token_out": output_context.price_per_share,
             }
         )
 
@@ -224,6 +230,8 @@ def _quote_vault_context(
         underlying_token=None,
         underlying_token_in=input_context.underlying_token,
         underlying_token_out=output_context.underlying_token,
-        price_per_share=input_context.price_per_share,
+        price_per_share=None,
+        price_per_share_token_in=input_context.price_per_share,
+        price_per_share_token_out=output_context.price_per_share,
         block_number=input_context.block_number,
     )

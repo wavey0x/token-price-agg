@@ -103,7 +103,8 @@ class QuoteVaultContext(BaseModel):
     vault_type: VaultType | None = None
     underlying_token_in: str | None = None
     underlying_token_out: str | None = None
-    price_per_share: Decimal
+    price_per_share_token_in: Decimal | None = None
+    price_per_share_token_out: Decimal | None = None
     block_number: int
 
 

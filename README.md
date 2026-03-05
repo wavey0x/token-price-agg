@@ -278,6 +278,9 @@ Price response includes:
 Quote response mirrors this shape using:
 - `token_in`, `token_out`, `quote`, `providers`, `provider_order`, `summary`
 - quote summary fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
+- quote `vault_context` (top-level `quote` only) uses:
+  - `underlying_token_in`, `underlying_token_out`
+  - `price_per_share_token_in`, `price_per_share_token_out` (`null` when a leg is not a vault)
 
 Notes:
 - Address inputs are case-insensitive.

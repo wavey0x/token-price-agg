@@ -359,7 +359,9 @@ For a token address when `use_underlying=true`:
 - Include `vault_context` in response:
   - `vault_type`
   - `underlying_token` (checksummed address)
-  - `share_to_asset_rate`
+  - `price_per_share` (decimal)
+  - for quote responses: `underlying_token_in`, `underlying_token_out`,
+    `price_per_share_token_in`, `price_per_share_token_out`
   - block number used
 
 ### 11.4 RPC Reliability

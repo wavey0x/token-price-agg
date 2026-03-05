@@ -167,6 +167,7 @@ def _to_quote_vault_context(vault_context: VaultContext | None) -> QuoteVaultCon
         vault_type=vault_context.vault_type,
         underlying_token_in=vault_context.underlying_token_in,
         underlying_token_out=vault_context.underlying_token_out,
-        price_per_share=vault_context.price_per_share,
+        price_per_share_token_in=vault_context.price_per_share_token_in,
+        price_per_share_token_out=vault_context.price_per_share_token_out,
         block_number=vault_context.block_number,
     )

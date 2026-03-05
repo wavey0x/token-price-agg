@@ -399,6 +399,9 @@ async def test_aggregate_quotes_applies_underlying_for_both_legs() -> None:
     assert results[0].vault_context.underlying_token is None
     assert results[0].vault_context.underlying_token_in == input_underlying.address
     assert results[0].vault_context.underlying_token_out == output_underlying.address
+    assert results[0].vault_context.price_per_share is None
+    assert results[0].vault_context.price_per_share_token_in == Decimal("1.5")
+    assert results[0].vault_context.price_per_share_token_out == Decimal("2")
 
 
 @pytest.mark.asyncio
@@ -598,3 +601,6 @@ async def test_aggregate_quotes_output_vault_only_converts_amounts_back_to_share
     assert results[0].vault_context is not None
     assert results[0].vault_context.underlying_token_in is None
     assert results[0].vault_context.underlying_token_out == USDC
+    assert results[0].vault_context.price_per_share is None
+    assert results[0].vault_context.price_per_share_token_in is None
+    assert results[0].vault_context.price_per_share_token_out == Decimal("2")

@@ -139,7 +139,7 @@ async def _handle_price_request(
 
 
 def _to_price_vault_context(vault_context: VaultContext | None) -> PriceVaultContext | None:
-    if vault_context is None:
+    if vault_context is None or vault_context.price_per_share is None:
         return None
     return PriceVaultContext(
         vault_type=vault_context.vault_type,

@@ -260,6 +260,10 @@ Key fields:
 - `summary` quote fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
 - `vault_context` is included only in top-level `quote` (not repeated in `providers.*`)
+- quote `vault_context` uses leg-specific share prices:
+  - `price_per_share_token_in`: share price used for input-leg conversion
+  - `price_per_share_token_out`: share price used for output-leg conversion
+  - both fields are always present in `vault_context` and are `null` when not applicable
 
 ### Example: Quote Success
 

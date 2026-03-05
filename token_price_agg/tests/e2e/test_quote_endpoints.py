@@ -228,6 +228,17 @@ def test_quote_endpoint_use_underlying_is_best_effort_without_rpc() -> None:
     assert payload["providers"]["curve"]["status"] == "ok"
 
 
+def test_openapi_quote_vault_context_uses_leg_specific_price_per_share_fields() -> None:
+    with TestClient(app) as client:
+        response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    schema = response.json()["components"]["schemas"]["QuoteVaultContext"]["properties"]
+    assert "price_per_share_token_in" in schema
+    assert "price_per_share_token_out" in schema
+    assert "price_per_share" not in schema
+
+
 def test_quote_endpoint_plugin_exception_returns_internal_error_not_http_500(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

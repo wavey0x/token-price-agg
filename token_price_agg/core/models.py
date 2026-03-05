@@ -41,7 +41,9 @@ class VaultContext(BaseModel):
     underlying_token: str | None = None
     underlying_token_in: str | None = None
     underlying_token_out: str | None = None
-    price_per_share: Decimal
+    price_per_share: Decimal | None = None
+    price_per_share_token_in: Decimal | None = None
+    price_per_share_token_out: Decimal | None = None
     block_number: int
 
     @field_validator("underlying_token", "underlying_token_in", "underlying_token_out")
