@@ -45,6 +45,7 @@ Auth behavior (when enabled):
 - `/metrics` remains public
 - auth failures return `401` with `WWW-Authenticate: Bearer`
 - rate-limit failures return `429` with `Retry-After` and `X-RateLimit-*` headers
+- structured `http_request` logs include `auth_status` and, when applicable, `auth_reason`
 
 ## Runtime Checks
 

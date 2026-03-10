@@ -43,6 +43,10 @@ _AUTH_FAILURE_MESSAGES = {
     AuthFailureReason.REVOKED: "API key revoked",
     AuthFailureReason.EXPIRED: "API key expired",
 }
+_AUTH_STATUS_UNPROTECTED = "unprotected"
+_AUTH_STATUS_AUTHENTICATED = "authenticated"
+_AUTH_STATUS_ANONYMOUS = "anonymous"
+_AUTH_STATUS_UNAUTHORIZED = "unauthorized"
 
 
 @asynccontextmanager
@@ -124,6 +128,8 @@ app.include_router(quotes_router)
 def _init_request_context(request: Request) -> tuple[str, RequestContextToken]:
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request.state.request_id = request_id
+    request.state.auth_status = _AUTH_STATUS_UNPROTECTED
+    request.state.auth_reason = None
     context_token = bind_request_context(
         request_id=request_id,
         path=request.url.path,
@@ -139,11 +145,13 @@ def _authorize_and_rate_limit_if_needed(
     request_id: str,
 ) -> tuple[Response | None, RateLimitResult | None]:
     if not settings.api_key_auth_enabled or not request.url.path.startswith("/v1/"):
+        _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_UNPROTECTED)
         return None, None
 
     store = get_api_key_store()
     auth_result = store.authenticate_bearer_header(request.headers.get("Authorization"))
     if auth_result.authenticated:
+        _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_AUTHENTICATED)
         if settings.metrics_enabled:
             record_auth_result(result="ok")
 
@@ -177,6 +185,11 @@ def _authorize_and_rate_limit_if_needed(
         failure_reason=auth_result.failure_reason,
         settings=settings,
     ):
+        _set_request_auth_state(
+            request=request,
+            auth_status=_AUTH_STATUS_ANONYMOUS,
+            auth_reason=_auth_reason_value(auth_result.failure_reason),
+        )
         if settings.metrics_enabled:
             record_auth_result(result="unauth_ok")
 
@@ -204,9 +217,30 @@ def _authorize_and_rate_limit_if_needed(
         metrics_enabled=settings.metrics_enabled,
         failure_reason=auth_result.failure_reason,
     )
+    _set_request_auth_state(
+        request=request,
+        auth_status=_AUTH_STATUS_UNAUTHORIZED,
+        auth_reason=_auth_reason_value(auth_result.failure_reason),
+    )
     unauthorized = _unauthorized_response(failure_reason=auth_result.failure_reason)
     unauthorized.headers["X-Request-ID"] = request_id
     return unauthorized, None
+
+
+def _set_request_auth_state(
+    *,
+    request: Request,
+    auth_status: str,
+    auth_reason: str | None = None,
+) -> None:
+    request.state.auth_status = auth_status
+    request.state.auth_reason = auth_reason
+
+
+def _auth_reason_value(failure_reason: AuthFailureReason | None) -> str | None:
+    if failure_reason is None:
+        return None
+    return failure_reason.value
 
 
 def _record_auth_failure_metrics(
@@ -296,13 +330,18 @@ def _finalize_observability(
         )
         dec_inflight_request()
 
-    _REQUEST_LOGGER.info(
-        "http_request",
-        extra={
-            "status_code": status_code,
-            "latency_ms": elapsed_ms,
-        },
-    )
+    request_log_extra: dict[str, int | str] = {
+        "status_code": status_code,
+        "latency_ms": elapsed_ms,
+    }
+    auth_status = getattr(request.state, "auth_status", None)
+    if auth_status is not None:
+        request_log_extra["auth_status"] = auth_status
+    auth_reason = getattr(request.state, "auth_reason", None)
+    if auth_reason is not None:
+        request_log_extra["auth_reason"] = auth_reason
+
+    _REQUEST_LOGGER.info("http_request", extra=request_log_extra)
     reset_request_context(context_token)
 
 

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+
 from token_price_agg.observability import logging as obs_logging
 
 
@@ -34,3 +37,34 @@ def test_redacts_sensitive_keys_and_bearer_values() -> None:
     assert redacted["nested"]["ENSO_API_KEY"] == "***REDACTED***"
     assert redacted["nested"]["normal"] == "ok"
     assert redacted["message"] == "***REDACTED***"
+
+
+def test_json_formatter_includes_auth_fields() -> None:
+    formatter = obs_logging.JsonLogFormatter()
+    token = obs_logging.bind_request_context(
+        request_id="request-2",
+        path="/v1/health",
+        method="GET",
+    )
+    try:
+        record = logging.LogRecord(
+            name="token_price_agg.http",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg="http_request",
+            args=(),
+            exc_info=None,
+        )
+        record.status_code = 429
+        record.latency_ms = 0
+        record.auth_status = "anonymous"
+        record.auth_reason = "missing_authorization"
+
+        payload = json.loads(formatter.format(record))
+    finally:
+        obs_logging.reset_request_context(token)
+
+    assert payload["auth_status"] == "anonymous"
+    assert payload["auth_reason"] == "missing_authorization"
+    assert payload["status_code"] == 429

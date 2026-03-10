@@ -48,12 +48,16 @@ class JsonLogFormatter(logging.Formatter):
         for key in [
             "status_code",
             "latency_ms",
+            "auth_status",
+            "auth_reason",
             "provider",
             "provider_status",
             "error_code",
         ]:
             if hasattr(record, key):
-                payload[key] = getattr(record, key)
+                value = getattr(record, key)
+                if value is not None:
+                    payload[key] = value
 
         if record.exc_info is not None:
             exc_type = record.exc_info[0]

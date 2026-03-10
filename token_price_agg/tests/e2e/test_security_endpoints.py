@@ -5,9 +5,24 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from token_price_agg.app import main as app_main
 from token_price_agg.app.main import app
 from token_price_agg.security.store import ApiKeyStore
 from token_price_agg.tests.e2e.helpers import issue_test_api_key, token_lower
+
+
+def _capture_http_request_logs(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+
+    def fake_info(message: str, *args: object, **kwargs: object) -> None:
+        if message != "http_request":
+            return
+        extra = kwargs.get("extra")
+        assert isinstance(extra, dict)
+        entries.append(dict(extra))
+
+    monkeypatch.setattr(app_main._REQUEST_LOGGER, "info", fake_info)
+    return entries
 
 
 def test_auth_enabled_allows_missing_authorization_at_limited_rate(
@@ -102,6 +117,42 @@ def test_auth_enabled_invalid_authorization_header_is_unauthorized(
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "UNAUTHORIZED"
     assert response.headers["WWW-Authenticate"] == "Bearer"
+
+
+def test_http_request_log_marks_authenticated_requests(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "api_keys.sqlite3"
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
+    entries = _capture_http_request_logs(monkeypatch)
+    key = issue_test_api_key("log-auth-e2e")
+
+    with TestClient(app) as client:
+        response = client.get("/v1/health", headers={"Authorization": f"Bearer {key}"})
+
+    assert response.status_code == 200
+    assert entries[-1]["auth_status"] == "authenticated"
+    assert "auth_reason" not in entries[-1]
+
+
+def test_http_request_log_marks_anonymous_requests(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "api_keys.sqlite3"
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
+    monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "true")
+    entries = _capture_http_request_logs(monkeypatch)
+
+    with TestClient(app) as client:
+        response = client.get("/v1/health")
+
+    assert response.status_code == 200
+    assert entries[-1]["auth_status"] == "anonymous"
+    assert entries[-1]["auth_reason"] == "missing_authorization"
 
 
 def test_rate_limit_returns_429_with_headers(
