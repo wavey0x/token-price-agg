@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from token_price_agg.app.config import Settings
 from token_price_agg.core.models import PriceResult, QuoteResult, TokenMetadata, TokenRef
 from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.cache import TokenMetadataCache
+from token_price_agg.token_metadata.logo_urls import build_logo_candidates
+from token_price_agg.token_metadata.logo_verifier import apply_verify_result, verify_candidates
 from token_price_agg.token_metadata.onchain import fetch_onchain_metadata
 from token_price_agg.token_metadata.policy import (
+    collect_provider_logo_urls,
     hints_from_refs,
     merge_metadata,
     resolve_logo_for_response,
@@ -21,6 +25,7 @@ class TokenMetadataResolver:
     def __init__(self, settings: Settings) -> None:
         self._cache = TokenMetadataCache(db_path=settings.token_metadata_db_path)
         self._rpc = AsyncRpcClient(rpc_urls=settings.rpc_urls)
+        self._pending_verification: set[tuple[int, str]] = set()
 
     async def resolve_from_price_results(
         self,
@@ -85,6 +90,7 @@ class TokenMetadataResolver:
 
         cached = self._cache.get_many(chain_id=chain_id, addresses=unique_addresses)
         hinted = hints_from_refs(refs, chain_id=chain_id)
+        provider_logos = collect_provider_logo_urls(refs, chain_id=chain_id)
 
         merged: dict[str, TokenMetadata] = {}
         for address in unique_addresses:
@@ -114,17 +120,104 @@ class TokenMetadataResolver:
                 default_source="onchain_multicall",
             )
 
+        needs_verification: list[str] = []
         for address, metadata in list(merged.items()):
             merged[address] = resolve_logo_for_response(
                 chain_id=chain_id,
                 address=address,
                 metadata=metadata,
                 cached=cached.get(address),
-                hint=hinted.get(address),
+                provider_logo_urls=provider_logos.get(address),
+            )
+            if merged[address].logo_status == "unknown":
+                needs_verification.append(address)
+
+        # Persist metadata, but don't store unverified logo URLs
+        to_persist = []
+        for metadata in merged.values():
+            if metadata.logo_status == "unknown":
+                to_persist.append(metadata.model_copy(update={"logo_url": None}))
+            else:
+                to_persist.append(metadata)
+        self._cache.upsert_many(to_persist)
+
+        # Background-verify tokens with unknown logo status
+        for address in needs_verification:
+            self._enqueue_verification(
+                chain_id=chain_id,
+                address=address,
+                provider_logo_urls=provider_logos.get(address),
+                existing=cached.get(address),
             )
 
-        self._cache.upsert_many(list(merged.values()))
         return merged
+
+    def _enqueue_verification(
+        self,
+        *,
+        chain_id: int,
+        address: str,
+        provider_logo_urls: list[str] | None,
+        existing: TokenMetadata | None,
+    ) -> None:
+        key = (chain_id, address)
+        if key in self._pending_verification:
+            return
+        self._pending_verification.add(key)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._pending_verification.discard(key)
+            return
+
+        loop.create_task(
+            self._verify_and_persist(
+                chain_id=chain_id,
+                address=address,
+                provider_logo_urls=provider_logo_urls,
+                existing=existing,
+            )
+        )
+
+    async def _verify_and_persist(
+        self,
+        *,
+        chain_id: int,
+        address: str,
+        provider_logo_urls: list[str] | None,
+        existing: TokenMetadata | None,
+    ) -> None:
+        try:
+            candidates = build_logo_candidates(
+                chain_id=chain_id,
+                address=address,
+                provider_logo_urls=provider_logo_urls,
+                cached_logo_url=existing.logo_url if existing is not None else None,
+            )
+            result = await verify_candidates(candidates)
+
+            base = existing or TokenMetadata(chain_id=chain_id, address=address)
+            updated = apply_verify_result(base, result)
+            self._cache.upsert_many([updated])
+
+            _LOGGER.debug(
+                "background_logo_verified",
+                extra={
+                    "chain_id": chain_id,
+                    "address": address,
+                    "logo_status": result.logo_status,
+                    "logo_url": result.logo_url,
+                    "logo_source": result.logo_source,
+                },
+            )
+        except Exception:
+            _LOGGER.exception(
+                "background_logo_verify_failed",
+                extra={"chain_id": chain_id, "address": address},
+            )
+        finally:
+            self._pending_verification.discard((chain_id, address))
 
     async def _fetch_onchain_metadata(
         self,

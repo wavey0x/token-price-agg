@@ -170,6 +170,7 @@ Primary fields:
 - `request_id`, `path`, `method`, `status_code`, `latency_ms`
 - `auth_status` (`authenticated`, `anonymous`, `unauthorized`, `unprotected`)
 - `auth_reason` (when auth middleware made a specific failure decision such as `missing_authorization`)
+- `api_key_id` (authenticated requests only; public key id, not the secret)
 - `provider`, `provider_status`, `error_code`
 - `env`, `version`
 

@@ -34,7 +34,7 @@ def test_auth_enabled_allows_missing_authorization_at_limited_rate(
     monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
     monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "true")
     monkeypatch.setenv("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS", "1")
-    key = issue_test_api_key("auth-e2e")
+    key = issue_test_api_key("auth-e2e").key
 
     with TestClient(app) as client:
         first = client.get("/v1/health")
@@ -71,7 +71,7 @@ def test_auth_enabled_with_unauth_access_disabled_requires_bearer_token(
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
     monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "false")
-    key = issue_test_api_key("strict-e2e")
+    key = issue_test_api_key("strict-e2e").key
 
     with TestClient(app) as client:
         no_key_price = client.get(
@@ -127,13 +127,14 @@ def test_http_request_log_marks_authenticated_requests(
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
     entries = _capture_http_request_logs(monkeypatch)
-    key = issue_test_api_key("log-auth-e2e")
+    issued = issue_test_api_key("log-auth-e2e")
 
     with TestClient(app) as client:
-        response = client.get("/v1/health", headers={"Authorization": f"Bearer {key}"})
+        response = client.get("/v1/health", headers={"Authorization": f"Bearer {issued.key}"})
 
     assert response.status_code == 200
     assert entries[-1]["auth_status"] == "authenticated"
+    assert entries[-1]["api_key_id"] == issued.public_id
     assert "auth_reason" not in entries[-1]
 
 
@@ -153,6 +154,7 @@ def test_http_request_log_marks_anonymous_requests(
     assert response.status_code == 200
     assert entries[-1]["auth_status"] == "anonymous"
     assert entries[-1]["auth_reason"] == "missing_authorization"
+    assert "api_key_id" not in entries[-1]
 
 
 def test_rate_limit_returns_429_with_headers(
@@ -163,7 +165,7 @@ def test_rate_limit_returns_429_with_headers(
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_KEY_DB_PATH", str(db_path))
     monkeypatch.setenv("API_KEY_RATE_LIMIT_RPM", "3")
-    key = issue_test_api_key("limit-e2e")
+    key = issue_test_api_key("limit-e2e").key
 
     with TestClient(app) as client:
         first = client.get("/v1/health", headers={"Authorization": f"Bearer {key}"})

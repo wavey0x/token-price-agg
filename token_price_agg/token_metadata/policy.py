@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from token_price_agg.core.models import TokenMetadata, TokenRef
 from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.logo_urls import build_logo_candidates
+
+_VALID_RECHECK_SECONDS = 14 * 86400  # 14 days
+_INVALID_RECHECK_SECONDS = 2 * 86400  # 2 days
 
 
 def hints_from_refs(refs: list[TokenRef], *, chain_id: int) -> dict[str, TokenMetadata]:
@@ -25,6 +29,19 @@ def hints_from_refs(refs: list[TokenRef], *, chain_id: int) -> dict[str, TokenMe
             hint=hint,
             default_source="provider",
         )
+    return out
+
+
+def collect_provider_logo_urls(
+    refs: list[TokenRef], *, chain_id: int
+) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for ref in refs:
+        address = AddressValidator.normalize_address(ref.address)
+        if ref.logo_url:
+            urls = out.setdefault(address, [])
+            if ref.logo_url not in urls:
+                urls.append(ref.logo_url)
     return out
 
 
@@ -73,33 +90,50 @@ def resolve_logo_for_response(
     address: str,
     metadata: TokenMetadata,
     cached: TokenMetadata | None,
-    hint: TokenMetadata | None,
+    provider_logo_urls: list[str] | None = None,
 ) -> TokenMetadata:
     status = normalized_logo_status(cached.logo_status if cached is not None else None)
-    candidates = build_logo_candidates(
-        chain_id=chain_id,
-        address=address,
-        provider_logo_url=hint.logo_url if hint is not None else None,
-        cached_logo_url=cached.logo_url if cached is not None else metadata.logo_url,
-    )
+    checked_at = cached.logo_checked_at if cached is not None else None
 
-    chosen_logo_url: str | None
-    if status == "valid":
-        if cached is not None and cached.logo_url:
-            chosen_logo_url = cached.logo_url
-        else:
-            chosen_logo_url = candidates[0].url if candidates else None
-    elif status == "invalid":
-        chosen_logo_url = None
-    else:
-        chosen_logo_url = candidates[0].url if candidates else None
+    if status in ("valid", "invalid") and _is_stale(status, checked_at):
+        status = "unknown"
+
+    if status == "valid" and cached is not None and cached.logo_url:
+        return metadata.model_copy(
+            update={
+                "logo_url": cached.logo_url,
+                "logo_status": "valid",
+                "logo_source": cached.logo_source if cached is not None else None,
+                "logo_checked_at": checked_at,
+                "logo_http_status": cached.logo_http_status if cached is not None else None,
+            }
+        )
+
+    if status == "invalid":
+        return metadata.model_copy(
+            update={
+                "logo_url": None,
+                "logo_status": "invalid",
+                "logo_source": None,
+                "logo_checked_at": checked_at,
+                "logo_http_status": cached.logo_http_status if cached is not None else None,
+            }
+        )
+
+    # status == "unknown": return first provider URL ephemerally (not persisted)
+    # but do not return unverified static fallbacks
+    ephemeral_url: str | None = None
+    for url in provider_logo_urls or []:
+        ephemeral_url = url
+        break
 
     return metadata.model_copy(
         update={
-            "logo_url": chosen_logo_url,
-            "logo_status": status,
-            "logo_checked_at": cached.logo_checked_at if cached is not None else None,
-            "logo_http_status": cached.logo_http_status if cached is not None else None,
+            "logo_url": ephemeral_url,
+            "logo_status": "unknown",
+            "logo_source": None,
+            "logo_checked_at": checked_at,
+            "logo_http_status": None,
         }
     )
 
@@ -111,6 +145,17 @@ def normalized_logo_status(value: str | None) -> str:
     if normalized in {"unknown", "valid", "invalid"}:
         return normalized
     return "unknown"
+
+
+def _is_stale(status: str, checked_at: int | None) -> bool:
+    if checked_at is None:
+        return True
+    age = int(time.time()) - checked_at
+    if status == "valid":
+        return age > _VALID_RECHECK_SECONDS
+    if status == "invalid":
+        return age > _INVALID_RECHECK_SECONDS
+    return True
 
 
 def _is_native(*, address: str, cached: TokenMetadata | None, hint: TokenMetadata | None) -> bool:

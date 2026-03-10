@@ -136,6 +136,7 @@ class TokenMetadata(BaseModel):
     decimals: int | None = None
     logo_url: str | None = None
     logo_status: str = "unknown"
+    logo_source: str | None = None
     logo_checked_at: int | None = None
     logo_http_status: int | None = None
     source: str | None = None

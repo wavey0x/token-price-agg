@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from decimal import Decimal
 from pathlib import Path
 
@@ -14,7 +15,7 @@ USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 
 
 @pytest.mark.asyncio
-async def test_resolver_uses_provider_metadata_and_persists_cache(tmp_path: Path) -> None:
+async def test_resolver_returns_provider_logo_ephemerally_for_unknown(tmp_path: Path) -> None:
     settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
     resolver = TokenMetadataResolver(settings)
 
@@ -39,22 +40,19 @@ async def test_resolver_uses_provider_metadata_and_persists_cache(tmp_path: Path
         request_token=request_token,
         results=[result],
     )
+    # Provider logo returned ephemerally in response
     assert first[USDC].symbol == "USDC"
     assert first[USDC].decimals == 6
     assert first[USDC].logo_url == "https://example.com/usdc.png"
+    assert first[USDC].logo_status == "unknown"
 
-    second = await resolver.resolve_from_price_results(
-        chain_id=1,
-        request_token=request_token,
-        results=[],
-    )
-    assert second[USDC].symbol == "USDC"
-    assert second[USDC].decimals == 6
-    assert second[USDC].logo_url == "https://example.com/usdc.png"
+    # But NOT persisted to cache
+    cached = resolver._cache.get_many(chain_id=1, addresses=[USDC])
+    assert cached[USDC].logo_url is None
 
 
 @pytest.mark.asyncio
-async def test_resolver_applies_smoldapp_logo_fallback(
+async def test_resolver_does_not_return_static_fallbacks_for_unknown(
     tmp_path: Path,
 ) -> None:
     settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
@@ -65,7 +63,9 @@ async def test_resolver_applies_smoldapp_logo_fallback(
         request_token=TokenRef(chain_id=1, address=USDC),
         results=[],
     )
-    assert metadata[USDC].logo_url == f"https://assets.smold.app/api/token/1/{USDC.lower()}/logo-128.png"
+    # No provider logo, no verified cache — returns None, not a static fallback
+    assert metadata[USDC].logo_url is None
+    assert metadata[USDC].logo_status == "unknown"
 
 
 @pytest.mark.asyncio
@@ -77,9 +77,9 @@ async def test_resolver_returns_null_logo_for_known_invalid_cached_token(tmp_pat
             TokenMetadata(
                 chain_id=1,
                 address=USDC,
-                logo_url="https://assets.smold.app/api/token/1/invalid/logo-128.png",
+                logo_url=None,
                 logo_status="invalid",
-                logo_checked_at=1_700_000_000,
+                logo_checked_at=int(time.time()),
                 logo_http_status=404,
             )
         ]
@@ -106,7 +106,8 @@ async def test_resolver_uses_cached_logo_for_known_valid_cached_token(tmp_path: 
                 address=USDC,
                 logo_url="https://example.com/verified-usdc.png",
                 logo_status="valid",
-                logo_checked_at=1_700_000_000,
+                logo_source="provider",
+                logo_checked_at=int(time.time()),
                 logo_http_status=200,
             )
         ]
@@ -120,6 +121,36 @@ async def test_resolver_uses_cached_logo_for_known_valid_cached_token(tmp_path: 
 
     assert metadata[USDC].logo_url == "https://example.com/verified-usdc.png"
     assert metadata[USDC].logo_status == "valid"
+    assert metadata[USDC].logo_source == "provider"
+
+
+@pytest.mark.asyncio
+async def test_resolver_treats_stale_valid_as_unknown(tmp_path: Path) -> None:
+    settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
+    resolver = TokenMetadataResolver(settings)
+    resolver._cache.upsert_many(
+        [
+            TokenMetadata(
+                chain_id=1,
+                address=USDC,
+                logo_url="https://example.com/old-usdc.png",
+                logo_status="valid",
+                logo_source="smoldapp",
+                logo_checked_at=int(time.time()) - 30 * 86400,  # 30 days old
+                logo_http_status=200,
+            )
+        ]
+    )
+
+    metadata = await resolver.resolve_from_price_results(
+        chain_id=1,
+        request_token=TokenRef(chain_id=1, address=USDC),
+        results=[],
+    )
+
+    # Stale valid is treated as unknown — no static fallback returned
+    assert metadata[USDC].logo_url is None
+    assert metadata[USDC].logo_status == "unknown"
 
 
 @pytest.mark.asyncio
@@ -157,3 +188,49 @@ async def test_resolver_uses_onchain_multicall_when_provider_has_no_metadata(
     assert calls == [[USDC]]
     assert metadata[USDC].symbol == "USDC"
     assert metadata[USDC].decimals == 6
+
+
+@pytest.mark.asyncio
+async def test_resolver_preserves_multiple_provider_logo_urls(tmp_path: Path) -> None:
+    settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
+    resolver = TokenMetadataResolver(settings)
+
+    provider_a = TokenRef(
+        chain_id=1,
+        address=USDC,
+        symbol="USDC",
+        decimals=6,
+        logo_url="https://provider-a.com/usdc.png",
+    )
+    provider_b = TokenRef(
+        chain_id=1,
+        address=USDC,
+        symbol="USDC",
+        decimals=6,
+        logo_url="https://provider-b.com/usdc.png",
+    )
+    results = [
+        PriceResult(
+            provider="lifi",
+            status=ProviderStatus.OK,
+            token=provider_a,
+            price_usd=Decimal("1"),
+            latency_ms=10,
+        ),
+        PriceResult(
+            provider="defillama",
+            status=ProviderStatus.OK,
+            token=provider_b,
+            price_usd=Decimal("1"),
+            latency_ms=10,
+        ),
+    ]
+
+    metadata = await resolver.resolve_from_price_results(
+        chain_id=1,
+        request_token=TokenRef(chain_id=1, address=USDC),
+        results=results,
+    )
+
+    # First provider logo returned ephemerally
+    assert metadata[USDC].logo_url == "https://provider-a.com/usdc.png"

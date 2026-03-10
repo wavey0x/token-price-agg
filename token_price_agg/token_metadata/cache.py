@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 import threading
 import time
@@ -7,6 +8,8 @@ from contextlib import closing
 from pathlib import Path
 
 from token_price_agg.core.models import TokenMetadata
+
+_LOGGER = logging.getLogger("token_price_agg.token_metadata")
 
 
 class TokenMetadataCache:
@@ -22,7 +25,7 @@ class TokenMetadataCache:
         placeholders = ",".join("?" for _ in addresses)
         query = (
             "SELECT chain_id, address, symbol, decimals, logo_url, "
-            "logo_status, logo_checked_at, logo_http_status, source "
+            "logo_status, logo_source, logo_checked_at, logo_http_status, source "
             f"FROM token_metadata WHERE chain_id = ? AND address IN ({placeholders})"
         )
         params: list[object] = [chain_id, *addresses]
@@ -41,6 +44,9 @@ class TokenMetadataCache:
                 logo_url=str(row["logo_url"]) if row["logo_url"] is not None else None,
                 logo_status=(
                     str(row["logo_status"]) if row["logo_status"] is not None else "unknown"
+                ),
+                logo_source=(
+                    str(row["logo_source"]) if row["logo_source"] is not None else None
                 ),
                 logo_checked_at=(
                     int(row["logo_checked_at"]) if row["logo_checked_at"] is not None else None
@@ -66,6 +72,7 @@ class TokenMetadataCache:
                 item.decimals,
                 item.logo_url,
                 item.logo_status,
+                item.logo_source,
                 item.logo_checked_at,
                 item.logo_http_status,
                 item.source,
@@ -84,16 +91,18 @@ class TokenMetadataCache:
                     decimals,
                     logo_url,
                     logo_status,
+                    logo_source,
                     logo_checked_at,
                     logo_http_status,
                     source,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(chain_id, address) DO UPDATE SET
                     symbol = excluded.symbol,
                     decimals = excluded.decimals,
                     logo_url = excluded.logo_url,
                     logo_status = excluded.logo_status,
+                    logo_source = excluded.logo_source,
                     logo_checked_at = excluded.logo_checked_at,
                     logo_http_status = excluded.logo_http_status,
                     source = excluded.source,
@@ -102,6 +111,28 @@ class TokenMetadataCache:
                 rows,
             )
             conn.commit()
+
+    def scrub_legacy_smoldapp_urls(self) -> int:
+        with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
+            cursor = conn.execute(
+                """
+                UPDATE token_metadata
+                SET logo_url = NULL,
+                    logo_status = 'unknown',
+                    logo_source = NULL,
+                    logo_checked_at = NULL,
+                    logo_http_status = NULL
+                WHERE logo_url LIKE 'https://raw.githubusercontent.com/SmolDapp/%'
+                """,
+            )
+            conn.commit()
+            count = cursor.rowcount
+        if count > 0:
+            _LOGGER.info(
+                "scrubbed_legacy_smoldapp_urls",
+                extra={"count": count},
+            )
+        return count
 
     def _ensure_db(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -115,6 +146,7 @@ class TokenMetadataCache:
                     decimals INTEGER,
                     logo_url TEXT,
                     logo_status TEXT NOT NULL DEFAULT 'unknown',
+                    logo_source TEXT,
                     logo_checked_at INTEGER,
                     logo_http_status INTEGER,
                     source TEXT,
@@ -130,6 +162,11 @@ class TokenMetadataCache:
             )
             self._ensure_column(
                 conn,
+                column_name="logo_source",
+                definition="TEXT",
+            )
+            self._ensure_column(
+                conn,
                 column_name="logo_checked_at",
                 definition="INTEGER",
             )
@@ -139,6 +176,8 @@ class TokenMetadataCache:
                 definition="INTEGER",
             )
             conn.commit()
+
+        self.scrub_legacy_smoldapp_urls()
 
     @staticmethod
     def _ensure_column(conn: sqlite3.Connection, *, column_name: str, definition: str) -> None:

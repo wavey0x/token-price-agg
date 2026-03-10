@@ -11,6 +11,7 @@ from token_price_agg.app.dependencies import (
     get_token_metadata_resolver,
     get_vault_resolver,
 )
+from token_price_agg.security.models import ApiKeyIssueResult
 from token_price_agg.tests.fixtures.ethereum_tokens import (
     DEFAULT_QUOTE_SYMBOLS,
     MAINNET_TOKENS,
@@ -59,7 +60,6 @@ def mock_defillama_price(router: respx.MockRouter, token_address: str, symbol: s
     )
 
 
-def issue_test_api_key(label: str = "e2e") -> str:
+def issue_test_api_key(label: str = "e2e") -> ApiKeyIssueResult:
     store = get_api_key_store()
-    issued = store.issue_key(label=label)
-    return issued.key
+    return store.issue_key(label=label)

@@ -50,6 +50,7 @@ class JsonLogFormatter(logging.Formatter):
             "latency_ms",
             "auth_status",
             "auth_reason",
+            "api_key_id",
             "provider",
             "provider_status",
             "error_code",

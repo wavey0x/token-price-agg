@@ -13,8 +13,8 @@ def build_logo_candidates(
     *,
     chain_id: int,
     address: str,
-    provider_logo_url: str | None,
-    cached_logo_url: str | None,
+    provider_logo_urls: list[str] | None = None,
+    cached_logo_url: str | None = None,
 ) -> list[LogoCandidate]:
     candidates: list[LogoCandidate] = []
     seen: set[str] = set()
@@ -30,21 +30,20 @@ def build_logo_candidates(
         seen.add(normalized)
         candidates.append(LogoCandidate(source=source, url=normalized))
 
-    _add("provider", provider_logo_url)
+    for provider_url in provider_logo_urls or []:
+        _add("provider", provider_url)
     _add("cached", cached_logo_url)
-    _add("smoldapp", smoldapp_logo_url(chain_id=chain_id, address=address))
     _add("yearn_tokenassets", yearn_tokenassets_logo_url(chain_id=chain_id, address=address))
     _add("trustwallet", trustwallet_logo_url(chain_id=chain_id, address=address))
+    _add("smoldapp", smoldapp_logo_url(chain_id=chain_id, address=address))
     return candidates
 
 
 def smoldapp_logo_url(*, chain_id: int, address: str) -> str:
-    # SmolDapp asset paths for EVM chains expect lowercase addresses.
     return f"https://assets.smold.app/api/token/{chain_id}/{address.lower()}/logo-128.png"
 
 
 def yearn_tokenassets_logo_url(*, chain_id: int, address: str) -> str:
-    # yearn/tokenAssets stores EVM token directories in lowercase.
     return (
         "https://raw.githubusercontent.com/yearn/tokenAssets/main/"
         f"tokens/{chain_id}/{address.lower()}/logo-128.png"

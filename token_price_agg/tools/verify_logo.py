@@ -4,29 +4,18 @@ import argparse
 import asyncio
 import json
 import sys
-import time
-from dataclasses import asdict, dataclass
-
-import httpx
+from dataclasses import asdict
 
 from token_price_agg.app.config import get_settings
 from token_price_agg.core.models import TokenMetadata
 from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.cache import TokenMetadataCache
-from token_price_agg.token_metadata.logo_urls import LogoCandidate, build_logo_candidates
-
-_HTTP_TIMEOUT_S = 2.0
-_HTTP_HEADERS = {"User-Agent": "token-price-agg/logo-verifier"}
-
-
-@dataclass(frozen=True)
-class VerifyAttempt:
-    url: str
-    source: str
-    method: str
-    http_status: int | None
-    valid: bool
-    error: str | None = None
+from token_price_agg.token_metadata.logo_urls import build_logo_candidates
+from token_price_agg.token_metadata.logo_verifier import (
+    VerifyAttempt,
+    apply_verify_result,
+    verify_candidates,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,144 +34,27 @@ async def verify_token_logo(*, chain_id: int, token: str) -> dict[str, object]:
     candidates = build_logo_candidates(
         chain_id=chain_id,
         address=address,
-        provider_logo_url=None,
+        provider_logo_urls=None,
         cached_logo_url=existing.logo_url if existing is not None else None,
     )
 
-    timeout = httpx.Timeout(_HTTP_TIMEOUT_S)
-    attempts: list[VerifyAttempt] = []
-    selected: LogoCandidate | None = None
-    selected_status: int | None = None
+    result = await verify_candidates(candidates)
 
-    async with httpx.AsyncClient(
-        timeout=timeout,
-        follow_redirects=True,
-        headers=_HTTP_HEADERS,
-    ) as client:
-        for candidate in candidates:
-            ok_head, status_head, error_head = await _check_candidate(
-                client=client,
-                candidate=candidate,
-                method="HEAD",
-            )
-            attempts.append(
-                VerifyAttempt(
-                    url=candidate.url,
-                    source=candidate.source,
-                    method="HEAD",
-                    http_status=status_head,
-                    valid=ok_head,
-                    error=error_head,
-                )
-            )
-            if ok_head:
-                selected = candidate
-                selected_status = status_head
-                break
-
-            ok_get, status_get, error_get = await _check_candidate(
-                client=client,
-                candidate=candidate,
-                method="GET",
-            )
-            attempts.append(
-                VerifyAttempt(
-                    url=candidate.url,
-                    source=candidate.source,
-                    method="GET",
-                    http_status=status_get,
-                    valid=ok_get,
-                    error=error_get,
-                )
-            )
-            if ok_get:
-                selected = candidate
-                selected_status = status_get
-                break
-
-    now = int(time.time())
-    base = existing or TokenMetadata(
-        chain_id=chain_id,
-        address=address,
-    )
-    if selected is not None:
-        updated = base.model_copy(
-            update={
-                "logo_url": selected.url,
-                "logo_status": "valid",
-                "logo_checked_at": now,
-                "logo_http_status": selected_status,
-            }
-        )
-        result_status = "valid"
-    else:
-        last_status = _last_http_status(attempts)
-        updated = base.model_copy(
-            update={
-                "logo_url": None,
-                "logo_status": "invalid",
-                "logo_checked_at": now,
-                "logo_http_status": last_status,
-            }
-        )
-        result_status = "invalid"
-
+    base = existing or TokenMetadata(chain_id=chain_id, address=address)
+    updated = apply_verify_result(base, result)
     cache.upsert_many([updated])
 
     return {
         "chain_id": chain_id,
         "token": address,
-        "result": result_status,
-        "logo_url": updated.logo_url,
-        "logo_status": updated.logo_status,
-        "logo_checked_at": updated.logo_checked_at,
-        "logo_http_status": updated.logo_http_status,
-        "attempts": [asdict(item) for item in attempts],
+        "result": result.logo_status,
+        "logo_url": result.logo_url,
+        "logo_status": result.logo_status,
+        "logo_source": result.logo_source,
+        "logo_checked_at": result.logo_checked_at,
+        "logo_http_status": result.logo_http_status,
+        "attempts": [asdict(item) for item in result.attempts],
     }
-
-
-async def _check_candidate(
-    *,
-    client: httpx.AsyncClient,
-    candidate: LogoCandidate,
-    method: str,
-) -> tuple[bool, int | None, str | None]:
-    try:
-        if method == "HEAD":
-            response = await client.head(candidate.url)
-        else:
-            response = await client.get(candidate.url)
-    except httpx.HTTPError as exc:
-        return False, None, type(exc).__name__
-
-    valid = _is_valid_image_response(response)
-    return valid, response.status_code, None
-
-
-def _is_valid_image_response(response: httpx.Response) -> bool:
-    if response.status_code != 200:
-        return False
-
-    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-    if content_type.startswith("image/"):
-        return True
-
-    body = response.content[:32]
-    return (
-        body.startswith(b"\x89PNG\r\n\x1a\n")
-        or body.startswith(b"\xff\xd8\xff")
-        or body.startswith(b"GIF87a")
-        or body.startswith(b"GIF89a")
-        or body.startswith(b"RIFF")
-        or body.lstrip().startswith(b"<svg")
-    )
-
-
-def _last_http_status(attempts: list[VerifyAttempt]) -> int | None:
-    for attempt in reversed(attempts):
-        if attempt.http_status is not None:
-            return attempt.http_status
-    return None
 
 
 def main() -> int:

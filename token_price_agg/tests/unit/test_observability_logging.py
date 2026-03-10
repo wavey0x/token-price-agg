@@ -58,13 +58,15 @@ def test_json_formatter_includes_auth_fields() -> None:
         )
         record.status_code = 429
         record.latency_ms = 0
-        record.auth_status = "anonymous"
-        record.auth_reason = "missing_authorization"
+        record.auth_status = "authenticated"
+        record.auth_reason = None
+        record.api_key_id = "df87009645a15ec6"
 
         payload = json.loads(formatter.format(record))
     finally:
         obs_logging.reset_request_context(token)
 
-    assert payload["auth_status"] == "anonymous"
-    assert payload["auth_reason"] == "missing_authorization"
+    assert payload["auth_status"] == "authenticated"
+    assert "auth_reason" not in payload
+    assert payload["api_key_id"] == "df87009645a15ec6"
     assert payload["status_code"] == 429

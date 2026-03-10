@@ -128,8 +128,7 @@ app.include_router(quotes_router)
 def _init_request_context(request: Request) -> tuple[str, RequestContextToken]:
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request.state.request_id = request_id
-    request.state.auth_status = _AUTH_STATUS_UNPROTECTED
-    request.state.auth_reason = None
+    _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_UNPROTECTED)
     context_token = bind_request_context(
         request_id=request_id,
         path=request.url.path,
@@ -151,12 +150,13 @@ def _authorize_and_rate_limit_if_needed(
     store = get_api_key_store()
     auth_result = store.authenticate_bearer_header(request.headers.get("Authorization"))
     if auth_result.authenticated:
-        _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_AUTHENTICATED)
+        _set_request_auth_state(
+            request=request,
+            auth_status=_AUTH_STATUS_AUTHENTICATED,
+            api_key_id=auth_result.public_id,
+        )
         if settings.metrics_enabled:
             record_auth_result(result="ok")
-
-        request.state.api_key_id = auth_result.public_id
-        request.state.api_key_label = auth_result.label
 
         effective_limit_rpm = (
             auth_result.rate_limit_rpm
@@ -232,9 +232,11 @@ def _set_request_auth_state(
     request: Request,
     auth_status: str,
     auth_reason: str | None = None,
+    api_key_id: str | None = None,
 ) -> None:
     request.state.auth_status = auth_status
     request.state.auth_reason = auth_reason
+    request.state.api_key_id = api_key_id
 
 
 def _auth_reason_value(failure_reason: AuthFailureReason | None) -> str | None:
@@ -334,12 +336,10 @@ def _finalize_observability(
         "status_code": status_code,
         "latency_ms": elapsed_ms,
     }
-    auth_status = getattr(request.state, "auth_status", None)
-    if auth_status is not None:
-        request_log_extra["auth_status"] = auth_status
-    auth_reason = getattr(request.state, "auth_reason", None)
-    if auth_reason is not None:
-        request_log_extra["auth_reason"] = auth_reason
+    for field in ("auth_status", "auth_reason", "api_key_id"):
+        value = getattr(request.state, field, None)
+        if value is not None:
+            request_log_extra[field] = value
 
     _REQUEST_LOGGER.info("http_request", extra=request_log_extra)
     reset_request_context(context_token)
