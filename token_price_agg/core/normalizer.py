@@ -13,26 +13,39 @@ from token_price_agg.core.models import (
     QuoteResult,
     TokenRef,
 )
+from token_price_agg.core.address_remap import resolve_remap
 from token_price_agg.core.validator import parse_positive_int
 
 
-def normalize_price_request(*, chain_id: int, token: str) -> ProviderPriceRequest:
+def _apply_remap(chain_id: int, ref: TokenRef) -> tuple[TokenRef, TokenRef | None]:
+    canonical = resolve_remap(chain_id, ref.address)
+    if canonical is None:
+        return ref, None
+    return TokenRef(chain_id=chain_id, address=canonical), ref
+
+
+def normalize_price_request(
+    *, chain_id: int, token: str
+) -> tuple[ProviderPriceRequest, TokenRef | None]:
     token_ref = TokenRef(chain_id=chain_id, address=token)
-    return ProviderPriceRequest(chain_id=chain_id, token=token_ref)
+    token_ref, original = _apply_remap(chain_id, token_ref)
+    return ProviderPriceRequest(chain_id=chain_id, token=token_ref), original
 
 
 def normalize_quote_request(
     *, chain_id: int, token_in: str, token_out: str, amount_in: str
-) -> ProviderQuoteRequest:
+) -> tuple[ProviderQuoteRequest, TokenRef | None, TokenRef | None]:
     parsed_amount_in = parse_positive_int(amount_in, "amount_in")
     token_in_ref = TokenRef(chain_id=chain_id, address=token_in)
     token_out_ref = TokenRef(chain_id=chain_id, address=token_out)
+    token_in_ref, original_in = _apply_remap(chain_id, token_in_ref)
+    token_out_ref, original_out = _apply_remap(chain_id, token_out_ref)
     return ProviderQuoteRequest(
         chain_id=chain_id,
         token_in=token_in_ref,
         token_out=token_out_ref,
         amount_in=parsed_amount_in,
-    )
+    ), original_in, original_out
 
 
 def _status_rank(status: ProviderStatus) -> int:

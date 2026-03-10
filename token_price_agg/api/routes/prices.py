@@ -72,10 +72,12 @@ async def _handle_price_request(
     token_metadata_resolver: TokenMetadataResolver,
     settings: Settings,
 ) -> PriceAggregateResponse:
-    normalized = normalize_price_request(
+    normalized, original_token = normalize_price_request(
         chain_id=payload.chain_id,
         token=payload.token,
     )
+    response_token = original_token if original_token is not None else normalized.token
+
     results, summary, provider_order, by_provider = await aggregate_with_provider_order(
         endpoint="/v1/price",
         aggregate_call=aggregator.aggregate_prices(
@@ -94,6 +96,14 @@ async def _handle_price_request(
         request_token=normalized.token,
         results=results,
     )
+
+    if original_token is not None:
+        canonical_meta = token_metadata.get(normalized.token.address)
+        if canonical_meta is not None:
+            token_metadata[original_token.address] = canonical_meta.model_copy(
+                update={"address": original_token.address}
+            )
+
     providers_payload: dict[str, PriceProviderEntry] = {}
     for provider_id in provider_order:
         result = by_provider.get(provider_id)
@@ -123,7 +133,7 @@ async def _handle_price_request(
 
     request_token_meta = metadata_for_address(
         metadata=token_metadata,
-        token=normalized.token,
+        token=response_token,
     )
 
     return PriceAggregateResponse(

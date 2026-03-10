@@ -78,12 +78,15 @@ async def _handle_quote_request(
     token_metadata_resolver: TokenMetadataResolver,
     settings: Settings,
 ) -> QuoteAggregateResponse:
-    normalized = normalize_quote_request(
+    normalized, original_in, original_out = normalize_quote_request(
         chain_id=payload.chain_id,
         token_in=payload.token_in,
         token_out=payload.token_out,
         amount_in=payload.amount_in,
     )
+    response_in = original_in or normalized.token_in
+    response_out = original_out or normalized.token_out
+
     results, summary, provider_order, by_provider = await aggregate_with_provider_order(
         endpoint="/v1/quote",
         aggregate_call=aggregator.aggregate_quotes(
@@ -107,6 +110,17 @@ async def _handle_quote_request(
         request_token_out=normalized.token_out,
         results=results,
     )
+
+    for original, canonical_ref in [
+        (original_in, normalized.token_in),
+        (original_out, normalized.token_out),
+    ]:
+        if original is not None:
+            canonical_meta = token_metadata.get(canonical_ref.address)
+            if canonical_meta is not None:
+                token_metadata[original.address] = canonical_meta.model_copy(
+                    update={"address": original.address}
+                )
 
     providers_payload: dict[str, QuoteProviderEntry] = {}
     for provider_id in provider_order:
@@ -145,8 +159,8 @@ async def _handle_quote_request(
             vault_context=_to_quote_vault_context(selected.vault_context),
         )
 
-    token_in_meta = metadata_for_address(metadata=token_metadata, token=normalized.token_in)
-    token_out_meta = metadata_for_address(metadata=token_metadata, token=normalized.token_out)
+    token_in_meta = metadata_for_address(metadata=token_metadata, token=response_in)
+    token_out_meta = metadata_for_address(metadata=token_metadata, token=response_out)
 
     return QuoteAggregateResponse(
         request_id=request_id,
