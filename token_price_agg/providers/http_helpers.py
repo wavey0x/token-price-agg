@@ -42,10 +42,11 @@ async def timed_get(
     url: str,
     params: QueryParams | None = None,
     headers: dict[str, str] | None = None,
+    timeout_ms: int | None = None,
 ) -> HttpCallResult:
     started = time.perf_counter()
     try:
-        response = await client.get(url=url, params=params, headers=headers)
+        response = await client.get(url=url, params=params, headers=headers, timeout_ms=timeout_ms)
     except httpx.TimeoutException:
         return HttpCallResult(
             latency_ms=int((time.perf_counter() - started) * 1000),
@@ -70,10 +71,11 @@ async def timed_post(
     json: JsonBody | None = None,
     params: QueryParams | None = None,
     headers: dict[str, str] | None = None,
+    timeout_ms: int | None = None,
 ) -> HttpCallResult:
     started = time.perf_counter()
     try:
-        response = await client.post(url=url, json=json, params=params, headers=headers)
+        response = await client.post(url=url, json=json, params=params, headers=headers, timeout_ms=timeout_ms)
     except httpx.TimeoutException:
         return HttpCallResult(
             latency_ms=int((time.perf_counter() - started) * 1000),

@@ -15,6 +15,10 @@ from pydantic_settings import (
 )
 
 
+MIN_REQUEST_TIMEOUT_MS = 200
+MAX_REQUEST_TIMEOUT_MS = 7000
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

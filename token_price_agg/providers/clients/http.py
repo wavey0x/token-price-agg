@@ -33,12 +33,14 @@ class HttpClient:
         url: str,
         params: QueryParams | None = None,
         headers: dict[str, str] | None = None,
+        timeout_ms: int | None = None,
     ) -> HttpResponse:
         response = await self._retryable_request(
             method="GET",
             url=url,
             params=params,
             headers=headers,
+            timeout_ms=timeout_ms,
         )
         return self._to_http_response(response)
 
@@ -49,6 +51,7 @@ class HttpClient:
         json: JsonBody | None = None,
         params: QueryParams | None = None,
         headers: dict[str, str] | None = None,
+        timeout_ms: int | None = None,
     ) -> HttpResponse:
         response = await self._retryable_request(
             method="POST",
@@ -56,6 +59,7 @@ class HttpClient:
             params=params,
             headers=headers,
             json=json,
+            timeout_ms=timeout_ms,
         )
         return self._to_http_response(response)
 
@@ -81,7 +85,9 @@ class HttpClient:
         params: QueryParams | None,
         headers: dict[str, str] | None,
         json: JsonBody | None = None,
+        timeout_ms: int | None = None,
     ) -> httpx.Response:
+        effective_timeout = (timeout_ms / 1000) if timeout_ms is not None else self._timeout
         last_exc: Exception | None = None
         for _ in range(self._attempts):
             try:
@@ -91,6 +97,7 @@ class HttpClient:
                     params=params,
                     headers=headers,
                     json=json,
+                    timeout=effective_timeout,
                 )
             except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as exc:
                 last_exc = exc

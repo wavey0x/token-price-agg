@@ -59,6 +59,7 @@ class ProviderPriceRequest(BaseModel):
 
     chain_id: int
     token: TokenRef
+    timeout_ms: int | None = None
 
 
 class ProviderQuoteRequest(BaseModel):
@@ -68,6 +69,7 @@ class ProviderQuoteRequest(BaseModel):
     token_in: TokenRef
     token_out: TokenRef
     amount_in: int
+    timeout_ms: int | None = None
 
 
 class PriceResult(BaseModel):

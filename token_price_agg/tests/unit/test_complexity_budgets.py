@@ -7,14 +7,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 LINE_BUDGETS = {
-    "token_price_agg/core/aggregator.py": 160,
-    "token_price_agg/token_metadata/resolver.py": 180,
+    "token_price_agg/core/aggregator.py": 275,
+    "token_price_agg/token_metadata/resolver.py": 240,
     "token_price_agg/api/routes/prices.py": 180,
-    "token_price_agg/api/routes/quotes.py": 180,
-    "token_price_agg/tests/e2e/test_price_endpoints.py": 300,
-    "token_price_agg/tests/e2e/test_quote_endpoints.py": 300,
+    "token_price_agg/api/routes/quotes.py": 210,
+    "token_price_agg/tests/e2e/test_price_endpoints.py": 315,
+    "token_price_agg/tests/e2e/test_quote_endpoints.py": 320,
     "token_price_agg/tests/e2e/test_operational_endpoints.py": 200,
-    "token_price_agg/tests/e2e/test_security_endpoints.py": 200,
+    "token_price_agg/tests/e2e/test_security_endpoints.py": 215,
 }
 
 

@@ -39,6 +39,7 @@ class CurveProvider(ProviderPlugin):
         call = await timed_get(
             client=self._client,
             url=f"https://prices.curve.finance/v1/usd_price/ethereum/{req.token.address}",
+            timeout_ms=req.timeout_ms,
         )
         transport = json_transport_outcome(call=call, provider_name="Curve")
         if transport.failure is not None:
@@ -96,6 +97,7 @@ class CurveProvider(ProviderPlugin):
                 "amountIn": str(req.amount_in),
                 "router": "curve",
             },
+            timeout_ms=req.timeout_ms,
         )
         if call.timeout:
             return QuoteResult(

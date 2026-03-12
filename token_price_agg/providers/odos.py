@@ -39,6 +39,7 @@ class OdosProvider(ProviderPlugin):
                 f"{_to_odos_token_address(req.token.address)}"
             ),
             headers={"accept": "application/json"},
+            timeout_ms=req.timeout_ms,
         )
         if call.timeout:
             return PriceResult(
@@ -120,6 +121,7 @@ class OdosProvider(ProviderPlugin):
                 "content-type": "application/json",
             },
             json=_build_quote_payload(req),
+            timeout_ms=req.timeout_ms,
         )
         if call.timeout:
             return QuoteResult(

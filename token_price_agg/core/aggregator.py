@@ -46,6 +46,7 @@ class AggregatorService:
         req: ProviderPriceRequest,
         provider_ids: list[str] | None,
         use_underlying: bool,
+        timeout_ms: int | None = None,
     ) -> tuple[list[PriceResult], AggregatePriceSummary, bool]:
         selected = self._registry.resolve(
             provider_ids=provider_ids,
@@ -70,10 +71,16 @@ class AggregatorService:
                 resolved_req = req
                 vault_context = None
 
+        effective_timeout = timeout_ms if timeout_ms is not None else self._settings.provider_request_timeout_ms
+        price_deadline = effective_timeout + 100
+
+        if timeout_ms is not None:
+            resolved_req = resolved_req.model_copy(update={"timeout_ms": timeout_ms})
+
         price_results = await self._runner.run_prices(
             plugins=selected,
             req=resolved_req,
-            deadline_ms=self._settings.aggregate_price_deadline_ms,
+            deadline_ms=price_deadline,
         )
 
         if vault_context is not None:
@@ -103,6 +110,7 @@ class AggregatorService:
         req: ProviderQuoteRequest,
         provider_ids: list[str] | None,
         use_underlying: bool,
+        timeout_ms: int | None = None,
     ) -> tuple[list[QuoteResult], AggregateQuoteSummary, bool]:
         selected = self._registry.resolve(
             provider_ids=provider_ids,
@@ -133,10 +141,16 @@ class AggregatorService:
                 resolved_req = req
                 quote_resolution = None
 
+        effective_timeout = timeout_ms if timeout_ms is not None else self._settings.provider_request_timeout_ms
+        quote_deadline = effective_timeout + 300
+
+        if timeout_ms is not None:
+            resolved_req = resolved_req.model_copy(update={"timeout_ms": timeout_ms})
+
         quote_results = await self._runner.run_quotes(
             plugins=selected,
             req=resolved_req,
-            deadline_ms=self._settings.aggregate_quote_deadline_ms,
+            deadline_ms=quote_deadline,
         )
 
         if quote_resolution is not None:

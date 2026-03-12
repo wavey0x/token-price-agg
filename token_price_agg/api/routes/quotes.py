@@ -17,7 +17,7 @@ from token_price_agg.api.schemas.responses import (
     QuoteVaultContext,
     SelectedQuote,
 )
-from token_price_agg.app.config import Settings, get_settings
+from token_price_agg.app.config import MAX_REQUEST_TIMEOUT_MS, MIN_REQUEST_TIMEOUT_MS, Settings, get_settings
 from token_price_agg.app.dependencies import get_aggregator_service, get_token_metadata_resolver
 from token_price_agg.core.aggregator import AggregatorService
 from token_price_agg.core.models import VaultContext
@@ -48,6 +48,18 @@ async def quote(
             )
         ),
     ] = False,
+    timeout_ms: Annotated[
+        int | None,
+        Query(
+            ge=MIN_REQUEST_TIMEOUT_MS,
+            le=MAX_REQUEST_TIMEOUT_MS,
+            description=(
+                "Per-request provider HTTP timeout in milliseconds. "
+                f"Range: {MIN_REQUEST_TIMEOUT_MS}–{MAX_REQUEST_TIMEOUT_MS}. "
+                "Overrides the server default when provided."
+            ),
+        ),
+    ] = None,
     aggregator: AggregatorService = Depends(get_aggregator_service),
     token_metadata_resolver: TokenMetadataResolver = Depends(get_token_metadata_resolver),
     settings: Settings = Depends(get_settings),
@@ -67,6 +79,7 @@ async def quote(
         aggregator=aggregator,
         token_metadata_resolver=token_metadata_resolver,
         settings=settings,
+        timeout_ms=timeout_ms,
     )
 
 
@@ -77,6 +90,7 @@ async def _handle_quote_request(
     aggregator: AggregatorService,
     token_metadata_resolver: TokenMetadataResolver,
     settings: Settings,
+    timeout_ms: int | None = None,
 ) -> QuoteAggregateResponse:
     normalized, original_in, original_out = normalize_quote_request(
         chain_id=payload.chain_id,
@@ -93,6 +107,7 @@ async def _handle_quote_request(
             req=normalized,
             provider_ids=payload.providers,
             use_underlying=payload.use_underlying,
+            timeout_ms=timeout_ms,
         ),
         requested_provider_ids=payload.providers,
         default_priority=settings.quote_provider_priority,

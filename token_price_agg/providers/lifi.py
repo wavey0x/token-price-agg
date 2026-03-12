@@ -55,6 +55,7 @@ class LiFiProvider(ProviderPlugin):
             url="https://li.quest/v1/token",
             params={"chain": req.chain_id, "token": req.token.address},
             headers=self._headers(),
+            timeout_ms=req.timeout_ms,
         )
         transport = json_transport_outcome(call=call, provider_name="LI.FI")
         if transport.failure is not None:
@@ -113,6 +114,7 @@ class LiFiProvider(ProviderPlugin):
                 "slippage": 0.003,
             },
             headers=self._headers(),
+            timeout_ms=req.timeout_ms,
         )
         transport = json_transport_outcome(call=call, provider_name="LI.FI")
         if transport.failure is not None:
