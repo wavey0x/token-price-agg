@@ -150,6 +150,21 @@ class ApiKeyStore:
             return AuthResult.failure(reason=failure_reason)
         return self.authenticate_key(credential, now_ts=now_ts)
 
+    def authenticate_request_headers(
+        self,
+        authorization: str | None,
+        x_api_key: str | None,
+        *,
+        now_ts: int | None = None,
+    ) -> AuthResult:
+        credential, bearer_failure = _parse_bearer_credential(authorization)
+        if credential is not None:
+            return self.authenticate_key(credential, now_ts=now_ts)
+        if x_api_key and x_api_key.strip():
+            return self.authenticate_key(x_api_key.strip(), now_ts=now_ts)
+        failure_reason = bearer_failure or AuthFailureReason.MISSING_AUTHORIZATION
+        return AuthResult.failure(reason=failure_reason)
+
     def authenticate_key(self, key: str, *, now_ts: int | None = None) -> AuthResult:
         parsed = _parse_key(key)
         if parsed is None:

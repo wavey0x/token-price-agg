@@ -38,7 +38,7 @@ from token_price_agg.security.models import AuthFailureReason, RateLimitResult
 
 _REQUEST_LOGGER = logging.getLogger("token_price_agg.http")
 _AUTH_FAILURE_MESSAGES = {
-    AuthFailureReason.MISSING_AUTHORIZATION: "Missing Authorization bearer token",
+    AuthFailureReason.MISSING_AUTHORIZATION: "Missing API key — provide via Authorization: Bearer <key> or x-api-key header",
     AuthFailureReason.INVALID_AUTHORIZATION: "Invalid Authorization header",
     AuthFailureReason.REVOKED: "API key revoked",
     AuthFailureReason.EXPIRED: "API key expired",
@@ -63,7 +63,46 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await registry.aclose()
 
 
-app = FastAPI(title="Token Price Agg", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Token Price Agg",
+    version="0.1.0",
+    lifespan=lifespan,
+    swagger_ui_init_oauth={},
+    openapi_tags=None,
+)
+
+
+def _custom_openapi() -> dict:  # type: ignore[type-arg]
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+    )
+    schema.setdefault("components", {}).setdefault("securitySchemes", {}).update(
+        {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Authorization: Bearer <api_key>",
+            },
+            "ApiKeyHeader": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "x-api-key",
+                "description": "x-api-key: <api_key>",
+            },
+        }
+    )
+    schema["security"] = [{"BearerAuth": []}, {"ApiKeyHeader": []}]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _custom_openapi  # type: ignore[assignment]
 
 
 @app.middleware("http")
@@ -148,7 +187,10 @@ def _authorize_and_rate_limit_if_needed(
         return None, None
 
     store = get_api_key_store()
-    auth_result = store.authenticate_bearer_header(request.headers.get("Authorization"))
+    auth_result = store.authenticate_request_headers(
+        request.headers.get("Authorization"),
+        request.headers.get("x-api-key"),
+    )
     if auth_result.authenticated:
         _set_request_auth_state(
             request=request,

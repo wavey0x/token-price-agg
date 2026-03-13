@@ -105,11 +105,17 @@ sudo systemctl status token-price-agg
 
 ### 7) Verify service
 
-If auth is enabled:
+If auth is enabled (either header style works):
 
 ```bash
 API_KEY="<your_api_key>"
+
+# Authorization: Bearer header
 curl -s -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:8000/v1/health
+
+# x-api-key header
+curl -s -H "x-api-key: ${API_KEY}" http://127.0.0.1:8000/v1/health
+
 curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:8000/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=defillama"
 ```
 
@@ -180,9 +186,10 @@ Yes, docs can be hosted directly on Vercel as static files.
 - `GET /metrics`
 
 When `API_KEY_AUTH_ENABLED=true`:
-- valid bearer keys use `API_KEY_RATE_LIMIT_RPM` by default, with optional per-key overrides via CLI
-- requests without `Authorization` are allowed only once per `API_KEY_UNAUTH_MIN_INTERVAL_SECONDS` per client IP when `API_KEY_UNAUTH_ACCESS_ENABLED=true`
-- invalid/revoked/expired authorization headers still return `401`
+- API keys can be provided via `Authorization: Bearer <key>` or `x-api-key: <key>` header
+- valid keys use `API_KEY_RATE_LIMIT_RPM` by default, with optional per-key overrides via CLI
+- requests without any API key header are allowed only once per `API_KEY_UNAUTH_MIN_INTERVAL_SECONDS` per client IP when `API_KEY_UNAUTH_ACCESS_ENABLED=true`
+- invalid/revoked/expired keys still return `401`
 - `/metrics` stays unauthenticated
 
 ## Request Examples
