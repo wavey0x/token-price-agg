@@ -17,6 +17,62 @@ Failure behavior:
 
 `/metrics` remains unauthenticated.
 
+## Provider Status Model
+
+Every per-provider entry includes a `status` field with exactly **4 possible values**:
+
+| Status | Meaning | Integrator Action |
+| --- | --- | --- |
+| `ok` | Provider returned data successfully | Use the data |
+| `no_route` | Provider cannot service this token/pair/chain (deterministic) | Don't retry this provider for this pair |
+| `error` | Transient failure (timeout, upstream error, rate limit, internal) | Retry may help; check `error.code` for detail |
+| `bad_request` | Invalid request (unsupported operation, provider unavailable) | Fix request parameters |
+
+### Quick integration
+
+```js
+switch (provider.status) {
+  case "ok":          // use the data
+  case "no_route":    // skip this provider, don't retry
+  case "error":       // retry later (check error.code if you need the reason)
+  case "bad_request": // fix your request
+}
+```
+
+### Error Detail
+
+When `status` is not `ok`, the `error` object provides machine-readable detail:
+
+```json
+{
+  "error": {
+    "code": "TIMEOUT",
+    "message": "Provider request timed out",
+    "retry_after_ms": null
+  }
+}
+```
+
+| `error.code` | Parent `status` | Description |
+| --- | --- | --- |
+| `TIMEOUT` | `error` | Provider or transport timed out |
+| `RATE_LIMITED` | `error` | Provider rate-limited the request. Check `retry_after_ms` if present. |
+| `UPSTREAM_HTTP` | `error` | HTTP error from provider (non-200 status, connection error) |
+| `UPSTREAM_PARSE` | `error` | Invalid or unparseable response from provider |
+| `DEADLINE_EXCEEDED` | `error` | Provider did not respond within the aggregate deadline |
+| `INTERNAL` | `error` | Internal error during provider execution |
+| `INVALID_VAULT_CONVERSION` | `error` | Failed to convert vault share/asset amounts |
+| `NO_ROUTE` | `no_route` | No route found or token not supported by this provider |
+| `UNSUPPORTED_OPERATION` | `bad_request` | Provider does not support this operation type (e.g. quote-only provider asked for price) |
+| `PROVIDER_UNAVAILABLE` | `bad_request` | Provider is disabled (e.g. missing API key) |
+
+`retry_after_ms` is `null` unless `error.code` is `RATE_LIMITED` and the provider communicates a backoff window.
+
+### Computed Fields
+
+- `success`: boolean, always `true` when `status == "ok"`, `false` otherwise.
+- `error`: always `null` when `status == "ok"`, always present otherwise.
+
 ## Price
 
 ### Request
@@ -31,6 +87,7 @@ Failure behavior:
 | `token` | string | yes | none | Token address to price. Case-insensitive input; output is checksummed (EIP-55). |
 | `providers` | list[string] | no | all available for price | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `use_underlying` | boolean | no | `false` | Best-effort vault handling. If token is a supported vault, service prices underlying and converts back to vault share price. If vault/web3 resolution fails, request proceeds with original token unchanged. |
+| `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 50, max 30000. |
 
 `providers` accepted formats:
 - repeated: `providers=curve&providers=defillama`
@@ -68,15 +125,19 @@ Key fields:
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
 - `vault_context` is included only in top-level `price_data` (not repeated in `providers.*`)
 
-`value_usd` is removed from response.
+#### Per-provider price entry
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `status` | string | `ok`, `no_route`, `error`, or `bad_request` |
+| `success` | boolean | `true` when `status == "ok"` |
+| `price` | string (decimal) \| null | USD price. `null` on failure. |
+| `latency_ms` | integer | Provider response time |
+| `as_of` | string (ISO 8601) \| null | When price was last updated at source. `null` if provider doesn't report this. |
+| `retrieved_at` | string (ISO 8601) | When this API retrieved the value |
+| `error` | object \| null | `{code, message, retry_after_ms}` on failure; `null` on success |
 
 ### Example: Price Success
-
-```bash
-curl -s \
-  -H "Authorization: Bearer ${API_KEY}" \
-  'http://localhost:8000/v1/price?chain_id=1&token=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&providers=defillama,curve'
-```
 
 ```json
 {
@@ -163,7 +224,7 @@ curl -s \
       "error": null
     },
     "defillama": {
-      "status": "timeout",
+      "status": "error",
       "success": false,
       "price": null,
       "latency_ms": 801,
@@ -171,7 +232,8 @@ curl -s \
       "retrieved_at": "2026-03-05T02:32:12.130000Z",
       "error": {
         "code": "DEADLINE_EXCEEDED",
-        "message": "Provider request exceeded deadline"
+        "message": "Provider exceeded aggregate deadline",
+        "retry_after_ms": null
       }
     }
   },
@@ -230,6 +292,7 @@ curl -s \
 | `providers` | list[string] | no | all available for quote | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `include_route` | boolean | no | `false` | If `true`, provider route payload is included when provider supports it. If `false`, route is omitted (`null`) in response. |
 | `use_underlying` | boolean | no | `false` | Best-effort vault handling on both legs. Supported vault legs are converted to underlying for provider quote calls, then response amounts are converted back to share units for vault output legs. If vault/web3 resolution fails, request proceeds unchanged. |
+| `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 50, max 30000. |
 
 `use_underlying` for quote:
 - Applies to both `token_in` and `token_out` if either is a supported vault.
@@ -263,13 +326,24 @@ Key fields:
   - `price_per_share_token_out`: share price used for output-leg conversion
   - both fields are always present in `vault_context` and are `null` when not applicable
 
-### Example: Quote Success
+#### Per-provider quote entry
 
-```bash
-curl -s \
-  -H "Authorization: Bearer ${API_KEY}" \
-  'http://localhost:8000/v1/quote?chain_id=1&token_in=0xD533a949740bb3306d119CC777fa900bA034cd52&token_out=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amount_in=1000000000000000000&providers=curve'
-```
+| Field | Type | Description |
+| --- | --- | --- |
+| `status` | string | `ok`, `no_route`, `error`, or `bad_request` |
+| `success` | boolean | `true` when `status == "ok"` |
+| `amount_in` | integer \| null | Input amount in base units. Mirrors the request value. |
+| `amount_out` | integer \| null | Output amount in base units. `null` on failure. |
+| `amount_out_min` | integer \| null | Minimum output for slippage. `null` if provider doesn't support or on failure. |
+| `price_impact_bps` | integer \| null | Price impact in basis points. `null` if unavailable. |
+| `estimated_gas` | integer \| null | Gas estimate. `null` if unavailable. |
+| `latency_ms` | integer | Provider response time |
+| `as_of` | string (ISO 8601) \| null | When quote was generated at source. `null` if provider doesn't report this. |
+| `retrieved_at` | string (ISO 8601) | When this API retrieved the value |
+| `error` | object \| null | `{code, message, retry_after_ms}` on failure; `null` on success |
+| `route` | object \| null | Provider-specific route data. Only present when `include_route=true`. |
+
+### Example: Quote Success
 
 ```json
 {
@@ -330,6 +404,91 @@ curl -s \
 }
 ```
 
+### Example: Quote with Multiple Providers (Mixed Success)
+
+```json
+{
+  "request_id": "a1b2c3d4e5f67890",
+  "chain_id": 1,
+  "token_in": { "chain_id": 1, "address": "0xD533a949740bb3306d119CC777fa900bA034cd52", "symbol": "CRV", "decimals": 18, "logo_url": null },
+  "token_out": { "chain_id": 1, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "symbol": "USDC", "decimals": 6, "logo_url": null },
+  "provider_order": ["curve", "odos", "lifi"],
+  "quote": {
+    "provider": "curve",
+    "amount_in": 1000000000000000000,
+    "amount_out": 742100,
+    "amount_out_min": 734679,
+    "price_impact_bps": 14,
+    "estimated_gas": 182000,
+    "latency_ms": 89,
+    "as_of": null,
+    "retrieved_at": "2026-03-05T02:40:11.330000Z",
+    "route": null,
+    "vault_context": null
+  },
+  "providers": {
+    "curve": {
+      "status": "ok",
+      "success": true,
+      "amount_in": 1000000000000000000,
+      "amount_out": 742100,
+      "amount_out_min": 734679,
+      "price_impact_bps": 14,
+      "estimated_gas": 182000,
+      "latency_ms": 89,
+      "as_of": null,
+      "retrieved_at": "2026-03-05T02:40:11.330000Z",
+      "error": null,
+      "route": null
+    },
+    "odos": {
+      "status": "no_route",
+      "success": false,
+      "amount_in": null,
+      "amount_out": null,
+      "amount_out_min": null,
+      "price_impact_bps": null,
+      "estimated_gas": null,
+      "latency_ms": 120,
+      "as_of": null,
+      "retrieved_at": "2026-03-05T02:40:11.360000Z",
+      "error": {
+        "code": "NO_ROUTE",
+        "message": "No route found",
+        "retry_after_ms": null
+      },
+      "route": null
+    },
+    "lifi": {
+      "status": "bad_request",
+      "success": false,
+      "amount_in": null,
+      "amount_out": null,
+      "amount_out_min": null,
+      "price_impact_bps": null,
+      "estimated_gas": null,
+      "latency_ms": 0,
+      "as_of": null,
+      "retrieved_at": "2026-03-05T02:40:11.330000Z",
+      "error": {
+        "code": "PROVIDER_UNAVAILABLE",
+        "message": "missing_api_key",
+        "retry_after_ms": null
+      },
+      "route": null
+    }
+  },
+  "summary": {
+    "requested_providers": 3,
+    "successful_providers": 1,
+    "failed_providers": 2,
+    "high_amount_out": 742100,
+    "low_amount_out": 742100,
+    "median_amount_out": 742100
+  }
+}
+```
+
 ## Error Response Shape
 
 Request/domain errors use:
@@ -355,3 +514,12 @@ Top-level `price`/`quote` is selected by:
    - `PRICE_PROVIDER_PRIORITY`
    - `QUOTE_PROVIDER_PRIORITY`
 3. Remaining selected providers in deterministic order.
+
+## Nullable Fields on Success
+
+When `status == "ok"`, a `null` value on an optional field means the provider does not supply that data. It does not indicate an error. For example:
+
+- `as_of: null` — provider does not report a source timestamp (e.g. Odos)
+- `amount_out_min: null` — provider does not compute a minimum output (e.g. Odos)
+- `estimated_gas: null` — provider does not return gas estimates
+- `route: null` — `include_route` was `false`, or provider has no route data
