@@ -194,7 +194,7 @@ async def test_aggregate_prices_unsupported_operation_returns_provider_failure(
     assert summary.requested_providers == 1
     assert summary.failed_providers == 1
     assert partial is True
-    assert results[0].status == ProviderStatus.INVALID_REQUEST
+    assert results[0].status == ProviderStatus.BAD_REQUEST
     assert results[0].error is not None
     assert results[0].error.code == "UNSUPPORTED_OPERATION"
 
@@ -215,7 +215,7 @@ async def test_aggregate_prices_unavailable_provider_returns_provider_failure(
     assert summary.requested_providers == 1
     assert summary.failed_providers == 1
     assert partial is True
-    assert results[0].status == ProviderStatus.INVALID_REQUEST
+    assert results[0].status == ProviderStatus.BAD_REQUEST
     assert results[0].error is not None
     assert results[0].error.code == "PROVIDER_UNAVAILABLE"
 
@@ -239,9 +239,9 @@ async def test_aggregate_prices_plugin_exception_returns_internal_error(
     assert summary.requested_providers == 1
     assert summary.failed_providers == 1
     assert partial is True
-    assert results[0].status == ProviderStatus.INTERNAL_ERROR
+    assert results[0].status == ProviderStatus.ERROR
     assert results[0].error is not None
-    assert results[0].error.code == "INTERNAL_ERROR"
+    assert results[0].error.code == "INTERNAL"
 
 
 @pytest.mark.asyncio
@@ -304,7 +304,7 @@ async def test_aggregate_quotes_deadline_timeout_returns_timeout_result(
     assert summary.requested_providers == 1
     assert summary.failed_providers == 1
     assert partial is True
-    assert results[0].status == ProviderStatus.TIMEOUT
+    assert results[0].status == ProviderStatus.ERROR
     assert results[0].error is not None
     assert results[0].error.code == "DEADLINE_EXCEEDED"
 
@@ -729,7 +729,7 @@ async def test_aggregate_quotes_missing_output_converter_marks_provider_failed(
     assert partial is True
     assert summary.successful_providers == 0
     assert summary.failed_providers == 1
-    assert results[0].status == ProviderStatus.INTERNAL_ERROR
+    assert results[0].status == ProviderStatus.ERROR
     assert results[0].amount_out is None
     assert results[0].amount_out_min is None
     assert results[0].error is not None

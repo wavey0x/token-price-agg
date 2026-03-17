@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from token_price_agg.core.errors import ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -23,7 +23,6 @@ from token_price_agg.providers.parsing import (
     parse_int,
     with_token_metadata,
 )
-from token_price_agg.providers.utils import error_from_status
 
 _ENSO_QUERY_ADDRESS = "0x1111111111111111111111111111111111111111"
 
@@ -65,7 +64,7 @@ class EnsoProvider(ProviderPlugin):
                 status=transport.failure.status,
                 token=req.token,
                 latency_ms=transport.failure.latency_ms,
-                error=error_from_status(transport.failure.status, transport.failure.message),
+                error=transport.failure.to_error_info(),
             )
 
         response_payload = transport.payload
@@ -78,10 +77,10 @@ class EnsoProvider(ProviderPlugin):
         if price is None:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "Token not supported"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not supported"),
             )
 
         return PriceResult(
@@ -117,7 +116,7 @@ class EnsoProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=transport.failure.latency_ms,
-                error=error_from_status(transport.failure.status, transport.failure.message),
+                error=transport.failure.to_error_info(),
             )
 
         response_payload = transport.payload
@@ -148,12 +147,12 @@ class EnsoProvider(ProviderPlugin):
         if amount_out is None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "No route found"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="No route found"),
             )
 
         price_impact_bps = _parse_enso_price_impact_bps(

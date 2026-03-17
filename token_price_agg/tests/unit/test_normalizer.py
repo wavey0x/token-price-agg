@@ -33,7 +33,7 @@ def test_build_quote_summary_even_count_median_uses_integer_midpoint() -> None:
             QuoteResult(provider="b", status=ProviderStatus.OK, amount_out=102, latency_ms=12),
             QuoteResult(
                 provider="c",
-                status=ProviderStatus.INVALID_REQUEST,
+                status=ProviderStatus.BAD_REQUEST,
                 amount_out=None,
                 latency_ms=14,
             ),

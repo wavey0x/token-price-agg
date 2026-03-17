@@ -111,7 +111,7 @@ async def test_lifi_unavailable_without_key() -> None:
 
     assert len(results) == 1
     result = results[0]
-    assert result.status == ProviderStatus.INVALID_REQUEST
+    assert result.status == ProviderStatus.BAD_REQUEST
     assert result.error is not None
     assert result.error.code == "PROVIDER_UNAVAILABLE"
 
@@ -382,9 +382,9 @@ async def test_odos_price_unsupported_token_maps_to_unsupported_status() -> None
 
     await client.close()
 
-    assert result.status == ProviderStatus.UNSUPPORTED_TOKEN
+    assert result.status == ProviderStatus.NO_ROUTE
     assert result.error is not None
-    assert result.error.code == "UNSUPPORTED_TOKEN"
+    assert result.error.code == "NO_ROUTE"
 
 
 @pytest.mark.asyncio
@@ -415,7 +415,7 @@ async def test_odos_quote_unsupported_token_maps_to_unsupported_status() -> None
 
     await client.close()
 
-    assert result.status == ProviderStatus.UNSUPPORTED_TOKEN
+    assert result.status == ProviderStatus.NO_ROUTE
     assert result.error is not None
-    assert result.error.code == "UNSUPPORTED_TOKEN"
+    assert result.error.code == "NO_ROUTE"
     assert "errorCode: 4016" in result.error.message

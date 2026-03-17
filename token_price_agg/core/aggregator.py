@@ -4,7 +4,7 @@ import logging
 from decimal import Decimal
 
 from token_price_agg.app.config import Settings
-from token_price_agg.core.errors import ErrorInfo, InvalidRequestError, ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, InvalidRequestError, ProviderStatus
 from token_price_agg.core.models import (
     AggregatePriceSummary,
     AggregateQuoteSummary,
@@ -214,11 +214,11 @@ def _vault_share_to_asset_multiplier(price_per_share: Decimal | None) -> Decimal
 
 
 def _mark_quote_conversion_failure(result: QuoteResult) -> None:
-    result.status = ProviderStatus.INTERNAL_ERROR
+    result.status = ProviderStatus.ERROR
     result.amount_out = None
     result.amount_out_min = None
     result.error = ErrorInfo(
-        code="INVALID_VAULT_CONVERSION",
+        code=ErrorCode.INVALID_VAULT_CONVERSION,
         message="Failed to convert output amount into vault share base units",
     )
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from token_price_agg.core.errors import ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -12,7 +12,7 @@ from token_price_agg.providers.base import ProviderPlugin
 from token_price_agg.providers.clients.http import HttpClient, HttpResponse
 from token_price_agg.providers.http_helpers import timed_get, timed_post
 from token_price_agg.providers.parsing import decimal_to_bps, parse_decimal, parse_int
-from token_price_agg.providers.utils import error_from_status, status_from_http_code
+from token_price_agg.providers.utils import status_from_http_code
 
 _ODOS_NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
 _UNSUPPORTED_TOKEN_DETAIL_MARKERS = (
@@ -44,50 +44,50 @@ class OdosProvider(ProviderPlugin):
         if call.timeout:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.TIMEOUT,
+                status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.TIMEOUT, "ODOS request timed out"),
+                error=ErrorInfo(code=ErrorCode.TIMEOUT, message="ODOS request timed out"),
             )
         if call.http_error is not None:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, str(call.http_error)),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message=str(call.http_error)),
             )
 
         response = call.response
         if response is None:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, "ODOS response missing"),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message="ODOS response missing"),
             )
 
         if response.status_code != 200:
-            status, detail = _status_and_detail_from_error(response)
+            status, error_code, detail = _status_and_detail_from_error(response)
             return PriceResult(
                 provider=self.id,
                 status=status,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=error_from_status(status, detail),
+                error=ErrorInfo(code=error_code, message=detail),
             )
 
         payload = response.json_data
         if not isinstance(payload, dict):
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=error_from_status(
-                    ProviderStatus.UPSTREAM_ERROR,
-                    "Invalid ODOS JSON response",
+                error=ErrorInfo(
+                    code=ErrorCode.UPSTREAM_PARSE,
+                    message="Invalid ODOS JSON response",
                 ),
             )
 
@@ -95,12 +95,12 @@ class OdosProvider(ProviderPlugin):
         if price is None:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=error_from_status(
-                    ProviderStatus.UPSTREAM_ERROR,
-                    "Price missing from response",
+                error=ErrorInfo(
+                    code=ErrorCode.UPSTREAM_PARSE,
+                    message="Price missing from response",
                 ),
             )
 
@@ -126,38 +126,38 @@ class OdosProvider(ProviderPlugin):
         if call.timeout:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.TIMEOUT,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.TIMEOUT, "ODOS request timed out"),
+                error=ErrorInfo(code=ErrorCode.TIMEOUT, message="ODOS request timed out"),
             )
         if call.http_error is not None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, str(call.http_error)),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message=str(call.http_error)),
             )
 
         response = call.response
         if response is None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, "ODOS response missing"),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message="ODOS response missing"),
             )
 
         if response.status_code != 200:
-            status, detail = _status_and_detail_from_error(response)
+            status, error_code, detail = _status_and_detail_from_error(response)
             return QuoteResult(
                 provider=self.id,
                 status=status,
@@ -165,21 +165,21 @@ class OdosProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(status, detail),
+                error=ErrorInfo(code=error_code, message=detail),
             )
 
         payload = response.json_data
         if not isinstance(payload, dict):
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(
-                    ProviderStatus.UPSTREAM_ERROR,
-                    "Invalid ODOS JSON response",
+                error=ErrorInfo(
+                    code=ErrorCode.UPSTREAM_PARSE,
+                    message="Invalid ODOS JSON response",
                 ),
             )
 
@@ -187,12 +187,12 @@ class OdosProvider(ProviderPlugin):
         if amount_out is None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "No route found"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="No route found"),
             )
 
         price_impact_bps = decimal_to_bps(parse_decimal(payload.get("priceImpact")))
@@ -239,13 +239,16 @@ def _build_quote_payload(req: ProviderQuoteRequest) -> dict[str, object]:
     }
 
 
-def _status_and_detail_from_error(response: HttpResponse) -> tuple[ProviderStatus, str]:
+def _status_and_detail_from_error(
+    response: HttpResponse,
+) -> tuple[ProviderStatus, ErrorCode, str]:
     detail = _extract_error_detail(response)
-    status = status_from_http_code(response.status_code)
+    status, error_code = status_from_http_code(response.status_code)
     if response.status_code == 400 and _is_unsupported_token_detail(detail):
-        status = ProviderStatus.UNSUPPORTED_TOKEN
+        status = ProviderStatus.NO_ROUTE
+        error_code = ErrorCode.NO_ROUTE
     message = detail or f"ODOS returned {response.status_code}"
-    return status, message
+    return status, error_code, message
 
 
 def _extract_error_detail(response: HttpResponse) -> str | None:

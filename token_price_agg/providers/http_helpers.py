@@ -6,7 +6,7 @@ from typing import Literal
 
 import httpx
 
-from token_price_agg.core.errors import ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.providers.clients.http import HttpClient, HttpResponse, JsonBody, QueryParams
 from token_price_agg.providers.utils import status_from_http_code
 
@@ -25,8 +25,12 @@ class HttpCallResult:
 class ProviderTransportFailure:
     reason: FailureReason
     status: ProviderStatus
+    error_code: ErrorCode
     message: str
     latency_ms: int
+
+    def to_error_info(self) -> ErrorInfo:
+        return ErrorInfo(code=self.error_code, message=self.message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +108,8 @@ def json_transport_outcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="timeout",
-                status=ProviderStatus.TIMEOUT,
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.TIMEOUT,
                 message=f"{provider_name} request timed out",
                 latency_ms=call.latency_ms,
             ),
@@ -115,7 +120,8 @@ def json_transport_outcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="http_error",
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.UPSTREAM_HTTP,
                 message=str(call.http_error),
                 latency_ms=call.latency_ms,
             ),
@@ -127,7 +133,8 @@ def json_transport_outcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="http_error",
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.UPSTREAM_HTTP,
                 message=f"{provider_name} response missing",
                 latency_ms=call.latency_ms,
             ),
@@ -135,12 +142,13 @@ def json_transport_outcome(
 
     failure = non_200_status(response=response, provider_name=provider_name)
     if failure is not None:
-        status, message = failure
+        status, error_code, message = failure
         return JsonTransportOutcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="non_200",
                 status=status,
+                error_code=error_code,
                 message=message,
                 latency_ms=call.latency_ms,
             ),
@@ -155,7 +163,8 @@ def json_transport_outcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="invalid_json",
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.UPSTREAM_PARSE,
                 message=str(invalid_json_error),
                 latency_ms=call.latency_ms,
             ),
@@ -168,11 +177,11 @@ def non_200_status(
     *,
     response: HttpResponse,
     provider_name: str,
-) -> tuple[ProviderStatus, str] | None:
+) -> tuple[ProviderStatus, ErrorCode, str] | None:
     if response.status_code == 200:
         return None
-    status = status_from_http_code(response.status_code)
-    return status, f"{provider_name} returned {response.status_code}"
+    status, error_code = status_from_http_code(response.status_code)
+    return status, error_code, f"{provider_name} returned {response.status_code}"
 
 
 def expect_json_dict(

@@ -189,7 +189,7 @@ def test_price_endpoint_explicit_unavailable_provider_returns_result_not_http_er
     payload = response.json()
     assert payload["provider_order"] == ["lifi"]
     assert payload["price_data"] is None
-    assert payload["providers"]["lifi"]["status"] == "invalid_request"
+    assert payload["providers"]["lifi"]["status"] == "bad_request"
     assert payload["providers"]["lifi"]["success"] is False
 
 
@@ -220,7 +220,7 @@ def test_price_endpoint_plugin_exception_returns_internal_error_not_http_500(
     assert payload["summary"]["failed_providers"] == 1
     assert payload["provider_order"] == ["curve"]
     assert payload["price_data"] is None
-    assert payload["providers"]["curve"]["status"] == "internal_error"
+    assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["curve"]["success"] is False
 
 
@@ -260,7 +260,7 @@ def test_price_endpoint_deadline_exceeded_returns_timeout_and_fast_response(
     assert elapsed < 0.50
     payload = response.json()
     assert payload["price_data"] is None
-    assert payload["providers"]["curve"]["status"] == "timeout"
+    assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["curve"]["success"] is False
     assert payload["providers"]["curve"]["error"]["code"] == "DEADLINE_EXCEEDED"
 
@@ -296,7 +296,7 @@ def test_price_endpoint_one_provider_fails_other_succeeds(monkeypatch: pytest.Mo
     assert payload["summary"]["failed_providers"] == 1
     assert payload["provider_order"] == ["curve", "defillama"]
 
-    assert payload["providers"]["curve"]["status"] == "internal_error"
+    assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["defillama"]["status"] == "ok"
     assert payload["price_data"]["provider"] == "defillama"
 

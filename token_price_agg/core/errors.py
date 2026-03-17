@@ -7,13 +7,22 @@ from pydantic import BaseModel, ConfigDict
 
 class ProviderStatus(str, Enum):
     OK = "ok"
-    UNSUPPORTED_TOKEN = "unsupported_token"
-    TIMEOUT = "timeout"
-    UPSTREAM_ERROR = "upstream_error"
-    RATE_LIMITED = "rate_limited"
-    INVALID_REQUEST = "invalid_request"
-    INTERNAL_ERROR = "internal_error"
-    STALE = "stale"
+    NO_ROUTE = "no_route"
+    ERROR = "error"
+    BAD_REQUEST = "bad_request"
+
+
+class ErrorCode(str, Enum):
+    TIMEOUT = "TIMEOUT"
+    RATE_LIMITED = "RATE_LIMITED"
+    UPSTREAM_HTTP = "UPSTREAM_HTTP"
+    UPSTREAM_PARSE = "UPSTREAM_PARSE"
+    NO_ROUTE = "NO_ROUTE"
+    UNSUPPORTED_OPERATION = "UNSUPPORTED_OPERATION"
+    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+    DEADLINE_EXCEEDED = "DEADLINE_EXCEEDED"
+    INTERNAL = "INTERNAL"
+    INVALID_VAULT_CONVERSION = "INVALID_VAULT_CONVERSION"
 
 
 class ErrorInfo(BaseModel):
@@ -21,6 +30,7 @@ class ErrorInfo(BaseModel):
 
     code: str
     message: str
+    retry_after_ms: int | None = None
 
 
 class AggregatorError(Exception):

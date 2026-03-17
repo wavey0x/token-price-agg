@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from token_price_agg.core.errors import ErrorInfo, ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import PriceResult, ProviderPriceRequest
 from token_price_agg.providers.base import ProviderPlugin
 from token_price_agg.providers.clients.http import HttpClient
 from token_price_agg.providers.http_helpers import (
-    ProviderTransportFailure,
     json_transport_outcome,
     timed_get,
 )
@@ -14,7 +13,6 @@ from token_price_agg.providers.parsing import (
     parse_decimal,
     with_token_metadata,
 )
-from token_price_agg.providers.utils import error_from_status
 
 
 class DefiLlamaProvider(ProviderPlugin):
@@ -49,7 +47,7 @@ class DefiLlamaProvider(ProviderPlugin):
                 status=transport.failure.status,
                 token=req.token,
                 latency_ms=transport.failure.latency_ms,
-                error=_error_from_failure(transport.failure),
+                error=transport.failure.to_error_info(),
             )
 
         payload = transport.payload
@@ -60,20 +58,20 @@ class DefiLlamaProvider(ProviderPlugin):
         if not isinstance(coins, dict):
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "Token not found"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not found"),
             )
 
         coin_data = coins.get(coin)
         if not isinstance(coin_data, dict):
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "Token not found"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not found"),
             )
 
         price = parse_decimal(coin_data.get("price"))
@@ -82,12 +80,12 @@ class DefiLlamaProvider(ProviderPlugin):
         if price is None:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=error_from_status(
-                    ProviderStatus.UPSTREAM_ERROR,
-                    "Price missing from response",
+                error=ErrorInfo(
+                    code=ErrorCode.UPSTREAM_PARSE,
+                    message="Price missing from response",
                 ),
             )
 
@@ -101,9 +99,3 @@ class DefiLlamaProvider(ProviderPlugin):
             latency_ms=latency_ms,
             as_of=as_of,
         )
-
-
-def _error_from_failure(failure: ProviderTransportFailure) -> ErrorInfo:
-    if failure.reason == "http_error":
-        return ErrorInfo(code="HTTP_ERROR", message=failure.message)
-    return error_from_status(failure.status, failure.message)

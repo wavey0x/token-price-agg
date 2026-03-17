@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from token_price_agg.core.errors import ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -23,7 +23,6 @@ from token_price_agg.providers.parsing import (
     parse_decimal,
     parse_int,
 )
-from token_price_agg.providers.utils import error_from_status
 
 
 class CurveProvider(ProviderPlugin):
@@ -48,7 +47,7 @@ class CurveProvider(ProviderPlugin):
                 status=transport.failure.status,
                 token=req.token,
                 latency_ms=transport.failure.latency_ms,
-                error=error_from_status(transport.failure.status, transport.failure.message),
+                error=transport.failure.to_error_info(),
             )
 
         payload = transport.payload
@@ -65,10 +64,10 @@ class CurveProvider(ProviderPlugin):
         if price is None:
             return PriceResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "Token not supported"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not supported"),
             )
 
         timestamp_val = get_first(payload, ["timestamp", "asOf"])
@@ -102,39 +101,39 @@ class CurveProvider(ProviderPlugin):
         if call.timeout:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.TIMEOUT,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.TIMEOUT, "Curve request timed out"),
+                error=ErrorInfo(code=ErrorCode.TIMEOUT, message="Curve request timed out"),
             )
         if call.http_error is not None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, str(call.http_error)),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message=str(call.http_error)),
             )
 
         response = call.response
         if response is None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, "Curve response missing"),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message="Curve response missing"),
             )
 
         status_failure = non_200_status(response=response, provider_name="Curve")
         if status_failure is not None:
-            status, message = status_failure
+            status, error_code, message = status_failure
             return QuoteResult(
                 provider=self.id,
                 status=status,
@@ -142,19 +141,19 @@ class CurveProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(status, message),
+                error=ErrorInfo(code=error_code, message=message),
             )
 
         payload_obj = _extract_curve_quote_payload(response.json_data)
         if payload_obj is None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UPSTREAM_ERROR,
+                status=ProviderStatus.ERROR,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=error_from_status(ProviderStatus.UPSTREAM_ERROR, "Invalid JSON response"),
+                error=ErrorInfo(code=ErrorCode.UPSTREAM_PARSE, message="Invalid JSON response"),
             )
         latency_ms = call.latency_ms
 
@@ -166,12 +165,12 @@ class CurveProvider(ProviderPlugin):
         if amount_out is None:
             return QuoteResult(
                 provider=self.id,
-                status=ProviderStatus.UNSUPPORTED_TOKEN,
+                status=ProviderStatus.NO_ROUTE,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=latency_ms,
-                error=error_from_status(ProviderStatus.UNSUPPORTED_TOKEN, "No route found"),
+                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="No route found"),
             )
 
         gas_value = get_first(payload_obj, ["gas", "estimatedGas"])

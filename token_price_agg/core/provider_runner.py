@@ -7,7 +7,7 @@ from collections.abc import Callable, Coroutine, Sequence
 from typing import Any, TypeVar
 
 from token_price_agg.app.config import Settings
-from token_price_agg.core.errors import ErrorInfo, ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -154,11 +154,11 @@ class ProviderOperationRunner:
         if not plugin.supports_price:
             result = PriceResult(
                 provider=plugin.id,
-                status=ProviderStatus.INVALID_REQUEST,
+                status=ProviderStatus.BAD_REQUEST,
                 token=req.token,
                 latency_ms=0,
                 error=ErrorInfo(
-                    code="UNSUPPORTED_OPERATION",
+                    code=ErrorCode.UNSUPPORTED_OPERATION,
                     message="Provider does not support price",
                 ),
             )
@@ -168,11 +168,11 @@ class ProviderOperationRunner:
         if not plugin.available:
             result = PriceResult(
                 provider=plugin.id,
-                status=ProviderStatus.INVALID_REQUEST,
+                status=ProviderStatus.BAD_REQUEST,
                 token=req.token,
                 latency_ms=0,
                 error=ErrorInfo(
-                    code="PROVIDER_UNAVAILABLE",
+                    code=ErrorCode.PROVIDER_UNAVAILABLE,
                     message=plugin.unavailable_reason or "Provider unavailable",
                 ),
             )
@@ -194,11 +194,11 @@ class ProviderOperationRunner:
                     )
                     result = PriceResult(
                         provider=plugin.id,
-                        status=ProviderStatus.INTERNAL_ERROR,
+                        status=ProviderStatus.ERROR,
                         token=req.token,
                         latency_ms=elapsed_ms,
                         error=ErrorInfo(
-                            code="INTERNAL_ERROR",
+                            code=ErrorCode.INTERNAL,
                             message=f"Provider execution failed: {type(exc).__name__}",
                         ),
                     )
@@ -223,13 +223,13 @@ class ProviderOperationRunner:
         if not plugin.supports_quote:
             result = QuoteResult(
                 provider=plugin.id,
-                status=ProviderStatus.INVALID_REQUEST,
+                status=ProviderStatus.BAD_REQUEST,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=0,
                 error=ErrorInfo(
-                    code="UNSUPPORTED_OPERATION",
+                    code=ErrorCode.UNSUPPORTED_OPERATION,
                     message="Provider does not support quote",
                 ),
             )
@@ -239,13 +239,13 @@ class ProviderOperationRunner:
         if not plugin.available:
             result = QuoteResult(
                 provider=plugin.id,
-                status=ProviderStatus.INVALID_REQUEST,
+                status=ProviderStatus.BAD_REQUEST,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=0,
                 error=ErrorInfo(
-                    code="PROVIDER_UNAVAILABLE",
+                    code=ErrorCode.PROVIDER_UNAVAILABLE,
                     message=plugin.unavailable_reason or "Provider unavailable",
                 ),
             )
@@ -267,13 +267,13 @@ class ProviderOperationRunner:
                     )
                     result = QuoteResult(
                         provider=plugin.id,
-                        status=ProviderStatus.INTERNAL_ERROR,
+                        status=ProviderStatus.ERROR,
                         token_in=req.token_in,
                         token_out=req.token_out,
                         amount_in=req.amount_in,
                         latency_ms=elapsed_ms,
                         error=ErrorInfo(
-                            code="INTERNAL_ERROR",
+                            code=ErrorCode.INTERNAL,
                             message=f"Provider execution failed: {type(exc).__name__}",
                         ),
                     )
@@ -293,11 +293,11 @@ class ProviderOperationRunner:
     ) -> PriceResult:
         result = PriceResult(
             provider=provider_id,
-            status=ProviderStatus.TIMEOUT,
+            status=ProviderStatus.ERROR,
             token=req.token,
             latency_ms=deadline_ms,
             error=ErrorInfo(
-                code="DEADLINE_EXCEEDED",
+                code=ErrorCode.DEADLINE_EXCEEDED,
                 message="Provider exceeded aggregate deadline",
             ),
         )
@@ -313,13 +313,13 @@ class ProviderOperationRunner:
     ) -> QuoteResult:
         result = QuoteResult(
             provider=provider_id,
-            status=ProviderStatus.TIMEOUT,
+            status=ProviderStatus.ERROR,
             token_in=req.token_in,
             token_out=req.token_out,
             amount_in=req.amount_in,
             latency_ms=deadline_ms,
             error=ErrorInfo(
-                code="DEADLINE_EXCEEDED",
+                code=ErrorCode.DEADLINE_EXCEEDED,
                 message="Provider exceeded aggregate deadline",
             ),
         )
@@ -335,11 +335,11 @@ class ProviderOperationRunner:
     ) -> PriceResult:
         result = PriceResult(
             provider=provider_id,
-            status=ProviderStatus.INTERNAL_ERROR,
+            status=ProviderStatus.ERROR,
             token=req.token,
             latency_ms=0,
             error=ErrorInfo(
-                code="INTERNAL_ERROR",
+                code=ErrorCode.INTERNAL,
                 message=f"Provider task failed: {type(exc).__name__}",
             ),
         )
@@ -355,13 +355,13 @@ class ProviderOperationRunner:
     ) -> QuoteResult:
         result = QuoteResult(
             provider=provider_id,
-            status=ProviderStatus.INTERNAL_ERROR,
+            status=ProviderStatus.ERROR,
             token_in=req.token_in,
             token_out=req.token_out,
             amount_in=req.amount_in,
             latency_ms=0,
             error=ErrorInfo(
-                code="INTERNAL_ERROR",
+                code=ErrorCode.INTERNAL,
                 message=f"Provider task failed: {type(exc).__name__}",
             ),
         )

@@ -120,7 +120,7 @@ def test_quote_endpoint_provider_query_styles(provider_params: list[tuple[str, s
     assert payload["provider_order"] == ["curve", "defillama"]
 
     assert payload["providers"]["curve"]["status"] == "ok"
-    assert payload["providers"]["defillama"]["status"] == "invalid_request"
+    assert payload["providers"]["defillama"]["status"] == "bad_request"
     assert payload["quote"]["provider"] == "curve"
 
 
@@ -268,7 +268,7 @@ def test_quote_endpoint_plugin_exception_returns_internal_error_not_http_500(
     assert payload["summary"]["failed_providers"] == 1
     assert payload["provider_order"] == ["curve"]
     assert payload["quote"] is None
-    assert payload["providers"]["curve"]["status"] == "internal_error"
+    assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["curve"]["success"] is False
 
 
@@ -313,6 +313,6 @@ def test_quote_endpoint_deadline_exceeded_returns_timeout_and_fast_response(
     assert elapsed < 0.70
     payload = response.json()
     assert payload["quote"] is None
-    assert payload["providers"]["curve"]["status"] == "timeout"
+    assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["curve"]["success"] is False
     assert payload["providers"]["curve"]["error"]["code"] == "DEADLINE_EXCEEDED"

@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import ClassVar
 
-from token_price_agg.core.errors import ErrorInfo, ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import (
     PriceResult,
     ProviderCapability,
@@ -51,19 +51,19 @@ class ProviderPlugin(ABC):
     async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
         return PriceResult(
             provider=self.id,
-            status=ProviderStatus.INVALID_REQUEST,
+            status=ProviderStatus.BAD_REQUEST,
             latency_ms=0,
             token=req.token,
-            error=ErrorInfo(code="UNSUPPORTED_OPERATION", message="Price not supported"),
+            error=ErrorInfo(code=ErrorCode.UNSUPPORTED_OPERATION, message="Price not supported"),
         )
 
     async def get_quote(self, req: ProviderQuoteRequest) -> QuoteResult:
         return QuoteResult(
             provider=self.id,
-            status=ProviderStatus.INVALID_REQUEST,
+            status=ProviderStatus.BAD_REQUEST,
             latency_ms=0,
             token_in=req.token_in,
             token_out=req.token_out,
             amount_in=req.amount_in,
-            error=ErrorInfo(code="UNSUPPORTED_OPERATION", message="Quote not supported"),
+            error=ErrorInfo(code=ErrorCode.UNSUPPORTED_OPERATION, message="Quote not supported"),
         )
