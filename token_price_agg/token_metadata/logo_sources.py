@@ -130,6 +130,18 @@ class TokenLogoSourceManager:
             ]
         return out
 
+    def latest_sync_at(self, *, chain_id: int) -> int | None:
+        latest: int | None = None
+        for source in self._sources:
+            if not source.supports_chain(chain_id):
+                continue
+            state = self._cache.get_logo_source_sync_state(source=source.id, chain_id=chain_id)
+            if state is None:
+                continue
+            if latest is None or state.synced_at > latest:
+                latest = state.synced_at
+        return latest
+
     async def refresh_sources(
         self,
         *,

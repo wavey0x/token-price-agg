@@ -90,11 +90,17 @@ def resolve_logo_for_response(
     metadata: TokenMetadata,
     cached: TokenMetadata | None,
     provider_logo_urls: list[str] | None = None,
+    latest_source_sync_at: int | None = None,
 ) -> TokenMetadata:
     status = normalized_logo_status(cached.logo_status if cached is not None else None)
     checked_at = cached.logo_checked_at if cached is not None else None
 
     if status in ("valid", "invalid") and _is_stale(status, checked_at):
+        status = "unknown"
+    elif status == "invalid" and _should_retry_for_new_sources(
+        checked_at=checked_at,
+        latest_source_sync_at=latest_source_sync_at,
+    ):
         status = "unknown"
 
     if status == "valid" and cached is not None and cached.logo_url:
@@ -155,6 +161,18 @@ def _is_stale(status: str, checked_at: int | None) -> bool:
     if status == "invalid":
         return age > _INVALID_RECHECK_SECONDS
     return True
+
+
+def _should_retry_for_new_sources(
+    *,
+    checked_at: int | None,
+    latest_source_sync_at: int | None,
+) -> bool:
+    if latest_source_sync_at is None:
+        return False
+    if checked_at is None:
+        return True
+    return checked_at < latest_source_sync_at
 
 
 def _is_native(*, address: str, cached: TokenMetadata | None, hint: TokenMetadata | None) -> bool:

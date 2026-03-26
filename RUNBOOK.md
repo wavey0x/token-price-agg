@@ -140,6 +140,7 @@ Logo URL state behavior:
 - `logo_status=valid`: API returns stored verified URL.
 - `logo_status=invalid`: API returns `logo_url=null`.
 - `logo_status=unknown`: API returns first provider logo URL only. Unverified static/list fallbacks are not returned.
+- If synced token-list sources are newer than an existing `invalid` check, the token is treated as `unknown` and re-verified.
 
 Manual logo verification command:
 

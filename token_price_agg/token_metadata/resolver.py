@@ -107,6 +107,7 @@ class TokenMetadataResolver:
             chain_id=chain_id,
             addresses=unique_addresses,
         )
+        latest_source_sync_at = self._logo_sources.latest_sync_at(chain_id=chain_id)
 
         merged: dict[str, TokenMetadata] = {}
         for address in unique_addresses:
@@ -144,6 +145,7 @@ class TokenMetadataResolver:
                 metadata=metadata,
                 cached=cached.get(address),
                 provider_logo_urls=provider_logos.get(address),
+                latest_source_sync_at=latest_source_sync_at,
             )
             if merged[address].logo_status == "unknown":
                 needs_verification.append(address)

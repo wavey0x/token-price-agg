@@ -96,6 +96,38 @@ async def test_resolver_returns_null_logo_for_known_invalid_cached_token(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_resolver_retries_invalid_logo_when_new_sources_sync(tmp_path: Path) -> None:
+    settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
+    resolver = TokenMetadataResolver(settings)
+    resolver._cache.upsert_many(
+        [
+            TokenMetadata(
+                chain_id=1,
+                address=USDC,
+                logo_url=None,
+                logo_status="invalid",
+                logo_checked_at=100,
+                logo_http_status=404,
+            )
+        ]
+    )
+    resolver._cache.upsert_logo_source_sync_state(
+        source="coingecko",
+        chain_id=1,
+        synced_at=200,
+    )
+
+    metadata = await resolver.resolve_from_price_results(
+        chain_id=1,
+        request_token=TokenRef(chain_id=1, address=USDC),
+        results=[],
+    )
+
+    assert metadata[USDC].logo_url is None
+    assert metadata[USDC].logo_status == "unknown"
+
+
+@pytest.mark.asyncio
 async def test_resolver_uses_cached_logo_for_known_valid_cached_token(tmp_path: Path) -> None:
     settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
     resolver = TokenMetadataResolver(settings)

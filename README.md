@@ -326,6 +326,7 @@ Logo URL behavior:
 - `logo_status=valid` in cache: return validated logo URL.
 - `logo_status=invalid` in cache: return `logo_url=null`.
 - `logo_status=unknown`: return first provider logo URL only (best-effort). Unverified static/list fallbacks are not returned.
+- If synced token-list sources are newer than an `invalid` logo check, the token is treated as `unknown` and re-verified against the newer source set.
 
 Repository hygiene:
 - SQLite files under `data/` are runtime state and should stay untracked.
