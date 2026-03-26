@@ -320,12 +320,12 @@ Resolution order:
 1. Existing cache entry
 2. Provider response metadata
 3. On-chain ERC20 metadata via multicall (if RPC is configured)
-4. Logo candidates (best-effort, no request-path URL checks): provider logo, SmolDapp, yearn/tokenAssets, TrustWallet
+4. Logo candidates (best-effort, no request-path URL checks): provider logo, cached logo, synced token-list sources (currently CoinGecko), yearn/tokenAssets, TrustWallet, SmolDapp
 
 Logo URL behavior:
 - `logo_status=valid` in cache: return validated logo URL.
 - `logo_status=invalid` in cache: return `logo_url=null`.
-- `logo_status=unknown`: return first candidate URL (best-effort).
+- `logo_status=unknown`: return first provider logo URL only (best-effort). Unverified static/list fallbacks are not returned.
 
 Repository hygiene:
 - SQLite files under `data/` are runtime state and should stay untracked.
@@ -341,7 +341,13 @@ Force-refresh a token logo on demand:
 uv run python -m token_price_agg.tools.verify_logo --chain-id 1 --token 0x22222222aEA0076fCA927a3f44dc0B4FdF9479D6
 ```
 
-The command verifies candidates (`provider -> SmolDapp -> yearn/tokenAssets -> TrustWallet`) and persists:
+Refresh synced token-list sources on demand:
+
+```bash
+uv run python -m token_price_agg.tools.refresh_logo_sources --chain-id 1
+```
+
+The logo verification command verifies candidates (`provider -> cached -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) and persists:
 - `valid`: stores verified `logo_url`.
 - `invalid`: stores `logo_url=null` to suppress known broken links.
 

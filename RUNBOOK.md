@@ -134,17 +134,23 @@ Metadata resolution order:
 1. local SQLite cache
 2. provider response token metadata
 3. on-chain ERC20 metadata via multicall (RPC required)
-4. logo candidates (`provider -> SmolDapp -> yearn/tokenAssets -> TrustWallet`) without request-path URL checks
+4. logo candidates (`provider -> cached -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) without request-path URL checks
 
 Logo URL state behavior:
 - `logo_status=valid`: API returns stored verified URL.
 - `logo_status=invalid`: API returns `logo_url=null`.
-- `logo_status=unknown`: API returns first candidate URL (best-effort).
+- `logo_status=unknown`: API returns first provider logo URL only. Unverified static/list fallbacks are not returned.
 
 Manual logo verification command:
 
 ```bash
 uv run python -m token_price_agg.tools.verify_logo --chain-id 1 --token 0x22222222aEA0076fCA927a3f44dc0B4FdF9479D6
+```
+
+Manual token-list refresh command:
+
+```bash
+uv run python -m token_price_agg.tools.refresh_logo_sources --chain-id 1
 ```
 
 This command force-refreshes one token and persists valid/invalid logo status.

@@ -5,7 +5,6 @@ from typing import Any
 
 from token_price_agg.core.models import TokenMetadata, TokenRef
 from token_price_agg.core.validator import AddressValidator
-from token_price_agg.token_metadata.logo_urls import build_logo_candidates
 
 _VALID_RECHECK_SECONDS = 14 * 86400  # 14 days
 _INVALID_RECHECK_SECONDS = 2 * 86400  # 2 days

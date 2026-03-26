@@ -7,7 +7,8 @@ from token_price_agg.app.config import Settings
 from token_price_agg.core.models import PriceResult, QuoteResult, TokenMetadata, TokenRef
 from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.cache import TokenMetadataCache
-from token_price_agg.token_metadata.logo_urls import build_logo_candidates
+from token_price_agg.token_metadata.logo_sources import TokenLogoSourceManager
+from token_price_agg.token_metadata.logo_urls import LogoCandidate, build_logo_candidates
 from token_price_agg.token_metadata.logo_verifier import apply_verify_result, verify_candidates
 from token_price_agg.token_metadata.onchain import fetch_onchain_metadata
 from token_price_agg.token_metadata.policy import (
@@ -23,9 +24,20 @@ _LOGGER = logging.getLogger("token_price_agg.token_metadata")
 
 class TokenMetadataResolver:
     def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         self._cache = TokenMetadataCache(db_path=settings.token_metadata_db_path)
         self._rpc = AsyncRpcClient(rpc_urls=settings.rpc_urls)
+        self._logo_sources = TokenLogoSourceManager(cache=self._cache)
         self._pending_verification: set[tuple[int, str]] = set()
+
+    async def refresh_logo_sources(self, *, force: bool = False) -> dict[int, dict[str, int]]:
+        refreshed: dict[int, dict[str, int]] = {}
+        for chain_id in self._settings.chain_ids:
+            refreshed[chain_id] = await self._logo_sources.refresh_sources(
+                chain_id=chain_id,
+                force=force,
+            )
+        return refreshed
 
     async def resolve_from_price_results(
         self,
@@ -91,6 +103,10 @@ class TokenMetadataResolver:
         cached = self._cache.get_many(chain_id=chain_id, addresses=unique_addresses)
         hinted = hints_from_refs(refs, chain_id=chain_id)
         provider_logos = collect_provider_logo_urls(refs, chain_id=chain_id)
+        source_logo_candidates = self._logo_sources.get_candidates(
+            chain_id=chain_id,
+            addresses=unique_addresses,
+        )
 
         merged: dict[str, TokenMetadata] = {}
         for address in unique_addresses:
@@ -147,6 +163,7 @@ class TokenMetadataResolver:
                 chain_id=chain_id,
                 address=address,
                 provider_logo_urls=provider_logos.get(address),
+                source_logo_candidates=source_logo_candidates.get(address),
                 existing=cached.get(address),
             )
 
@@ -158,6 +175,7 @@ class TokenMetadataResolver:
         chain_id: int,
         address: str,
         provider_logo_urls: list[str] | None,
+        source_logo_candidates: list[LogoCandidate] | None,
         existing: TokenMetadata | None,
     ) -> None:
         key = (chain_id, address)
@@ -171,14 +189,16 @@ class TokenMetadataResolver:
             self._pending_verification.discard(key)
             return
 
-        loop.create_task(
+        task = loop.create_task(
             self._verify_and_persist(
                 chain_id=chain_id,
                 address=address,
                 provider_logo_urls=provider_logo_urls,
+                source_logo_candidates=source_logo_candidates,
                 existing=existing,
             )
         )
+        _ = task
 
     async def _verify_and_persist(
         self,
@@ -186,6 +206,7 @@ class TokenMetadataResolver:
         chain_id: int,
         address: str,
         provider_logo_urls: list[str] | None,
+        source_logo_candidates: list[LogoCandidate] | None,
         existing: TokenMetadata | None,
     ) -> None:
         try:
@@ -194,6 +215,7 @@ class TokenMetadataResolver:
                 address=address,
                 provider_logo_urls=provider_logo_urls,
                 cached_logo_url=existing.logo_url if existing is not None else None,
+                additional_logo_candidates=source_logo_candidates,
             )
             result = await verify_candidates(candidates)
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 import ipaddress
 import logging
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import httpx
 
 from token_price_agg.core.models import TokenMetadata
-from token_price_agg.token_metadata.logo_urls import LogoCandidate, build_logo_candidates
+from token_price_agg.token_metadata.logo_urls import LogoCandidate
 
 _LOGGER = logging.getLogger("token_price_agg.token_metadata")
 

@@ -7,9 +7,10 @@ from pathlib import Path
 from pytest import MonkeyPatch
 
 from token_price_agg.app.config import get_settings
-from token_price_agg.token_metadata.cache import TokenMetadataCache
-from token_price_agg.token_metadata.logo_urls import LogoCandidate, build_logo_candidates
 from token_price_agg.token_metadata import logo_verifier
+from token_price_agg.token_metadata.cache import TokenLogoSourceEntry, TokenMetadataCache
+from token_price_agg.token_metadata.logo_sources import TokenLogoSourceManager
+from token_price_agg.token_metadata.logo_urls import LogoCandidate, build_logo_candidates
 from token_price_agg.tools import verify_logo
 
 USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
@@ -52,6 +53,22 @@ def test_build_logo_candidates_multiple_provider_urls() -> None:
     assert candidates[1].source == "provider"
 
 
+def test_build_logo_candidates_includes_source_candidates_before_static_fallbacks() -> None:
+    candidates = build_logo_candidates(
+        chain_id=1,
+        address=USDC,
+        additional_logo_candidates=[
+            LogoCandidate(source="coingecko", url="https://assets.coingecko.com/usdc.png")
+        ],
+    )
+    assert [item.source for item in candidates] == [
+        "coingecko",
+        "yearn_tokenassets",
+        "trustwallet",
+        "smoldapp",
+    ]
+
+
 def test_smoldapp_is_last_fallback() -> None:
     candidates = build_logo_candidates(
         chain_id=1,
@@ -89,6 +106,31 @@ def test_cache_migration_adds_logo_columns(tmp_path: Path) -> None:
     assert "logo_source" in columns
     assert "logo_checked_at" in columns
     assert "logo_http_status" in columns
+
+
+def test_cache_persists_logo_source_entries_and_sync_state(tmp_path: Path) -> None:
+    cache = TokenMetadataCache(db_path=str(tmp_path / "token_cache.sqlite3"))
+    cache.replace_logo_source_entries(
+        source="coingecko",
+        chain_id=1,
+        entries=[
+            TokenLogoSourceEntry(
+                source="coingecko",
+                chain_id=1,
+                address=USDC,
+                logo_url="https://assets.coingecko.com/usdc.png",
+            )
+        ],
+    )
+    cache.upsert_logo_source_sync_state(source="coingecko", chain_id=1, synced_at=1234)
+
+    entries = cache.get_logo_source_entries(chain_id=1, addresses=[USDC])
+    assert entries[USDC][0].source == "coingecko"
+    assert entries[USDC][0].logo_url == "https://assets.coingecko.com/usdc.png"
+
+    state = cache.get_logo_source_sync_state(source="coingecko", chain_id=1)
+    assert state is not None
+    assert state.synced_at == 1234
 
 
 def test_scrub_legacy_smoldapp_urls(tmp_path: Path) -> None:
@@ -181,6 +223,57 @@ def test_verify_token_logo_marks_invalid_and_persists(
     row = cache.get_many(chain_id=1, addresses=[USDC])[USDC]
     assert row.logo_status == "invalid"
     assert row.logo_url is None
+
+
+def test_verify_token_logo_uses_source_candidates(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TOKEN_METADATA_DB_PATH", str(tmp_path / "token_cache.sqlite3"))
+    get_settings.cache_clear()
+
+    async def _fake_refresh(
+        self: TokenLogoSourceManager,
+        *,
+        chain_id: int,
+        force: bool = False,
+    ) -> dict[str, int]:
+        del self, chain_id, force
+        return {}
+
+    async def _fake_check(
+        *,
+        client: object,
+        candidate: LogoCandidate,
+        method: str,
+    ) -> tuple[bool, int | None, str | None]:
+        del client
+        if candidate.source == "coingecko" and method == "GET":
+            return True, 200, None
+        return False, 404, None
+
+    monkeypatch.setattr(TokenLogoSourceManager, "refresh_sources", _fake_refresh)
+    monkeypatch.setattr(logo_verifier, "_check_candidate", _fake_check)
+
+    cache = TokenMetadataCache(db_path=str(tmp_path / "token_cache.sqlite3"))
+    cache.replace_logo_source_entries(
+        source="coingecko",
+        chain_id=1,
+        entries=[
+            TokenLogoSourceEntry(
+                source="coingecko",
+                chain_id=1,
+                address=USDC,
+                logo_url="https://assets.coingecko.com/usdc.png",
+            )
+        ],
+    )
+
+    payload = asyncio.run(verify_logo.verify_token_logo(chain_id=1, token=USDC))
+
+    assert payload["result"] == "valid"
+    assert payload["logo_source"] == "coingecko"
+    assert payload["logo_url"] == "https://assets.coingecko.com/usdc.png"
 
 
 def test_ssrf_protection_rejects_unsafe_urls() -> None:

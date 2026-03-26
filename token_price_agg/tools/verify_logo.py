@@ -10,9 +10,9 @@ from token_price_agg.app.config import get_settings
 from token_price_agg.core.models import TokenMetadata
 from token_price_agg.core.validator import AddressValidator
 from token_price_agg.token_metadata.cache import TokenMetadataCache
+from token_price_agg.token_metadata.logo_sources import TokenLogoSourceManager
 from token_price_agg.token_metadata.logo_urls import build_logo_candidates
 from token_price_agg.token_metadata.logo_verifier import (
-    VerifyAttempt,
     apply_verify_result,
     verify_candidates,
 )
@@ -29,13 +29,21 @@ async def verify_token_logo(*, chain_id: int, token: str) -> dict[str, object]:
     address = AddressValidator.normalize_address(token)
     settings = get_settings()
     cache = TokenMetadataCache(db_path=settings.token_metadata_db_path)
+    source_manager = TokenLogoSourceManager(cache=cache)
+
+    await source_manager.refresh_sources(chain_id=chain_id)
 
     existing = cache.get_many(chain_id=chain_id, addresses=[address]).get(address)
+    source_logo_candidates = source_manager.get_candidates(
+        chain_id=chain_id,
+        addresses=[address],
+    )
     candidates = build_logo_candidates(
         chain_id=chain_id,
         address=address,
         provider_logo_urls=None,
         cached_logo_url=existing.logo_url if existing is not None else None,
+        additional_logo_candidates=source_logo_candidates.get(address),
     )
 
     result = await verify_candidates(candidates)

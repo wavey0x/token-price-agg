@@ -15,6 +15,7 @@ def build_logo_candidates(
     address: str,
     provider_logo_urls: list[str] | None = None,
     cached_logo_url: str | None = None,
+    additional_logo_candidates: list[LogoCandidate] | None = None,
 ) -> list[LogoCandidate]:
     candidates: list[LogoCandidate] = []
     seen: set[str] = set()
@@ -33,6 +34,8 @@ def build_logo_candidates(
     for provider_url in provider_logo_urls or []:
         _add("provider", provider_url)
     _add("cached", cached_logo_url)
+    for candidate in additional_logo_candidates or []:
+        _add(candidate.source, candidate.url)
     _add("yearn_tokenassets", yearn_tokenassets_logo_url(chain_id=chain_id, address=address))
     _add("trustwallet", trustwallet_logo_url(chain_id=chain_id, address=address))
     _add("smoldapp", smoldapp_logo_url(chain_id=chain_id, address=address))

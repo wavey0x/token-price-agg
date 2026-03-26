@@ -28,9 +28,10 @@ SmolDapp demoted to last. New order:
 
 1. provider logos (all, not just one)
 2. cached
-3. yearn/tokenAssets
-4. trustwallet
-5. smoldapp
+3. synced token-list sources (currently CoinGecko)
+4. yearn/tokenAssets
+5. trustwallet
+6. smoldapp
 
 ### Multiple provider logo candidates preserved
 
@@ -81,8 +82,10 @@ On cache init, rows matching `logo_url LIKE 'https://raw.githubusercontent.com/S
 
 - `token_price_agg/core/models.py` — added `logo_source` field
 - `token_price_agg/token_metadata/logo_urls.py` — `provider_logo_urls: list[str]`, SmolDapp last
+- `token_price_agg/token_metadata/logo_sources.py` — synced token-list sources, currently CoinGecko
 - `token_price_agg/token_metadata/policy.py` — `collect_provider_logo_urls()`, staleness check, ephemeral provider URLs
 - `token_price_agg/token_metadata/cache.py` — `logo_source` column, `scrub_legacy_smoldapp_urls()`
 - `token_price_agg/token_metadata/logo_verifier.py` — new shared verification module with SSRF protection
 - `token_price_agg/token_metadata/resolver.py` — don't persist unverified, background verification with dedup
 - `token_price_agg/tools/verify_logo.py` — delegates to shared verifier
+- `token_price_agg/tools/refresh_logo_sources.py` — refreshes synced token-list sources on demand

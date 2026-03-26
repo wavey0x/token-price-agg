@@ -5,11 +5,27 @@ import sqlite3
 import threading
 import time
 from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
 
 from token_price_agg.core.models import TokenMetadata
 
 _LOGGER = logging.getLogger("token_price_agg.token_metadata")
+
+
+@dataclass(frozen=True)
+class TokenLogoSourceEntry:
+    source: str
+    chain_id: int
+    address: str
+    logo_url: str
+
+
+@dataclass(frozen=True)
+class TokenLogoSourceSyncState:
+    source: str
+    chain_id: int
+    synced_at: int
 
 
 class TokenMetadataCache:
@@ -112,6 +128,126 @@ class TokenMetadataCache:
             )
             conn.commit()
 
+    def get_logo_source_entries(
+        self,
+        *,
+        chain_id: int,
+        addresses: list[str],
+    ) -> dict[str, list[TokenLogoSourceEntry]]:
+        if not addresses:
+            return {}
+
+        placeholders = ",".join("?" for _ in addresses)
+        query = (
+            "SELECT source, chain_id, address, logo_url "
+            f"FROM token_logo_source_entries WHERE chain_id = ? AND address IN ({placeholders})"
+        )
+        params: list[object] = [chain_id, *addresses]
+
+        with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(query, params).fetchall()
+
+        out: dict[str, list[TokenLogoSourceEntry]] = {}
+        for row in rows:
+            entry = TokenLogoSourceEntry(
+                source=str(row["source"]),
+                chain_id=int(row["chain_id"]),
+                address=str(row["address"]),
+                logo_url=str(row["logo_url"]),
+            )
+            out.setdefault(entry.address, []).append(entry)
+        return out
+
+    def replace_logo_source_entries(
+        self,
+        *,
+        source: str,
+        chain_id: int,
+        entries: list[TokenLogoSourceEntry],
+    ) -> None:
+        now = int(time.time())
+        rows = [
+            (
+                source,
+                chain_id,
+                entry.address,
+                entry.logo_url,
+                now,
+            )
+            for entry in entries
+        ]
+
+        with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
+            conn.execute(
+                "DELETE FROM token_logo_source_entries WHERE source = ? AND chain_id = ?",
+                (source, chain_id),
+            )
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO token_logo_source_entries (
+                        source,
+                        chain_id,
+                        address,
+                        logo_url,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            conn.commit()
+
+    def get_logo_source_sync_state(
+        self,
+        *,
+        source: str,
+        chain_id: int,
+    ) -> TokenLogoSourceSyncState | None:
+        with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT source, chain_id, synced_at
+                FROM token_logo_source_sync
+                WHERE source = ? AND chain_id = ?
+                """,
+                (source, chain_id),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return TokenLogoSourceSyncState(
+            source=str(row["source"]),
+            chain_id=int(row["chain_id"]),
+            synced_at=int(row["synced_at"]),
+        )
+
+    def upsert_logo_source_sync_state(
+        self,
+        *,
+        source: str,
+        chain_id: int,
+        synced_at: int,
+    ) -> None:
+        now = int(time.time())
+        with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
+            conn.execute(
+                """
+                INSERT INTO token_logo_source_sync (
+                    source,
+                    chain_id,
+                    synced_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(source, chain_id) DO UPDATE SET
+                    synced_at = excluded.synced_at,
+                    updated_at = excluded.updated_at
+                """,
+                (source, chain_id, synced_at, now),
+            )
+            conn.commit()
+
     def scrub_legacy_smoldapp_urls(self) -> int:
         with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
             cursor = conn.execute(
@@ -174,6 +310,35 @@ class TokenMetadataCache:
                 conn,
                 column_name="logo_http_status",
                 definition="INTEGER",
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS token_logo_source_entries (
+                    source TEXT NOT NULL,
+                    chain_id INTEGER NOT NULL,
+                    address TEXT NOT NULL,
+                    logo_url TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY (source, chain_id, address)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS token_logo_source_sync (
+                    source TEXT NOT NULL,
+                    chain_id INTEGER NOT NULL,
+                    synced_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY (source, chain_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_token_logo_source_entries_lookup
+                ON token_logo_source_entries (chain_id, address)
+                """
             )
             conn.commit()
 

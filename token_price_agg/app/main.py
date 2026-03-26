@@ -20,6 +20,7 @@ from token_price_agg.app.dependencies import (
     get_anonymous_rate_limiter,
     get_api_key_store,
     get_provider_registry,
+    get_token_metadata_resolver,
 )
 from token_price_agg.observability.logging import (
     RequestContextToken,
@@ -37,6 +38,7 @@ from token_price_agg.observability.metrics import (
 from token_price_agg.security.models import AuthFailureReason, RateLimitResult
 
 _REQUEST_LOGGER = logging.getLogger("token_price_agg.http")
+_APP_LOGGER = logging.getLogger("token_price_agg.app")
 _AUTH_FAILURE_MESSAGES = {
     AuthFailureReason.MISSING_AUTHORIZATION: "Missing API key — provide via Authorization: Bearer <key> or x-api-key header",
     AuthFailureReason.INVALID_AUTHORIZATION: "Invalid Authorization header",
@@ -58,6 +60,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         app_env=settings.app_env,
         app_version=settings.app_version,
     )
+    try:
+        resolver = get_token_metadata_resolver()
+        await resolver.refresh_logo_sources()
+    except Exception:
+        _APP_LOGGER.exception("token_logo_source_startup_refresh_failed")
     yield
     registry = get_provider_registry()
     await registry.aclose()
@@ -102,7 +109,7 @@ def _custom_openapi() -> dict:  # type: ignore[type-arg]
     return schema
 
 
-app.openapi = _custom_openapi  # type: ignore[assignment]
+app.openapi = _custom_openapi  # type: ignore[method-assign]
 
 
 @app.middleware("http")
