@@ -17,6 +17,33 @@ _HTTP_TIMEOUT_S = 15.0
 _HTTP_HEADERS = {"User-Agent": "token-price-agg/logo-source-sync"}
 
 
+class LocalTokenLogoOverrideSource:
+    id = "local_override"
+    _CHAIN_LOGO_OVERRIDES: ClassVar[dict[int, dict[str, str]]] = {
+        # Checked-in escape hatch for tokens missing from upstream lists.
+        1: {
+            "0x7fE24F1A024D33506966CB7CA48Bab8c65fB632d": "https://www.asymmetry.finance/ASF-32x32.png",
+        }
+    }
+
+    def supports_chain(self, chain_id: int) -> bool:
+        return chain_id in self._CHAIN_LOGO_OVERRIDES
+
+    async def fetch_entries(self, *, chain_id: int) -> list[TokenLogoSourceEntry]:
+        overrides = self._CHAIN_LOGO_OVERRIDES.get(chain_id, {})
+        entries: list[TokenLogoSourceEntry] = []
+        for address, logo_url in overrides.items():
+            entries.append(
+                TokenLogoSourceEntry(
+                    source=self.id,
+                    chain_id=chain_id,
+                    address=AddressValidator.normalize_address(address),
+                    logo_url=logo_url,
+                )
+            )
+        return entries
+
+
 class TokenLogoSource(Protocol):
     id: str
 
@@ -106,7 +133,13 @@ class TokenLogoSourceManager:
         sources: list[TokenLogoSource] | None = None,
     ) -> None:
         self._cache = cache
-        self._sources = list(sources or [CoinGeckoTokenListSource()])
+        default_sources: list[TokenLogoSource] = [
+            LocalTokenLogoOverrideSource(),
+            CoinGeckoTokenListSource(),
+        ]
+        self._sources: list[TokenLogoSource] = list(
+            sources if sources is not None else default_sources
+        )
 
     def get_candidates(
         self,

@@ -134,7 +134,7 @@ Metadata resolution order:
 1. local SQLite cache
 2. provider response token metadata
 3. on-chain ERC20 metadata via multicall (RPC required)
-4. logo candidates (`provider -> cached -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) without request-path URL checks
+4. logo candidates (`provider -> cached -> local_override -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) without request-path URL checks
 
 Logo URL state behavior:
 - `logo_status=valid`: API returns stored verified URL.

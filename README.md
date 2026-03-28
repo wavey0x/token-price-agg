@@ -320,7 +320,7 @@ Resolution order:
 1. Existing cache entry
 2. Provider response metadata
 3. On-chain ERC20 metadata via multicall (if RPC is configured)
-4. Logo candidates (best-effort, no request-path URL checks): provider logo, cached logo, synced token-list sources (currently CoinGecko), yearn/tokenAssets, TrustWallet, SmolDapp
+4. Logo candidates (best-effort, no request-path URL checks): provider logo, cached logo, checked-in local overrides, synced token-list sources (currently CoinGecko), yearn/tokenAssets, TrustWallet, SmolDapp
 
 Logo URL behavior:
 - `logo_status=valid` in cache: return validated logo URL.
@@ -348,7 +348,7 @@ Refresh synced token-list sources on demand:
 uv run python -m token_price_agg.tools.refresh_logo_sources --chain-id 1
 ```
 
-The logo verification command verifies candidates (`provider -> cached -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) and persists:
+The logo verification command verifies candidates (`provider -> cached -> local_override -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) and persists:
 - `valid`: stores verified `logo_url`.
 - `invalid`: stores `logo_url=null` to suppress known broken links.
 
