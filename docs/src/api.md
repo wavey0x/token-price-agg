@@ -87,7 +87,7 @@ When `status` is not `ok`, the `error` object provides machine-readable detail:
 | `token` | string | yes | none | Token address to price. Case-insensitive input; output is checksummed (EIP-55). |
 | `providers` | list[string] | no | all available for price | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `use_underlying` | boolean | no | `false` | Best-effort vault handling. If token is a supported vault, service prices underlying and converts back to vault share price. If vault/web3 resolution fails, request proceeds with original token unchanged. |
-| `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 50, max 30000. |
+| `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 200, max 10000. |
 
 `providers` accepted formats:
 - repeated: `providers=curve&providers=defillama`
@@ -292,7 +292,7 @@ curl -s \
 | `providers` | list[string] | no | all available for quote | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `include_route` | boolean | no | `false` | If `true`, provider route payload is included when provider supports it. If `false`, route is omitted (`null`) in response. |
 | `use_underlying` | boolean | no | `false` | Best-effort vault handling on both legs. Supported vault legs are converted to underlying for provider quote calls, then response amounts are converted back to share units for vault output legs. If vault/web3 resolution fails, request proceeds unchanged. |
-| `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 50, max 30000. |
+| `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 200, max 10000. |
 
 `use_underlying` for quote:
 - Applies to both `token_in` and `token_out` if either is a supported vault.

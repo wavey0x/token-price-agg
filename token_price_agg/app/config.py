@@ -16,7 +16,7 @@ from pydantic_settings import (
 
 
 MIN_REQUEST_TIMEOUT_MS = 200
-MAX_REQUEST_TIMEOUT_MS = 7000
+MAX_REQUEST_TIMEOUT_MS = 10000
 
 
 class Settings(BaseSettings):

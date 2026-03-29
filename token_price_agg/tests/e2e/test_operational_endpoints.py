@@ -1,10 +1,79 @@
 from __future__ import annotations
 
+from typing import TypeAlias
+
 import pytest
 from fastapi.testclient import TestClient
 
 from token_price_agg.app.main import app
 from token_price_agg.tests.e2e.helpers import token_lower
+
+QueryParamValue: TypeAlias = str | int
+RequestParams: TypeAlias = dict[str, QueryParamValue]
+
+
+@pytest.mark.parametrize(
+    ("path", "params"),
+    [
+        (
+            "/v1/price",
+            {
+                "chain_id": 1,
+                "token": token_lower("USDC"),
+                "providers": "lifi",
+                "timeout_ms": 10000,
+            },
+        ),
+        (
+            "/v1/quote",
+            {
+                "chain_id": 1,
+                "token_in": token_lower("USDC"),
+                "token_out": token_lower("CRV"),
+                "amount_in": "1000000",
+                "providers": "lifi",
+                "timeout_ms": 10000,
+            },
+        ),
+    ],
+)
+def test_timeout_ms_accepts_documented_max(path: str, params: RequestParams) -> None:
+    with TestClient(app) as client:
+        response = client.get(path, params=params)
+
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("path", "params"),
+    [
+        (
+            "/v1/price",
+            {
+                "chain_id": 1,
+                "token": token_lower("USDC"),
+                "providers": "lifi",
+                "timeout_ms": 10001,
+            },
+        ),
+        (
+            "/v1/quote",
+            {
+                "chain_id": 1,
+                "token_in": token_lower("USDC"),
+                "token_out": token_lower("CRV"),
+                "amount_in": "1000000",
+                "providers": "lifi",
+                "timeout_ms": 10001,
+            },
+        ),
+    ],
+)
+def test_timeout_ms_rejects_above_max(path: str, params: RequestParams) -> None:
+    with TestClient(app) as client:
+        response = client.get(path, params=params)
+
+    assert response.status_code == 422
 
 
 def test_providers_endpoint_shows_missing_api_keys() -> None:
