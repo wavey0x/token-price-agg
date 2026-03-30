@@ -7,6 +7,7 @@ from web3 import Web3
 from token_price_agg.vault.adapters.common import load_abi
 from token_price_agg.web3.client import AsyncRpcClient
 
+_ERC20_ABI = load_abi("erc20.json")
 _YEARN_V2_ABI = load_abi("yearn_v2_vault.json")
 _MULTICALL3_ABI = load_abi("multicall3.json")
 _MULTICALL3_BY_CHAIN: dict[int, str] = {
@@ -24,13 +25,14 @@ class YearnV2VaultInfo:
     vault_address: str
     underlying_token: str
     share_decimals: int
+    underlying_decimals: int
     price_per_share: int
 
     def convert_shares_to_assets(self, shares: int) -> int:
         return int((shares * self.price_per_share) // (10**self.share_decimals))
 
     def share_to_asset_rate_str(self) -> str:
-        return f"{self.price_per_share}/{10**self.share_decimals}"
+        return f"{self.price_per_share}/{10**self.underlying_decimals}"
 
 
 class YearnV2Adapter:
@@ -61,6 +63,12 @@ class YearnV2Adapter:
                 fn_name="decimals",
                 args=[],
             )
+            underlying_decimals_raw = await self._rpc_client.call(
+                address=str(underlying),
+                abi=_ERC20_ABI,
+                fn_name="decimals",
+                args=[],
+            )
             pps_raw = await self._rpc_client.call(
                 address=vault_address,
                 abi=_YEARN_V2_ABI,
@@ -71,6 +79,7 @@ class YearnV2Adapter:
                 vault_address=vault_address,
                 underlying_token=str(underlying),
                 share_decimals=int(share_decimals_raw),
+                underlying_decimals=int(underlying_decimals_raw),
                 price_per_share=int(pps_raw),
             )
         except Exception:
@@ -118,10 +127,29 @@ class YearnV2Adapter:
         if underlying is None or share_decimals is None or price_per_share is None:
             return None
 
+        underlying_decimals_raw = await self._rpc_client.call(
+            address=multicall_address,
+            abi=_MULTICALL3_ABI,
+            fn_name="aggregate3",
+            args=[[(underlying, True, _ERC20_DECIMALS_SELECTOR)]],
+        )
+        underlying_decimals_result = _normalize_multicall_result(underlying_decimals_raw)
+        if len(underlying_decimals_result) < 1:
+            return None
+
+        underlying_decimals_success, underlying_decimals_data = underlying_decimals_result[0]
+        if not underlying_decimals_success or underlying_decimals_data is None:
+            return None
+
+        underlying_decimals = _decode_uint256(underlying_decimals_data)
+        if underlying_decimals is None or underlying_decimals < 0:
+            return None
+
         return YearnV2VaultInfo(
             vault_address=vault_address,
             underlying_token=underlying,
             share_decimals=share_decimals,
+            underlying_decimals=underlying_decimals,
             price_per_share=price_per_share,
         )
 

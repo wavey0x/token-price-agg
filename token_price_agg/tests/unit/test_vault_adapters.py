@@ -38,15 +38,7 @@ class RpcStub:
                 (True, _WEB3.codec.encode(["uint256"], [18])),
                 (True, _WEB3.codec.encode(["uint256"], [2 * 10**18])),
             ]
-        return [
-            (
-                True,
-                _WEB3.codec.encode(
-                    ["address"], ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
-                ),
-            ),
-            (True, _WEB3.codec.encode(["uint256"], [18])),
-        ]
+        return [(True, _WEB3.codec.encode(["uint256"], [6]))]
 
 
 class Erc4626RpcStub:
@@ -77,6 +69,7 @@ class Erc4626RpcStub:
                 (True, _WEB3.codec.encode(["uint256"], [18])),
             ]
         return [
+            (True, _WEB3.codec.encode(["uint256"], [6])),
             (False, b""),
             (True, _WEB3.codec.encode(["uint256"], [15 * 10**17])),
         ]
@@ -94,6 +87,7 @@ async def test_erc4626_adapter_uses_multicall_on_mainnet() -> None:
     assert info is not None
     assert info.underlying_token == "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
     assert info.share_decimals == 18
+    assert info.underlying_decimals == 6
     assert info.assets_per_share_unit == 15 * 10**17
     assert [name for name, _ in rpc.calls] == ["aggregate3", "aggregate3"]
 
@@ -110,5 +104,6 @@ async def test_yearn_adapter_uses_multicall_on_mainnet() -> None:
     assert info is not None
     assert info.underlying_token == "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
     assert info.share_decimals == 18
+    assert info.underlying_decimals == 6
     assert info.price_per_share == 2 * 10**18
-    assert [name for name, _ in rpc.calls] == ["aggregate3"]
+    assert [name for name, _ in rpc.calls] == ["aggregate3", "aggregate3"]

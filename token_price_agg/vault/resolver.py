@@ -150,39 +150,37 @@ class _VaultInfo:
         *,
         vault_type: VaultType,
         underlying_token: str,
-        share_to_asset_rate: str,
-        asset_per_share_numerator: int,
-        asset_per_share_denominator: int,
+        assets_per_share_unit: int,
+        share_unit: int,
+        underlying_unit: int,
         convert_fn: Callable[[int], int],
     ) -> None:
         self.vault_type = vault_type
         self.underlying_token = underlying_token
-        self._share_to_asset_rate = share_to_asset_rate
-        self._asset_per_share_numerator = asset_per_share_numerator
-        self._asset_per_share_denominator = asset_per_share_denominator
+        self._assets_per_share_unit = assets_per_share_unit
+        self._share_unit = share_unit
+        self._underlying_unit = underlying_unit
         self._convert_fn = convert_fn
 
     @classmethod
     def from_erc4626(cls, vault: Erc4626VaultInfo) -> _VaultInfo:
-        denominator = 10**vault.share_decimals
         return cls(
             vault_type=VaultType.ERC4626,
             underlying_token=vault.underlying_token,
-            share_to_asset_rate=vault.share_to_asset_rate_str(),
-            asset_per_share_numerator=vault.assets_per_share_unit,
-            asset_per_share_denominator=denominator,
+            assets_per_share_unit=vault.assets_per_share_unit,
+            share_unit=10**vault.share_decimals,
+            underlying_unit=10**vault.underlying_decimals,
             convert_fn=vault.convert_shares_to_assets,
         )
 
     @classmethod
     def from_yearn_v2(cls, vault: YearnV2VaultInfo) -> _VaultInfo:
-        denominator = 10**vault.share_decimals
         return cls(
             vault_type=VaultType.YEARN_V2,
             underlying_token=vault.underlying_token,
-            share_to_asset_rate=vault.share_to_asset_rate_str(),
-            asset_per_share_numerator=vault.price_per_share,
-            asset_per_share_denominator=denominator,
+            assets_per_share_unit=vault.price_per_share,
+            share_unit=10**vault.share_decimals,
+            underlying_unit=10**vault.underlying_decimals,
             convert_fn=vault.convert_shares_to_assets,
         )
 
@@ -190,19 +188,15 @@ class _VaultInfo:
         return int(self._convert_fn(shares))
 
     def convert_assets_to_shares(self, assets: int) -> int:
-        if self._asset_per_share_numerator == 0:
+        if self._assets_per_share_unit == 0:
             raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault share_to_asset_rate")
-        return int((assets * self._asset_per_share_denominator) // self._asset_per_share_numerator)
-
-    @property
-    def share_to_asset_rate(self) -> str:
-        return self._share_to_asset_rate
+        return int((assets * self._share_unit) // self._assets_per_share_unit)
 
     @property
     def price_per_share(self) -> Decimal:
-        if self._asset_per_share_denominator == 0:
+        if self._underlying_unit == 0:
             raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
-        return Decimal(self._asset_per_share_numerator) / Decimal(self._asset_per_share_denominator)
+        return Decimal(self._assets_per_share_unit) / Decimal(self._underlying_unit)
 
 
 def _underlying_token_ref(base: TokenRef, underlying_address: str) -> TokenRef:

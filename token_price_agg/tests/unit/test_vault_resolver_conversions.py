@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from token_price_agg.vault.adapters.erc4626 import Erc4626VaultInfo
 from token_price_agg.vault.adapters.yearn_v2 import YearnV2VaultInfo
 from token_price_agg.vault.resolver import _VaultInfo
@@ -9,6 +11,7 @@ def test_erc4626_assets_to_shares_respects_share_decimals() -> None:
             vault_address="0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204",
             underlying_token="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
             share_decimals=6,
+            underlying_decimals=6,
             assets_per_share_unit=1_098_368,
         )
     )
@@ -24,9 +27,38 @@ def test_yearn_assets_to_shares_respects_share_decimals() -> None:
             vault_address="0x1111111111111111111111111111111111111111",
             underlying_token="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
             share_decimals=18,
+            underlying_decimals=6,
             price_per_share=1_500_000,
         )
     )
 
     # 1_500_000 assets correspond to exactly one full share (1e18).
     assert vault.convert_assets_to_shares(1_500_000) == 10**18
+
+
+def test_erc4626_price_per_share_uses_underlying_decimals() -> None:
+    vault = _VaultInfo.from_erc4626(
+        Erc4626VaultInfo(
+            vault_address="0x01Ba69727E2860b37bc1a2bd56999c1aFb4C15D8",
+            underlying_token="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            share_decimals=18,
+            underlying_decimals=6,
+            assets_per_share_unit=1_049_479,
+        )
+    )
+
+    assert vault.price_per_share == Decimal("1.049479")
+
+
+def test_yearn_price_per_share_uses_underlying_decimals() -> None:
+    vault = _VaultInfo.from_yearn_v2(
+        YearnV2VaultInfo(
+            vault_address="0x1111111111111111111111111111111111111111",
+            underlying_token="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            share_decimals=18,
+            underlying_decimals=6,
+            price_per_share=1_500_000,
+        )
+    )
+
+    assert vault.price_per_share == Decimal("1.5")

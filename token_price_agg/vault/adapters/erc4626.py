@@ -7,6 +7,7 @@ from web3 import Web3
 from token_price_agg.vault.adapters.common import load_abi
 from token_price_agg.web3.client import AsyncRpcClient
 
+_ERC20_ABI = load_abi("erc20.json")
 _ERC4626_ABI = load_abi("erc4626.json")
 _MULTICALL3_ABI = load_abi("multicall3.json")
 _MULTICALL3_BY_CHAIN: dict[int, str] = {
@@ -25,13 +26,14 @@ class Erc4626VaultInfo:
     vault_address: str
     underlying_token: str
     share_decimals: int
+    underlying_decimals: int
     assets_per_share_unit: int
 
     def convert_shares_to_assets(self, shares: int) -> int:
         return int((shares * self.assets_per_share_unit) // (10**self.share_decimals))
 
     def share_to_asset_rate_str(self) -> str:
-        return f"{self.assets_per_share_unit}/{10**self.share_decimals}"
+        return f"{self.assets_per_share_unit}/{10**self.underlying_decimals}"
 
 
 class Erc4626Adapter:
@@ -63,6 +65,12 @@ class Erc4626Adapter:
                 args=[],
             )
             share_decimals = int(share_decimals_raw)
+            underlying_decimals_raw = await self._rpc_client.call(
+                address=str(underlying),
+                abi=_ERC20_ABI,
+                fn_name="decimals",
+                args=[],
+            )
             one_share = 10**share_decimals
             try:
                 assets_per_share = await self._rpc_client.call(
@@ -83,6 +91,7 @@ class Erc4626Adapter:
                 vault_address=vault_address,
                 underlying_token=str(underlying),
                 share_decimals=share_decimals,
+                underlying_decimals=int(underlying_decimals_raw),
                 assets_per_share_unit=int(assets_per_share),
             )
         except Exception:
@@ -127,11 +136,27 @@ class Erc4626Adapter:
             address=multicall_address,
             abi=_MULTICALL3_ABI,
             fn_name="aggregate3",
-            args=[[(checksum, True, convert_data), (checksum, True, fallback_data)]],
+            args=[
+                [
+                    (underlying, True, _ERC20_DECIMALS_SELECTOR),
+                    (checksum, True, convert_data),
+                    (checksum, True, fallback_data),
+                ]
+            ],
         )
         conversion = _normalize_multicall_result(conversion_raw)
+        if len(conversion) < 3:
+            return None
+
+        underlying_decimals_success, underlying_decimals_data = conversion[0]
+        if not underlying_decimals_success or underlying_decimals_data is None:
+            return None
+        underlying_decimals = _decode_uint256(underlying_decimals_data)
+        if underlying_decimals is None or underlying_decimals < 0:
+            return None
+
         assets_per_share: int | None = None
-        for success, data in conversion:
+        for success, data in conversion[1:]:
             if not success or data is None:
                 continue
             candidate = _decode_uint256(data)
@@ -145,6 +170,7 @@ class Erc4626Adapter:
             vault_address=vault_address,
             underlying_token=underlying,
             share_decimals=share_decimals,
+            underlying_decimals=underlying_decimals,
             assets_per_share_unit=assets_per_share,
         )
 
