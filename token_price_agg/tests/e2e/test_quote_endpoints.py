@@ -228,6 +228,34 @@ def test_quote_endpoint_use_underlying_is_best_effort_without_rpc() -> None:
     assert payload["providers"]["curve"]["status"] == "ok"
 
 
+def test_quote_endpoint_curve_empty_list_maps_to_no_route() -> None:
+    with respx.mock(assert_all_called=True) as router:
+        router.get("https://www.curve.finance/api/router/v1/routes").mock(
+            return_value=Response(200, json=[]),
+        )
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/v1/quote",
+                params={
+                    "chain_id": 1,
+                    "token_in": token_lower("CRV"),
+                    "token_out": "0xb5571e76693ba60110b5811dd650ffefce1c955f",
+                    "amount_in": "3046763837527638654979",
+                    "providers": "curve",
+                    "use_underlying": "true",
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["quote"] is None
+    assert payload["providers"]["curve"]["status"] == "no_route"
+    assert payload["providers"]["curve"]["success"] is False
+    assert payload["providers"]["curve"]["error"]["code"] == "NO_ROUTE"
+    assert payload["providers"]["curve"]["error"]["message"] == "No route found"
+
+
 def test_openapi_quote_vault_context_uses_leg_specific_price_per_share_fields() -> None:
     with TestClient(app) as client:
         response = client.get("/openapi.json")

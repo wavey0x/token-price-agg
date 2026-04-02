@@ -213,6 +213,8 @@ def _extract_curve_quote_payload(json_data: object) -> dict[str, object] | None:
         data = json_data.get("data")
         return data if isinstance(data, dict) else json_data
     if isinstance(json_data, list):
+        if not json_data:
+            return {}
         for item in json_data:
             if isinstance(item, dict):
                 return item

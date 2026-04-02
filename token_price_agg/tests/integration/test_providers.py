@@ -91,6 +91,34 @@ async def test_curve_quote_success() -> None:
 
 
 @pytest.mark.asyncio
+async def test_curve_quote_empty_list_maps_to_no_route() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = CurveProvider(client=client)
+
+    req = ProviderQuoteRequest(
+        chain_id=1,
+        token_in=TokenRef(chain_id=1, address="0xD533a949740bb3306d119CC777fa900bA034cd52"),
+        token_out=TokenRef(chain_id=1, address="0xB5571E76693ba60110B5811DD650FFefce1C955f"),
+        amount_in=3046763837527638654979,
+    )
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get("https://www.curve.finance/api/router/v1/routes").mock(
+            return_value=Response(200, json=[]),
+        )
+
+        result = await provider.get_quote(req)
+
+    await client.close()
+
+    assert result.status == ProviderStatus.NO_ROUTE
+    assert result.amount_out is None
+    assert result.error is not None
+    assert result.error.code == "NO_ROUTE"
+    assert result.error.message == "No route found"
+
+
+@pytest.mark.asyncio
 async def test_lifi_unavailable_without_key() -> None:
     client = HttpClient(timeout_ms=500, max_retries=0)
     provider = LiFiProvider(
