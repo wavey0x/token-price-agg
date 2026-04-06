@@ -124,6 +124,10 @@ class QuoteAggregateResponse(BaseAggregateResponse):
     summary: AggregateQuoteSummary
 
 
+class TokenResponse(BaseAggregateResponse):
+    token: TokenMetadataResponse
+
+
 class ProvidersResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

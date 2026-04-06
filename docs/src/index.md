@@ -1,9 +1,10 @@
 # Token Price Agg
 
-Ethereum token price and quote aggregation API with plugin-style providers.
+Ethereum token metadata, price, and quote API with plugin-style providers.
 
 ## Endpoints
 
+- `GET /v1/token`
 - `GET /v1/price`
 - `GET /v1/quote`
 - `GET /v1/providers`

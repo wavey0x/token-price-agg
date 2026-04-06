@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from statistics import median
 
+from token_price_agg.core.address_remap import resolve_remap
 from token_price_agg.core.errors import ProviderStatus
 from token_price_agg.core.models import (
     AggregatePriceSummary,
@@ -13,7 +14,6 @@ from token_price_agg.core.models import (
     QuoteResult,
     TokenRef,
 )
-from token_price_agg.core.address_remap import resolve_remap
 from token_price_agg.core.validator import parse_positive_int
 
 
@@ -30,6 +30,11 @@ def normalize_price_request(
     token_ref = TokenRef(chain_id=chain_id, address=token)
     token_ref, original = _apply_remap(chain_id, token_ref)
     return ProviderPriceRequest(chain_id=chain_id, token=token_ref), original
+
+
+def normalize_token_request(*, chain_id: int, token: str) -> tuple[TokenRef, TokenRef | None]:
+    token_ref = TokenRef(chain_id=chain_id, address=token)
+    return _apply_remap(chain_id, token_ref)
 
 
 def normalize_quote_request(

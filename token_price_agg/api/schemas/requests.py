@@ -35,3 +35,10 @@ class QuoteRequest(BaseAggregatorRequest):
     token_out: str = Field(min_length=42)
     amount_in: str
     include_route: bool = False
+
+
+class TokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chain_id: int = Field(gt=0)
+    token: str = Field(min_length=42)

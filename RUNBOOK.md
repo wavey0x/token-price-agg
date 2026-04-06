@@ -55,6 +55,7 @@ Observability env vars:
 - `GET /v1/health` liveness (`/v1/*` uses authenticated tier and optional unauthenticated tier when `API_KEY_AUTH_ENABLED=true`)
 - `GET /v1/ready` readiness (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
 - `GET /v1/providers` provider capabilities and availability (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
+- `GET /v1/token` lightweight token metadata response (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
 - `GET /metrics` Prometheus scrape endpoint
 - `GET /v1/price` aggregated price response (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
 - `GET /v1/quote` aggregated quote response (`/v1/*` uses authenticated tier and optional unauthenticated tier when enabled)
@@ -74,6 +75,10 @@ Auth behavior (when enabled):
   - `{"detail":{"code":"RATE_LIMITED","message":"..."}}`
 
 ## Request Contract
+
+`GET /v1/token` query params:
+- `chain_id` (int, optional, default `1`)
+- `token` (EVM address, required)
 
 `GET /v1/price` query params:
 - `chain_id` (int, required)
@@ -95,7 +100,12 @@ Providers query examples:
 
 ## Response Contract
 
-Shared fields:
+Token response:
+- `request_id`, `chain_id`
+- `token`: known token metadata for the requested address
+- no provider fan-out, `provider_order`, or `summary`
+
+Aggregate response shared fields:
 - `request_id`, `chain_id`, `provider_order`, `summary`
 
 Price response:
@@ -139,7 +149,7 @@ Metadata resolution order:
 Logo URL state behavior:
 - `logo_status=valid`: API returns stored verified URL.
 - `logo_status=invalid`: API returns `logo_url=null`.
-- `logo_status=unknown`: API returns first provider logo URL only. Unverified static/list fallbacks are not returned.
+- `logo_status=unknown`: `/v1/price` and `/v1/quote` return first provider logo URL only. `/v1/token` returns `logo_url=null`. Unverified static/list fallbacks are not returned.
 - If synced token-list sources are newer than an existing `invalid` check, the token is treated as `unknown` and re-verified.
 
 Manual logo verification command:
@@ -258,6 +268,14 @@ Metrics:
 
 ```bash
 curl -s http://localhost:8000/metrics
+```
+
+Token request:
+
+```bash
+curl -s \
+  -H "Authorization: Bearer ${API_KEY}" \
+  'http://localhost:8000/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 ```
 
 Price request:

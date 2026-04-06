@@ -73,6 +73,59 @@ When `status` is not `ok`, the `error` object provides machine-readable detail:
 - `success`: boolean, always `true` when `status == "ok"`, `false` otherwise.
 - `error`: always `null` when `status == "ok"`, always present otherwise.
 
+## Token
+
+### Request
+
+`GET /v1/token`
+
+Returns known token metadata without calling downstream price/quote providers.
+
+#### Parameters
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `chain_id` | integer | no | `1` | EVM chain id. Must be `> 0`. |
+| `token` | string | yes | none | Token address to resolve. Case-insensitive input; output is checksummed (EIP-55). |
+
+Behavior:
+
+- Uses local cache, synced logo source state, and best-effort onchain ERC20 metadata.
+- Does not fan out to downstream provider APIs.
+- `logo_url` may be `null` on a cold cache while background verification runs.
+
+Example:
+
+```bash
+curl -s \
+  -H "Authorization: Bearer ${API_KEY}" \
+  'http://localhost:8000/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+```
+
+### Response
+
+Key fields:
+
+- `token`: known metadata for the requested token
+- `token.address`: checksummed token address
+- `token.logo_url`: verified known logo URL when available, else `null`
+
+### Example: Token Metadata
+
+```json
+{
+  "request_id": "26c3f337d1f74491",
+  "chain_id": 1,
+  "token": {
+    "chain_id": 1,
+    "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "symbol": "USDC",
+    "decimals": 6,
+    "logo_url": "https://assets.example.com/usdc.png"
+  }
+}
+```
+
 ## Price
 
 ### Request

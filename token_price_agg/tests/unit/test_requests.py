@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from token_price_agg.api.schemas.requests import PriceRequest, QuoteRequest
+from token_price_agg.api.schemas.requests import PriceRequest, QuoteRequest, TokenRequest
 
 TOKEN = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 
@@ -21,6 +21,9 @@ def test_use_underlying_defaults_false_for_quote() -> None:
 def test_extra_fields_forbidden() -> None:
     with pytest.raises(ValidationError):
         PriceRequest.model_validate({"chain_id": 1, "token": TOKEN, "unknown": "x"})
+
+    with pytest.raises(ValidationError):
+        TokenRequest.model_validate({"chain_id": 1, "token": TOKEN, "unknown": "x"})
 
 
 def test_price_amount_removed_and_forbidden() -> None:

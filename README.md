@@ -1,6 +1,6 @@
 # token-price-agg
 
-Ethereum token price/quote aggregator with plugin-style providers.
+Ethereum token metadata, price, and quote API with plugin-style providers.
 
 ## Ubuntu Server Install (systemd)
 
@@ -116,6 +116,8 @@ curl -s -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:8000/v1/health
 # x-api-key header
 curl -s -H "x-api-key: ${API_KEY}" http://127.0.0.1:8000/v1/health
 
+curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:8000/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+
 curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:8000/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=defillama"
 ```
 
@@ -178,6 +180,7 @@ Yes, docs can be hosted directly on Vercel as static files.
 
 ## API
 
+- `GET /v1/token`
 - `GET /v1/price`
 - `GET /v1/quote`
 - `GET /v1/providers`
@@ -193,6 +196,17 @@ When `API_KEY_AUTH_ENABLED=true`:
 - `/metrics` stays unauthenticated
 
 ## Request Examples
+
+### Token
+
+Returns known token metadata without calling downstream price/quote providers. `logo_url` may be
+`null` on a cold cache until background verification completes.
+
+```bash
+curl -s \
+  -H "Authorization: Bearer ${API_KEY}" \
+  'http://localhost:8000/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+```
 
 ### Price
 

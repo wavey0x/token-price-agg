@@ -52,6 +52,7 @@ Auth behavior (when enabled):
 ```bash
 curl -s -H "Authorization: Bearer ${API_KEY}" http://localhost:8000/v1/health
 curl -s -H "Authorization: Bearer ${API_KEY}" http://localhost:8000/v1/ready
+curl -s -H "Authorization: Bearer ${API_KEY}" "http://localhost:8000/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 curl -s http://localhost:8000/metrics
 ```
 

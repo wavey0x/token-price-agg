@@ -82,6 +82,18 @@ class TokenMetadataResolver:
                     refs.append(TokenRef(chain_id=chain_id, address=underlying_out))
         return await self._resolve(chain_id=chain_id, refs=refs, source="provider")
 
+    async def resolve_token(
+        self,
+        *,
+        chain_id: int,
+        request_token: TokenRef,
+    ) -> dict[str, TokenMetadata]:
+        return await self._resolve(
+            chain_id=chain_id,
+            refs=[request_token],
+            source="token_request",
+        )
+
     async def _resolve(
         self,
         *,

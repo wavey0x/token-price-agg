@@ -82,6 +82,13 @@ def test_auth_enabled_with_unauth_access_disabled_requires_bearer_token(
                 "providers": "lifi",
             },
         )
+        no_key_token = client.get(
+            "/v1/token",
+            params={
+                "chain_id": 1,
+                "token": token_lower("USDC"),
+            },
+        )
         with_key_price = client.get(
             "/v1/price",
             params={
@@ -91,14 +98,24 @@ def test_auth_enabled_with_unauth_access_disabled_requires_bearer_token(
             },
             headers={"Authorization": f"Bearer {key}"},
         )
+        with_key_token = client.get(
+            "/v1/token",
+            params={
+                "chain_id": 1,
+                "token": token_lower("USDC"),
+            },
+            headers={"Authorization": f"Bearer {key}"},
+        )
         no_key_ready = client.get("/v1/ready")
         no_key_providers = client.get("/v1/providers")
 
     assert no_key_price.status_code == 401
+    assert no_key_token.status_code == 401
     assert no_key_ready.status_code == 401
     assert no_key_providers.status_code == 401
 
     assert with_key_price.status_code == 200
+    assert with_key_token.status_code == 200
     assert with_key_price.json()["summary"]["requested_providers"] == 1
 
 

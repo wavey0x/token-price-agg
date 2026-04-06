@@ -15,6 +15,7 @@ from token_price_agg.api.routes.prices import router as prices_router
 from token_price_agg.api.routes.providers import router as providers_router
 from token_price_agg.api.routes.quotes import router as quotes_router
 from token_price_agg.api.routes.ready import router as ready_router
+from token_price_agg.api.routes.tokens import router as tokens_router
 from token_price_agg.app.config import Settings, get_settings
 from token_price_agg.app.dependencies import (
     get_anonymous_rate_limiter,
@@ -40,7 +41,9 @@ from token_price_agg.security.models import AuthFailureReason, RateLimitResult
 _REQUEST_LOGGER = logging.getLogger("token_price_agg.http")
 _APP_LOGGER = logging.getLogger("token_price_agg.app")
 _AUTH_FAILURE_MESSAGES = {
-    AuthFailureReason.MISSING_AUTHORIZATION: "Missing API key — provide via Authorization: Bearer <key> or x-api-key header",
+    AuthFailureReason.MISSING_AUTHORIZATION: (
+        "Missing API key - provide via Authorization: Bearer <key> or x-api-key header"
+    ),
     AuthFailureReason.INVALID_AUTHORIZATION: "Invalid Authorization header",
     AuthFailureReason.REVOKED: "API key revoked",
     AuthFailureReason.EXPIRED: "API key expired",
@@ -166,6 +169,7 @@ async def request_observability_middleware(
 app.include_router(health_router)
 app.include_router(ready_router)
 app.include_router(providers_router)
+app.include_router(tokens_router)
 app.include_router(metrics_router)
 app.include_router(prices_router)
 app.include_router(quotes_router)
