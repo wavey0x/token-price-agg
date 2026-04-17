@@ -29,6 +29,7 @@ class ProviderRegistry:
         self._http_client = HttpClient(
             timeout_ms=settings.provider_request_timeout_ms,
             max_retries=settings.provider_max_retries,
+            trust_env=settings.provider_http_trust_env,
         )
         self._plugins = self._build_plugins()
         self._warn_invalid_priority_entries()

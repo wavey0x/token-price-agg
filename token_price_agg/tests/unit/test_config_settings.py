@@ -20,6 +20,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 "[timeouts]",
                 "provider_request_timeout_ms = 650",
                 "provider_max_retries = 0",
+                "provider_http_trust_env = true",
                 "",
                 "[concurrency]",
                 "provider_fanout_per_request = 5",
@@ -51,6 +52,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
     for key in [
         "PROVIDER_REQUEST_TIMEOUT_MS",
         "PROVIDER_MAX_RETRIES",
+        "PROVIDER_HTTP_TRUST_ENV",
         "PROVIDER_FANOUT_PER_REQUEST",
         "PROVIDER_GLOBAL_LIMIT",
         "CHAIN_IDS",
@@ -71,6 +73,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
 
     assert settings.provider_request_timeout_ms == 650
     assert settings.provider_max_retries == 0
+    assert settings.provider_http_trust_env is True
     assert settings.provider_fanout_per_request == 5
     assert settings.provider_global_limit == 99
     assert settings.chain_ids == [1, 10]
@@ -90,6 +93,11 @@ def test_settings_loads_toml_when_env_overrides_absent(
 def test_providers_enabled_can_be_overridden_directly() -> None:
     settings = Settings(providers_enabled=["curve"])
     assert settings.providers_enabled == ["curve"]
+
+
+def test_provider_http_trust_env_defaults_false() -> None:
+    settings = Settings()
+    assert settings.provider_http_trust_env is False
 
 
 def test_api_key_rate_limit_must_be_positive() -> None:

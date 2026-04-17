@@ -241,6 +241,7 @@ Key sections:
 - `[timeouts]`
   - `provider_request_timeout_ms`
   - `provider_max_retries` (default `0`)
+  - `provider_http_trust_env` (default `false`; opt in only if the service should use `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`)
 - `[concurrency]`
   - `provider_fanout_per_request`
   - `provider_global_limit`

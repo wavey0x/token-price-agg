@@ -34,3 +34,17 @@ def test_default_providers_enabled_are_built() -> None:
 
     capabilities = sorted(item.id for item in registry.capabilities())
     assert capabilities == ["curve", "defillama", "enso", "lifi", "odos"]
+
+
+def test_provider_http_client_does_not_trust_env_by_default() -> None:
+    settings = Settings(providers_enabled=["curve"])
+    registry = ProviderRegistry(settings)
+
+    assert registry._http_client.trust_env is False
+
+
+def test_provider_http_client_can_trust_env_when_enabled() -> None:
+    settings = Settings(providers_enabled=["curve"], provider_http_trust_env=True)
+    registry = ProviderRegistry(settings)
+
+    assert registry._http_client.trust_env is True

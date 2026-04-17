@@ -5,7 +5,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import AliasChoices, AliasPath, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    AliasPath,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     NoDecode,
@@ -13,7 +19,6 @@ from pydantic_settings import (
     SettingsConfigDict,
     TomlConfigSettingsSource,
 )
-
 
 MIN_REQUEST_TIMEOUT_MS = 200
 MAX_REQUEST_TIMEOUT_MS = 10000
@@ -51,6 +56,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "provider_max_retries",
             AliasPath("timeouts", "provider_max_retries"),
+        ),
+    )
+    provider_http_trust_env: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "provider_http_trust_env",
+            AliasPath("timeouts", "provider_http_trust_env"),
         ),
     )
 

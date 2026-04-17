@@ -18,11 +18,17 @@ class HttpResponse:
 
 
 class HttpClient:
-    def __init__(self, *, timeout_ms: int, max_retries: int) -> None:
+    def __init__(self, *, timeout_ms: int, max_retries: int, trust_env: bool = False) -> None:
         self._timeout = timeout_ms / 1000
         # Retry means additional attempts, so total attempts is retries + 1.
         self._attempts = max(1, max_retries + 1)
-        self._client = httpx.AsyncClient(timeout=self._timeout)
+        self._trust_env = trust_env
+        # Do not inherit ambient proxy/TLS env unless the deployment explicitly opts in.
+        self._client = httpx.AsyncClient(timeout=self._timeout, trust_env=trust_env)
+
+    @property
+    def trust_env(self) -> bool:
+        return self._trust_env
 
     async def close(self) -> None:
         await self._client.aclose()

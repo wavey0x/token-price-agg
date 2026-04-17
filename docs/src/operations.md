@@ -10,6 +10,7 @@ Common TOML keys:
 - `[rpc].urls` (enables best-effort `use_underlying=true` vault resolution)
 - `[timeouts].provider_request_timeout_ms`
 - `[timeouts].provider_max_retries`
+- `[timeouts].provider_http_trust_env` (default `false`; opt in only when provider calls should use proxy env)
 - `[concurrency].provider_fanout_per_request`
 - `[concurrency].provider_global_limit`
 - `[providers].enabled`

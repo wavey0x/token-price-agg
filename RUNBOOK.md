@@ -28,6 +28,7 @@ Required/important env vars:
 - `TOKEN_METADATA_DB_PATH` (default: `data/token_metadata.sqlite3`)
 - `PROVIDER_REQUEST_TIMEOUT_MS` (default: `800`)
 - `PROVIDER_MAX_RETRIES` (default: `0`)
+- `PROVIDER_HTTP_TRUST_ENV` (default: `false`; set `true` only when provider calls must honor `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`)
 - `PROVIDERS_ENABLED` (default: `defillama,curve,odos,lifi,enso`)
 - `PRICE_PROVIDER_PRIORITY` (optional default precedence)
 - `QUOTE_PROVIDER_PRIORITY` (optional default precedence)
