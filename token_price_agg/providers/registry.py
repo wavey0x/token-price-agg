@@ -54,6 +54,7 @@ class ProviderRegistry:
             plugins[LiFiProvider.id] = LiFiProvider(
                 client=self._http_client,
                 api_key=self._settings.lifi_api_key,
+                deny_exchanges=self._settings.lifi_deny_exchanges,
                 available=lifi_available,
                 unavailable_reason=lifi_reason,
             )

@@ -249,6 +249,8 @@ Key sections:
   - `enabled = [...]`
   - `price_priority = [...]`
   - `quote_priority = [...]`
+- `[providers.lifi]`
+  - `deny_exchanges = [...]` (sent to Li.Fi quote requests as `denyExchanges`)
 - `[security]`
   - `api_key_auth_enabled = false`
   - `api_key_db_path = "data/api_keys.sqlite3"`

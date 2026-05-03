@@ -8,7 +8,7 @@ from token_price_agg.core.models import (
     QuoteResult,
 )
 from token_price_agg.providers.base import ProviderPlugin
-from token_price_agg.providers.clients.http import HttpClient
+from token_price_agg.providers.clients.http import HttpClient, QueryParams
 from token_price_agg.providers.common import first_nested_dict
 from token_price_agg.providers.http_helpers import json_transport_outcome, timed_get
 from token_price_agg.providers.parsing import (
@@ -36,12 +36,14 @@ class LiFiProvider(ProviderPlugin):
         *,
         client: HttpClient,
         api_key: str | None,
+        deny_exchanges: list[str] | None = None,
         available: bool,
         unavailable_reason: str | None = None,
     ) -> None:
         super().__init__(available=available, unavailable_reason=unavailable_reason)
         self._client = client
         self._api_key = api_key
+        self._deny_exchanges = tuple(deny_exchanges or [])
 
     def _headers(self) -> dict[str, str]:
         if not self._api_key:
@@ -99,19 +101,23 @@ class LiFiProvider(ProviderPlugin):
         )
 
     async def get_quote(self, req: ProviderQuoteRequest) -> QuoteResult:
+        params: QueryParams = {
+            "fromChain": req.chain_id,
+            "toChain": req.chain_id,
+            "fromToken": req.token_in.address,
+            "toToken": req.token_out.address,
+            "fromAmount": str(req.amount_in),
+            "fromAddress": _LIFI_DUMMY_ADDRESS,
+            "toAddress": _LIFI_DUMMY_ADDRESS,
+            "slippage": 0.003,
+        }
+        if self._deny_exchanges:
+            params["denyExchanges"] = ",".join(self._deny_exchanges)
+
         call = await timed_get(
             client=self._client,
             url="https://li.quest/v1/quote",
-            params={
-                "fromChain": req.chain_id,
-                "toChain": req.chain_id,
-                "fromToken": req.token_in.address,
-                "toToken": req.token_out.address,
-                "fromAmount": str(req.amount_in),
-                "fromAddress": _LIFI_DUMMY_ADDRESS,
-                "toAddress": _LIFI_DUMMY_ADDRESS,
-                "slippage": 0.003,
-            },
+            params=params,
             headers=self._headers(),
             timeout_ms=req.timeout_ms,
         )

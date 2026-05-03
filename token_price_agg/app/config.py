@@ -153,6 +153,13 @@ class Settings(BaseSettings):
     )
 
     lifi_api_key: str | None = None
+    lifi_deny_exchanges: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices(
+            "lifi_deny_exchanges",
+            AliasPath("providers", "lifi", "deny_exchanges"),
+        ),
+    )
     enso_api_key: str | None = None
 
     @classmethod
@@ -244,6 +251,23 @@ class Settings(BaseSettings):
                 continue
             normalized.append(provider_id)
             seen.add(provider_id)
+        return normalized
+
+    @field_validator("lifi_deny_exchanges", mode="before")
+    @classmethod
+    def _parse_lifi_deny_exchanges(cls, value: object) -> object:
+        parsed = _parse_string_list(value)
+        if parsed is None:
+            return value
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in parsed:
+            exchange_id = item.strip().lower()
+            if not exchange_id or exchange_id in seen:
+                continue
+            normalized.append(exchange_id)
+            seen.add(exchange_id)
         return normalized
 
     @model_validator(mode="after")

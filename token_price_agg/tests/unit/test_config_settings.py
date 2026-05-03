@@ -31,6 +31,9 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 'price_priority = ["curve"]',
                 'quote_priority = ["curve"]',
                 "",
+                "[providers.lifi]",
+                'deny_exchanges = ["fly"]',
+                "",
                 "[chains]",
                 "ids = [1, 10]",
                 "",
@@ -60,6 +63,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
         "PROVIDERS_ENABLED",
         "PRICE_PROVIDER_PRIORITY",
         "QUOTE_PROVIDER_PRIORITY",
+        "LIFI_DENY_EXCHANGES",
         "API_KEY_AUTH_ENABLED",
         "API_KEY_DB_PATH",
         "API_KEY_RATE_LIMIT_RPM",
@@ -81,6 +85,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.providers_enabled == ["curve", "defillama"]
     assert settings.price_provider_priority == ["curve"]
     assert settings.quote_provider_priority == ["curve"]
+    assert settings.lifi_deny_exchanges == ["fly"]
     assert settings.api_key_auth_enabled is True
     assert settings.api_key_db_path == "data/custom_api_keys.sqlite3"
     assert settings.api_key_rate_limit_rpm == 123
@@ -98,6 +103,12 @@ def test_providers_enabled_can_be_overridden_directly() -> None:
 def test_provider_http_trust_env_defaults_false() -> None:
     settings = Settings()
     assert settings.provider_http_trust_env is False
+
+
+def test_lifi_deny_exchanges_can_be_set_from_env(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("LIFI_DENY_EXCHANGES", "fly, okx, fly")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.lifi_deny_exchanges == ["fly", "okx"]
 
 
 def test_api_key_rate_limit_must_be_positive() -> None:

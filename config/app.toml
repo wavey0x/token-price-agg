@@ -21,6 +21,9 @@ enabled = ["defillama", "curve", "odos", "lifi", "enso"]
 price_priority = []
 quote_priority = []
 
+[providers.lifi]
+deny_exchanges = ["fly"]
+
 [token_metadata]
 db_path = "data/token_metadata.sqlite3"
 

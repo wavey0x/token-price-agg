@@ -294,6 +294,40 @@ async def test_lifi_quote_converts_human_decimal_amounts_to_base_units() -> None
 
 
 @pytest.mark.asyncio
+async def test_lifi_quote_sends_configured_denied_exchanges() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = LiFiProvider(
+        client=client,
+        api_key="dummy",
+        deny_exchanges=["fly"],
+        available=True,
+    )
+    req = ProviderQuoteRequest(
+        chain_id=1,
+        token_in=TokenRef(chain_id=1, address="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
+        token_out=TokenRef(chain_id=1, address="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        amount_in=10**18,
+    )
+
+    with respx.mock(assert_all_called=True) as router:
+        route = router.get("https://li.quest/v1/quote").mock(
+            return_value=Response(
+                200,
+                json={"estimate": {"toAmount": "2125893537"}},
+            )
+        )
+
+        result = await provider.get_quote(req)
+
+    await client.close()
+
+    request = route.calls[0].request
+    assert request.url.params["denyExchanges"] == "fly"
+    assert result.status == ProviderStatus.OK
+    assert result.amount_out == 2125893537
+
+
+@pytest.mark.asyncio
 async def test_odos_price_success() -> None:
     client = HttpClient(timeout_ms=500, max_retries=0)
     provider = OdosProvider(client=client)
