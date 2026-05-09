@@ -239,7 +239,7 @@ def _is_valid_image_response(*, response: httpx.Response, body_preview: bytes) -
 
 
 def _is_image_content_type(response: httpx.Response) -> bool:
-    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+    content_type = str(response.headers.get("content-type", "")).split(";")[0].strip().lower()
     return content_type.startswith("image/")
 
 
