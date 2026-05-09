@@ -23,6 +23,7 @@ from token_price_agg.app.dependencies import (
     get_provider_registry,
     get_token_metadata_resolver,
 )
+from token_price_agg.core.errors import InvalidRequestError
 from token_price_agg.observability.logging import (
     RequestContextToken,
     bind_request_context,
@@ -113,6 +114,17 @@ def _custom_openapi() -> dict:  # type: ignore[type-arg]
 
 
 app.openapi = _custom_openapi  # type: ignore[method-assign]
+
+
+@app.exception_handler(InvalidRequestError)
+async def invalid_request_exception_handler(
+    _: Request,
+    exc: InvalidRequestError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={"detail": {"code": exc.code, "message": exc.message}},
+    )
 
 
 @app.middleware("http")
