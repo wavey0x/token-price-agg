@@ -8,6 +8,7 @@ from token_price_agg.api.routes.aggregate_utils import (
     aggregate_with_provider_order,
     get_request_id,
     metadata_for_address,
+    raise_bad_request,
 )
 from token_price_agg.api.schemas.query_params import parse_provider_query_values
 from token_price_agg.api.schemas.requests import PriceRequest
@@ -25,6 +26,7 @@ from token_price_agg.app.config import (
 )
 from token_price_agg.app.dependencies import get_aggregator_service, get_token_metadata_resolver
 from token_price_agg.core.aggregator import AggregatorService
+from token_price_agg.core.errors import InvalidRequestError
 from token_price_agg.core.models import VaultContext
 from token_price_agg.core.normalizer import normalize_price_request
 from token_price_agg.core.selection import index_price_results, select_price_result
@@ -91,10 +93,13 @@ async def _handle_price_request(
     settings: Settings,
     timeout_ms: int | None = None,
 ) -> PriceAggregateResponse:
-    normalized, original_token = normalize_price_request(
-        chain_id=payload.chain_id,
-        token=payload.token,
-    )
+    try:
+        normalized, original_token = normalize_price_request(
+            chain_id=payload.chain_id,
+            token=payload.token,
+        )
+    except InvalidRequestError as exc:
+        raise_bad_request(exc)
     response_token = original_token if original_token is not None else normalized.token
 
     results, summary, provider_order, by_provider = await aggregate_with_provider_order(

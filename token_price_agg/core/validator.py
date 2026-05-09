@@ -10,6 +10,7 @@ NATIVE_TOKEN_ALIAS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 _POSITIVE_INT_RE = re.compile(r"^[1-9][0-9]*$")
+MAX_POSITIVE_INT_DIGITS = 78
 
 
 class AddressValidator:
@@ -30,8 +31,13 @@ class AddressValidator:
 
 
 def parse_positive_int(value: str, field_name: str) -> int:
-    if not _POSITIVE_INT_RE.match(value):
+    if len(value) > MAX_POSITIVE_INT_DIGITS or not _POSITIVE_INT_RE.match(value):
         raise InvalidRequestError(
             "INVALID_AMOUNT", f"Field '{field_name}' must be a positive integer string"
         )
-    return int(value)
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise InvalidRequestError(
+            "INVALID_AMOUNT", f"Field '{field_name}' must be a positive integer string"
+        ) from exc

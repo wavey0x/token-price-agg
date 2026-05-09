@@ -8,6 +8,7 @@ from token_price_agg.api.routes.aggregate_utils import (
     aggregate_with_provider_order,
     get_request_id,
     metadata_for_address,
+    raise_bad_request,
 )
 from token_price_agg.api.schemas.query_params import parse_provider_query_values
 from token_price_agg.api.schemas.requests import QuoteRequest
@@ -25,6 +26,7 @@ from token_price_agg.app.config import (
 )
 from token_price_agg.app.dependencies import get_aggregator_service, get_token_metadata_resolver
 from token_price_agg.core.aggregator import AggregatorService
+from token_price_agg.core.errors import InvalidRequestError
 from token_price_agg.core.models import VaultContext
 from token_price_agg.core.normalizer import normalize_quote_request
 from token_price_agg.core.selection import index_quote_results, select_quote_result
@@ -97,12 +99,15 @@ async def _handle_quote_request(
     settings: Settings,
     timeout_ms: int | None = None,
 ) -> QuoteAggregateResponse:
-    normalized, original_in, original_out = normalize_quote_request(
-        chain_id=payload.chain_id,
-        token_in=payload.token_in,
-        token_out=payload.token_out,
-        amount_in=payload.amount_in,
-    )
+    try:
+        normalized, original_in, original_out = normalize_quote_request(
+            chain_id=payload.chain_id,
+            token_in=payload.token_in,
+            token_out=payload.token_out,
+            amount_in=payload.amount_in,
+        )
+    except InvalidRequestError as exc:
+        raise_bad_request(exc)
     response_in = original_in or normalized.token_in
     response_out = original_out or normalized.token_out
 
