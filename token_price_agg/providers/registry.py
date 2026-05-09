@@ -30,6 +30,9 @@ class ProviderRegistry:
             timeout_ms=settings.provider_request_timeout_ms,
             max_retries=settings.provider_max_retries,
             trust_env=settings.provider_http_trust_env,
+            max_connections=settings.provider_global_limit,
+            max_keepalive_connections=min(20, settings.provider_global_limit),
+            keepalive_expiry_s=5.0,
         )
         self._plugins = self._build_plugins()
         self._warn_invalid_priority_entries()

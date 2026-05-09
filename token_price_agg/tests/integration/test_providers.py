@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from decimal import Decimal
 
@@ -8,7 +9,7 @@ import respx
 from httpx import Request, Response
 
 from token_price_agg.app.config import Settings
-from token_price_agg.core.errors import ProviderStatus
+from token_price_agg.core.errors import ErrorCode, ProviderStatus
 from token_price_agg.core.models import ProviderPriceRequest, ProviderQuoteRequest, TokenRef
 from token_price_agg.core.provider_runner import ProviderOperationRunner
 from token_price_agg.core.validator import NATIVE_TOKEN_ALIAS
@@ -16,8 +17,101 @@ from token_price_agg.providers.clients.http import HttpClient
 from token_price_agg.providers.curve import CurveProvider
 from token_price_agg.providers.defillama import DefiLlamaProvider
 from token_price_agg.providers.enso import EnsoProvider
+from token_price_agg.providers.http_helpers import json_transport_outcome, timed_get
 from token_price_agg.providers.lifi import LiFiProvider
 from token_price_agg.providers.odos import OdosProvider
+
+
+async def _start_delayed_json_server(*, delay_s: float) -> tuple[asyncio.Server, str]:
+    async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            await reader.read(4096)
+            await asyncio.sleep(delay_s)
+            writer.write(
+                b"HTTP/1.1 200 OK\r\n"
+                b"content-type: application/json\r\n"
+                b"content-length: 2\r\n"
+                b"connection: close\r\n\r\n{}"
+            )
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    server = await asyncio.start_server(_handle, "127.0.0.1", 0)
+    assert server.sockets is not None
+    socket = server.sockets[0]
+    host, port = socket.getsockname()[:2]
+    return server, f"http://{host}:{port}/"
+
+
+@pytest.mark.asyncio
+async def test_provider_http_pool_timeout_maps_to_internal_transport_timeout() -> None:
+    server, url = await _start_delayed_json_server(delay_s=0.4)
+    client = HttpClient(
+        timeout_ms=1000,
+        max_retries=0,
+        max_connections=1,
+        max_keepalive_connections=0,
+    )
+    first = asyncio.create_task(
+        timed_get(
+            client=client,
+            url=url,
+            timeout_ms=1000,
+            provider_id="test",
+            operation="price",
+        )
+    )
+
+    try:
+        await asyncio.sleep(0.05)
+        second = await timed_get(
+            client=client,
+            url=url,
+            timeout_ms=100,
+            provider_id="test",
+            operation="price",
+        )
+        transport = json_transport_outcome(call=second, provider_name="Test")
+        first_result = await first
+    finally:
+        await client.close()
+        server.close()
+        await server.wait_closed()
+
+    assert first_result.response is not None
+    assert second.timeout is True
+    assert second.timeout_error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT
+    assert second.transport_error_type == "PoolTimeout"
+    assert transport.failure is not None
+    assert transport.failure.error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT
+    assert "internal transport" in transport.failure.message
+
+
+@pytest.mark.asyncio
+async def test_provider_http_read_timeout_stays_provider_timeout() -> None:
+    server, url = await _start_delayed_json_server(delay_s=0.3)
+    client = HttpClient(timeout_ms=50, max_retries=0)
+
+    try:
+        call = await timed_get(
+            client=client,
+            url=url,
+            provider_id="test",
+            operation="price",
+        )
+        transport = json_transport_outcome(call=call, provider_name="Test")
+    finally:
+        await client.close()
+        server.close()
+        await server.wait_closed()
+
+    assert call.timeout is True
+    assert call.timeout_error_code == ErrorCode.TIMEOUT
+    assert call.transport_error_type == "ReadTimeout"
+    assert transport.failure is not None
+    assert transport.failure.error_code == ErrorCode.TIMEOUT
 
 
 @pytest.mark.asyncio

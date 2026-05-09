@@ -48,3 +48,12 @@ def test_provider_http_client_can_trust_env_when_enabled() -> None:
     registry = ProviderRegistry(settings)
 
     assert registry._http_client.trust_env is True
+
+
+def test_provider_http_client_limits_follow_global_limit() -> None:
+    settings = Settings(providers_enabled=["curve"], provider_global_limit=77)
+    registry = ProviderRegistry(settings)
+
+    assert registry._http_client.max_connections == 77
+    assert registry._http_client.max_keepalive_connections == 20
+    assert registry._http_client.keepalive_expiry_s == 5.0

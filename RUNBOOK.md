@@ -189,7 +189,8 @@ Primary fields:
 - `auth_status` (`authenticated`, `anonymous`, `unauthorized`, `unprotected`)
 - `auth_reason` (when auth middleware made a specific failure decision such as `missing_authorization`)
 - `api_key_id` (authenticated requests only; public key id, not the secret)
-- `provider`, `provider_status`, `error_code`
+- `provider`, `operation`, `provider_status`, `error_code`
+- provider transport failures also include `transport_error_type`, `timeout_ms`, `provider_global_limit`
 - `env`, `version`
 
 Correlation:

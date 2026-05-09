@@ -37,10 +37,11 @@ When a provider fails, `error.code` gives the specific reason:
 
 | Code | Description |
 | --- | --- |
-| `TIMEOUT` | Provider did not respond in time |
+| `TIMEOUT` | Upstream provider connect/read/write timed out |
 | `RATE_LIMITED` | Provider rate-limited the request |
 | `UPSTREAM_HTTP` | HTTP error from provider |
 | `UPSTREAM_PARSE` | Could not parse provider response |
+| `INTERNAL_TRANSPORT_TIMEOUT` | Service could not acquire local outbound HTTP capacity in time |
 | `DEADLINE_EXCEEDED` | Aggregate deadline exceeded before provider responded |
 | `INTERNAL` | Internal error during provider execution |
 | `INVALID_VAULT_CONVERSION` | Vault share/asset conversion failed |

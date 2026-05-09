@@ -18,17 +18,61 @@ class HttpResponse:
 
 
 class HttpClient:
-    def __init__(self, *, timeout_ms: int, max_retries: int, trust_env: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        timeout_ms: int,
+        max_retries: int,
+        trust_env: bool = False,
+        max_connections: int = 100,
+        max_keepalive_connections: int | None = None,
+        keepalive_expiry_s: float = 5.0,
+    ) -> None:
+        self._timeout_ms = timeout_ms
         self._timeout = timeout_ms / 1000
         # Retry means additional attempts, so total attempts is retries + 1.
         self._attempts = max(1, max_retries + 1)
         self._trust_env = trust_env
+        self._max_connections = max(1, max_connections)
+        requested_keepalive_connections = (
+            max_keepalive_connections if max_keepalive_connections is not None else 20
+        )
+        self._max_keepalive_connections = min(
+            self._max_connections,
+            max(0, requested_keepalive_connections),
+        )
+        self._keepalive_expiry_s = keepalive_expiry_s
         # Do not inherit ambient proxy/TLS env unless the deployment explicitly opts in.
-        self._client = httpx.AsyncClient(timeout=self._timeout, trust_env=trust_env)
+        limits = httpx.Limits(
+            max_connections=self._max_connections,
+            max_keepalive_connections=self._max_keepalive_connections,
+            keepalive_expiry=self._keepalive_expiry_s,
+        )
+        self._client = httpx.AsyncClient(
+            timeout=self._timeout,
+            trust_env=trust_env,
+            limits=limits,
+        )
 
     @property
     def trust_env(self) -> bool:
         return self._trust_env
+
+    @property
+    def timeout_ms(self) -> int:
+        return self._timeout_ms
+
+    @property
+    def max_connections(self) -> int:
+        return self._max_connections
+
+    @property
+    def max_keepalive_connections(self) -> int:
+        return self._max_keepalive_connections
+
+    @property
+    def keepalive_expiry_s(self) -> float:
+        return self._keepalive_expiry_s
 
     async def close(self) -> None:
         await self._client.aclose()

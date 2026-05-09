@@ -56,6 +56,8 @@ class EnsoProvider(ProviderPlugin):
             url=f"https://api.enso.finance/api/v1/prices/{req.chain_id}/{req.token.address}",
             headers=self._headers(),
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="price",
         )
         transport = json_transport_outcome(call=call, provider_name="Enso")
         if transport.failure is not None:
@@ -106,6 +108,8 @@ class EnsoProvider(ProviderPlugin):
             },
             headers=self._headers(),
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="quote",
         )
         transport = json_transport_outcome(call=call, provider_name="Enso")
         if transport.failure is not None:

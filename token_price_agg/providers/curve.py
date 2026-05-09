@@ -14,6 +14,7 @@ from token_price_agg.providers.http_helpers import (
     json_transport_outcome,
     non_200_status,
     timed_get,
+    timeout_error_info,
 )
 from token_price_agg.providers.parsing import (
     decimal_to_bps,
@@ -39,6 +40,8 @@ class CurveProvider(ProviderPlugin):
             client=self._client,
             url=f"https://prices.curve.finance/v1/usd_price/ethereum/{req.token.address}",
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="price",
         )
         transport = json_transport_outcome(call=call, provider_name="Curve")
         if transport.failure is not None:
@@ -97,6 +100,8 @@ class CurveProvider(ProviderPlugin):
                 "router": "curve",
             },
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="quote",
         )
         if call.timeout:
             return QuoteResult(
@@ -106,7 +111,7 @@ class CurveProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=ErrorCode.TIMEOUT, message="Curve request timed out"),
+                error=timeout_error_info(call=call, provider_name="Curve"),
             )
         if call.http_error is not None:
             return QuoteResult(

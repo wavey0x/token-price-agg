@@ -71,7 +71,9 @@ class AggregatorService:
                 resolved_req = req
                 vault_context = None
 
-        effective_timeout = timeout_ms if timeout_ms is not None else self._settings.provider_request_timeout_ms
+        effective_timeout = (
+            timeout_ms if timeout_ms is not None else self._settings.provider_request_timeout_ms
+        )
         price_deadline = effective_timeout + 100
 
         if timeout_ms is not None:
@@ -104,7 +106,7 @@ class AggregatorService:
         partial = summary.failed_providers > 0
         return ordered, summary, partial
 
-    async def aggregate_quotes(
+    async def aggregate_quotes(  # noqa: C901
         self,
         *,
         req: ProviderQuoteRequest,
@@ -141,7 +143,9 @@ class AggregatorService:
                 resolved_req = req
                 quote_resolution = None
 
-        effective_timeout = timeout_ms if timeout_ms is not None else self._settings.provider_request_timeout_ms
+        effective_timeout = (
+            timeout_ms if timeout_ms is not None else self._settings.provider_request_timeout_ms
+        )
         quote_deadline = effective_timeout + 300
 
         if timeout_ms is not None:

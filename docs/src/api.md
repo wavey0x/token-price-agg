@@ -55,10 +55,11 @@ When `status` is not `ok`, the `error` object provides machine-readable detail:
 
 | `error.code` | Parent `status` | Description |
 | --- | --- | --- |
-| `TIMEOUT` | `error` | Provider or transport timed out |
+| `TIMEOUT` | `error` | Upstream provider connect/read/write timed out |
 | `RATE_LIMITED` | `error` | Provider rate-limited the request. Check `retry_after_ms` if present. |
 | `UPSTREAM_HTTP` | `error` | HTTP error from provider (non-200 status, connection error) |
 | `UPSTREAM_PARSE` | `error` | Invalid or unparseable response from provider |
+| `INTERNAL_TRANSPORT_TIMEOUT` | `error` | Service could not acquire local outbound HTTP capacity in time |
 | `DEADLINE_EXCEEDED` | `error` | Provider did not respond within the aggregate deadline |
 | `INTERNAL` | `error` | Internal error during provider execution |
 | `INVALID_VAULT_CONVERSION` | `error` | Failed to convert vault share/asset amounts |

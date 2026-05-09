@@ -17,7 +17,12 @@ from token_price_agg.api.schemas.responses import (
     PriceVaultContext,
     SelectedPrice,
 )
-from token_price_agg.app.config import MAX_REQUEST_TIMEOUT_MS, MIN_REQUEST_TIMEOUT_MS, Settings, get_settings
+from token_price_agg.app.config import (
+    MAX_REQUEST_TIMEOUT_MS,
+    MIN_REQUEST_TIMEOUT_MS,
+    Settings,
+    get_settings,
+)
 from token_price_agg.app.dependencies import get_aggregator_service, get_token_metadata_resolver
 from token_price_agg.core.aggregator import AggregatorService
 from token_price_agg.core.models import VaultContext
@@ -52,7 +57,7 @@ async def price(
             le=MAX_REQUEST_TIMEOUT_MS,
             description=(
                 "Per-request provider HTTP timeout in milliseconds. "
-                f"Range: {MIN_REQUEST_TIMEOUT_MS}–{MAX_REQUEST_TIMEOUT_MS}. "
+                f"Range: {MIN_REQUEST_TIMEOUT_MS}-{MAX_REQUEST_TIMEOUT_MS}. "
                 "Overrides the server default when provided."
             ),
         ),

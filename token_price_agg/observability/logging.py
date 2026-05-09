@@ -52,8 +52,12 @@ class JsonLogFormatter(logging.Formatter):
             "auth_reason",
             "api_key_id",
             "provider",
+            "operation",
             "provider_status",
             "error_code",
+            "transport_error_type",
+            "timeout_ms",
+            "provider_global_limit",
         ]:
             if hasattr(record, key):
                 value = getattr(record, key)

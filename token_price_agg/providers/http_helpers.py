@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Literal
@@ -10,6 +11,8 @@ from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
 from token_price_agg.providers.clients.http import HttpClient, HttpResponse, JsonBody, QueryParams
 from token_price_agg.providers.utils import status_from_http_code
 
+_LOGGER = logging.getLogger("token_price_agg.providers.transport")
+
 FailureReason = Literal["timeout", "http_error", "non_200", "invalid_json"]
 
 
@@ -18,6 +21,8 @@ class HttpCallResult:
     latency_ms: int
     response: HttpResponse | None = None
     timeout: bool = False
+    timeout_error_code: ErrorCode | None = None
+    transport_error_type: str | None = None
     http_error: httpx.HTTPError | None = None
 
 
@@ -47,18 +52,53 @@ async def timed_get(
     params: QueryParams | None = None,
     headers: dict[str, str] | None = None,
     timeout_ms: int | None = None,
+    provider_id: str | None = None,
+    operation: str | None = None,
 ) -> HttpCallResult:
     started = time.perf_counter()
     try:
         response = await client.get(url=url, params=params, headers=headers, timeout_ms=timeout_ms)
-    except httpx.TimeoutException:
+    except httpx.PoolTimeout as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
         return HttpCallResult(
-            latency_ms=int((time.perf_counter() - started) * 1000),
+            latency_ms=latency_ms,
             timeout=True,
+            timeout_error_code=ErrorCode.INTERNAL_TRANSPORT_TIMEOUT,
+            transport_error_type=type(exc).__name__,
+        )
+    except httpx.TimeoutException as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=latency_ms,
+            timeout=True,
+            timeout_error_code=ErrorCode.TIMEOUT,
+            transport_error_type=type(exc).__name__,
         )
     except httpx.HTTPError as exc:
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
         return HttpCallResult(
             latency_ms=int((time.perf_counter() - started) * 1000),
+            transport_error_type=type(exc).__name__,
             http_error=exc,
         )
 
@@ -76,18 +116,59 @@ async def timed_post(
     params: QueryParams | None = None,
     headers: dict[str, str] | None = None,
     timeout_ms: int | None = None,
+    provider_id: str | None = None,
+    operation: str | None = None,
 ) -> HttpCallResult:
     started = time.perf_counter()
     try:
-        response = await client.post(url=url, json=json, params=params, headers=headers, timeout_ms=timeout_ms)
-    except httpx.TimeoutException:
+        response = await client.post(
+            url=url,
+            json=json,
+            params=params,
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    except httpx.PoolTimeout as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
         return HttpCallResult(
-            latency_ms=int((time.perf_counter() - started) * 1000),
+            latency_ms=latency_ms,
             timeout=True,
+            timeout_error_code=ErrorCode.INTERNAL_TRANSPORT_TIMEOUT,
+            transport_error_type=type(exc).__name__,
+        )
+    except httpx.TimeoutException as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=latency_ms,
+            timeout=True,
+            timeout_error_code=ErrorCode.TIMEOUT,
+            transport_error_type=type(exc).__name__,
         )
     except httpx.HTTPError as exc:
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
         return HttpCallResult(
             latency_ms=int((time.perf_counter() - started) * 1000),
+            transport_error_type=type(exc).__name__,
             http_error=exc,
         )
 
@@ -104,13 +185,14 @@ def json_transport_outcome(
     invalid_json_message: str = "Invalid JSON response",
 ) -> JsonTransportOutcome:
     if call.timeout:
+        error = timeout_error_info(call=call, provider_name=provider_name)
         return JsonTransportOutcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="timeout",
                 status=ProviderStatus.ERROR,
-                error_code=ErrorCode.TIMEOUT,
-                message=f"{provider_name} request timed out",
+                error_code=ErrorCode(error.code),
+                message=error.message,
                 latency_ms=call.latency_ms,
             ),
         )
@@ -171,6 +253,39 @@ def json_transport_outcome(
         )
 
     return JsonTransportOutcome(latency_ms=call.latency_ms, payload=payload)
+
+
+def timeout_error_info(*, call: HttpCallResult, provider_name: str) -> ErrorInfo:
+    error_code = call.timeout_error_code or ErrorCode.TIMEOUT
+    if error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT:
+        return ErrorInfo(
+            code=error_code,
+            message=(
+                f"{provider_name} internal transport timed out before acquiring "
+                "outbound capacity"
+            ),
+        )
+    return ErrorInfo(code=error_code, message=f"{provider_name} request timed out")
+
+
+def _log_transport_failure(
+    *,
+    client: HttpClient,
+    exc: httpx.HTTPError,
+    provider_id: str | None,
+    operation: str | None,
+    timeout_ms: int | None,
+) -> None:
+    _LOGGER.warning(
+        "provider_transport_failure",
+        extra={
+            "provider": provider_id or "unknown",
+            "operation": operation or "unknown",
+            "transport_error_type": type(exc).__name__,
+            "timeout_ms": timeout_ms if timeout_ms is not None else client.timeout_ms,
+            "provider_global_limit": client.max_connections,
+        },
+    )
 
 
 def non_200_status(

@@ -35,6 +35,8 @@ class DefiLlamaProvider(ProviderPlugin):
             url=self._price_url(coin),
             params={"searchWidth": "4h"},
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="price",
         )
         transport = json_transport_outcome(
             call=call,

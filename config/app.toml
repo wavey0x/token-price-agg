@@ -13,7 +13,7 @@ provider_http_trust_env = false
 
 [concurrency]
 provider_fanout_per_request = 8
-provider_global_limit = 200
+provider_global_limit = 80
 web3_limit = 32
 
 [providers]

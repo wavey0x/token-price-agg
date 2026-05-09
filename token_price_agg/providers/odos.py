@@ -10,7 +10,7 @@ from token_price_agg.core.models import (
 from token_price_agg.core.validator import NATIVE_TOKEN_ALIAS
 from token_price_agg.providers.base import ProviderPlugin
 from token_price_agg.providers.clients.http import HttpClient, HttpResponse
-from token_price_agg.providers.http_helpers import timed_get, timed_post
+from token_price_agg.providers.http_helpers import timed_get, timed_post, timeout_error_info
 from token_price_agg.providers.parsing import decimal_to_bps, parse_decimal, parse_int
 from token_price_agg.providers.utils import status_from_http_code
 
@@ -40,6 +40,8 @@ class OdosProvider(ProviderPlugin):
             ),
             headers={"accept": "application/json"},
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="price",
         )
         if call.timeout:
             return PriceResult(
@@ -47,7 +49,7 @@ class OdosProvider(ProviderPlugin):
                 status=ProviderStatus.ERROR,
                 token=req.token,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=ErrorCode.TIMEOUT, message="ODOS request timed out"),
+                error=timeout_error_info(call=call, provider_name="ODOS"),
             )
         if call.http_error is not None:
             return PriceResult(
@@ -122,6 +124,8 @@ class OdosProvider(ProviderPlugin):
             },
             json=_build_quote_payload(req),
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="quote",
         )
         if call.timeout:
             return QuoteResult(
@@ -131,7 +135,7 @@ class OdosProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=ErrorCode.TIMEOUT, message="ODOS request timed out"),
+                error=timeout_error_info(call=call, provider_name="ODOS"),
             )
         if call.http_error is not None:
             return QuoteResult(

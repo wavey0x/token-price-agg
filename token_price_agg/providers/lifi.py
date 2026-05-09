@@ -57,6 +57,8 @@ class LiFiProvider(ProviderPlugin):
             params={"chain": req.chain_id, "token": req.token.address},
             headers=self._headers(),
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="price",
         )
         transport = json_transport_outcome(call=call, provider_name="LI.FI")
         if transport.failure is not None:
@@ -120,6 +122,8 @@ class LiFiProvider(ProviderPlugin):
             params=params,
             headers=self._headers(),
             timeout_ms=req.timeout_ms,
+            provider_id=self.id,
+            operation="quote",
         )
         transport = json_transport_outcome(call=call, provider_name="LI.FI")
         if transport.failure is not None:
