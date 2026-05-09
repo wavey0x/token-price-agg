@@ -178,24 +178,56 @@ async def _check_candidate(
     try:
         if method == "HEAD":
             response = await client.head(candidate.url)
+            if _response_declares_oversized(response):
+                return False, response.status_code, "response_too_large"
+            valid = _is_valid_image_response(response=response, body_preview=b"")
         else:
-            response = await client.get(candidate.url)
+            response, body_preview, too_large = await _get_response_preview(
+                client=client,
+                url=candidate.url,
+            )
+            if too_large:
+                return False, response.status_code, "response_too_large"
+            valid = _is_valid_image_response(response=response, body_preview=body_preview)
     except httpx.HTTPError as exc:
         return False, None, type(exc).__name__
 
-    valid = _is_valid_image_response(response)
     return valid, response.status_code, None
 
 
-def _is_valid_image_response(response: httpx.Response) -> bool:
+async def _get_response_preview(
+    *,
+    client: httpx.AsyncClient,
+    url: str,
+) -> tuple[httpx.Response, bytes, bool]:
+    async with client.stream("GET", url) as response:
+        if _response_declares_oversized(response):
+            return response, b"", True
+        if _is_image_content_type(response):
+            return response, b"", False
+
+        preview = bytearray()
+        total_bytes = 0
+        async for chunk in response.aiter_bytes(chunk_size=4096):
+            total_bytes += len(chunk)
+            if total_bytes > _MAX_RESPONSE_BYTES:
+                return response, bytes(preview), True
+            if len(preview) < 32:
+                preview.extend(chunk[: 32 - len(preview)])
+            if len(preview) >= 32:
+                break
+
+    return response, bytes(preview), False
+
+
+def _is_valid_image_response(*, response: httpx.Response, body_preview: bytes) -> bool:
     if response.status_code != 200:
         return False
 
-    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-    if content_type.startswith("image/"):
+    if _is_image_content_type(response):
         return True
 
-    body = response.content[:32]
+    body = body_preview[:32]
     return (
         body.startswith(b"\x89PNG\r\n\x1a\n")
         or body.startswith(b"\xff\xd8\xff")
@@ -204,6 +236,21 @@ def _is_valid_image_response(response: httpx.Response) -> bool:
         or body.startswith(b"RIFF")
         or body.lstrip().startswith(b"<svg")
     )
+
+
+def _is_image_content_type(response: httpx.Response) -> bool:
+    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+    return content_type.startswith("image/")
+
+
+def _response_declares_oversized(response: httpx.Response) -> bool:
+    content_length = response.headers.get("content-length")
+    if content_length is None:
+        return False
+    try:
+        return int(content_length) > _MAX_RESPONSE_BYTES
+    except ValueError:
+        return False
 
 
 def _last_http_status(attempts: list[VerifyAttempt]) -> int | None:

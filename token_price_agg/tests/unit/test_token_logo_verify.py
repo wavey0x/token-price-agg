@@ -4,6 +4,9 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
+import pytest
+import respx
+from httpx import Response
 from pytest import MonkeyPatch
 
 from token_price_agg.app.config import get_settings
@@ -286,3 +289,42 @@ def test_ssrf_protection_rejects_unsafe_urls() -> None:
     assert logo_verifier.is_safe_logo_url("https://172.16.0.1/logo.png") is False
     assert logo_verifier.is_safe_logo_url("ftp://example.com/logo.png") is False
     assert logo_verifier.is_safe_logo_url("") is False
+
+
+@pytest.mark.asyncio
+async def test_verify_candidates_rejects_declared_oversized_logo() -> None:
+    url = "https://example.com/logo.png"
+    with respx.mock(assert_all_called=True) as router:
+        router.head(url).mock(return_value=Response(405))
+        router.get(url).mock(
+            return_value=Response(
+                200,
+                headers={
+                    "content-length": str(logo_verifier._MAX_RESPONSE_BYTES + 1),
+                    "content-type": "image/png",
+                },
+            )
+        )
+
+        result = await logo_verifier.verify_candidates(
+            [LogoCandidate(source="provider", url=url)]
+        )
+
+    assert result.logo_status == "invalid"
+    assert result.attempts[-1].method == "GET"
+    assert result.attempts[-1].error == "response_too_large"
+
+
+@pytest.mark.asyncio
+async def test_verify_candidates_sniffs_get_body_without_content_type() -> None:
+    url = "https://example.com/logo.png"
+    with respx.mock(assert_all_called=True) as router:
+        router.head(url).mock(return_value=Response(405))
+        router.get(url).mock(return_value=Response(200, content=b"\x89PNG\r\n\x1a\nrest"))
+
+        result = await logo_verifier.verify_candidates(
+            [LogoCandidate(source="provider", url=url)]
+        )
+
+    assert result.logo_status == "valid"
+    assert result.logo_url == url
