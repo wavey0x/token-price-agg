@@ -113,7 +113,14 @@ class ProviderOperationRunner:
             )
             tasks[task] = provider_id
 
-        done, pending = await asyncio.wait(tasks.keys(), timeout=deadline_s)
+        try:
+            done, pending = await asyncio.wait(tasks.keys(), timeout=deadline_s)
+        except asyncio.CancelledError:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks.keys(), return_exceptions=True)
+            raise
         results: list[TResult] = []
 
         for task in done:
