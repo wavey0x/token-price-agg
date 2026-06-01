@@ -11,10 +11,45 @@ provider_max_retries = 0
 # Keep provider transport independent from ambient HTTP(S)_PROXY env by default.
 provider_http_trust_env = false
 
+[transport]
+provider_pool_timeout_ms = 25
+provider_connect_timeout_ms = 500
+# Defaults to provider_request_timeout_ms when unset.
+# provider_read_timeout_ms = 2000
+provider_write_timeout_ms = 500
+# Defaults to provider_global_limit when unset.
+# provider_max_connections_per_provider = 80
+provider_max_keepalive_connections_per_provider = 2
+provider_keepalive_expiry_s = 2.0
+provider_client_ttl_s = 300
+provider_client_max_requests = 5000
+provider_recycle_pool_timeout_threshold = 10
+provider_recycle_window_s = 30
+
 [concurrency]
 provider_fanout_per_request = 8
 provider_global_limit = 80
+provider_global_units = 80
+provider_per_principal_units = 20
+provider_principal_limiter_idle_ttl_s = 300
+provider_principal_limiter_max_entries = 10000
+provider_per_provider_units = 20
+vault_global_units = 16
+admission_acquire_timeout_ms = 25
 web3_limit = 32
+
+[circuit_breakers]
+failure_window_s = 30
+failure_threshold = 10
+open_duration_s = 15
+half_open_probe_count = 2
+
+[vault]
+positive_cache_ttl_s = 30
+negative_cache_ttl_s = 300
+
+[readiness]
+close_wait_ready_threshold = 80
 
 [providers]
 enabled = ["defillama", "curve", "odos", "lifi", "enso"]

@@ -7,7 +7,7 @@ from typing import Never
 from fastapi import HTTPException, Request
 
 from token_price_agg.api.schemas.responses import TokenMetadataResponse
-from token_price_agg.core.errors import InvalidRequestError
+from token_price_agg.core.errors import AdmissionRejectedError, InvalidRequestError
 from token_price_agg.core.models import (
     AggregatePriceSummary,
     AggregateQuoteSummary,
@@ -44,6 +44,16 @@ def record_aggregate_metrics(
 
 def get_request_id(request: Request) -> str:
     return getattr(request.state, "request_id", str(uuid.uuid4()))
+
+
+def get_principal_id(request: Request) -> str:
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if api_key_id:
+        return f"api_key:{api_key_id}"
+    auth_status = getattr(request.state, "auth_status", None)
+    client = request.client
+    host = client.host if client is not None and client.host else "unknown"
+    return f"{auth_status or 'unprotected'}:{host}"
 
 
 def metadata_for_address(
@@ -97,6 +107,12 @@ async def aggregate_with_provider_order[
 ) -> tuple[list[TResult], TSummary, list[str], dict[str, TResult]]:
     try:
         results, summary, partial = await aggregate_call
+    except AdmissionRejectedError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     except InvalidRequestError as exc:
         raise_bad_request(exc)
 

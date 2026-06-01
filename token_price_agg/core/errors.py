@@ -47,3 +47,17 @@ class InvalidRequestError(AggregatorError):
 
 class UnsupportedOperationError(AggregatorError):
     pass
+
+
+class AdmissionRejectedError(AggregatorError):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        status_code: int,
+        retry_after_seconds: int = 1,
+    ) -> None:
+        self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(code, message)

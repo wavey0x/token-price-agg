@@ -342,17 +342,32 @@ uv run mypy .
 - `INVALID_ADDRESS`: malformed token address
 - `UNAUTHORIZED`: invalid/revoked/expired bearer token (or missing bearer when `API_KEY_UNAUTH_ACCESS_ENABLED=false`)
 - `RATE_LIMITED`: API key exceeded per-minute budget or anonymous tier exceeded per-second budget
+- `RATE_LIMITED`: concurrent provider capacity for one principal is exhausted
+- `SERVICE_OVERLOADED`: global provider admission capacity is exhausted before fan-out
 - provider status `invalid_request` + `missing_api_key`
 - provider status `timeout`/`upstream_error`
+- provider error `INTERNAL_TRANSPORT_TIMEOUT`: the local HTTP pool could not hand out a connection before `provider_pool_timeout_ms`
+- provider error `PROVIDER_UNAVAILABLE`: provider is disabled, missing credentials, circuit-open, or its per-provider concurrent lane is full
 - readiness `not_ready` with reason `no_available_providers` in strict mode
+- readiness `not_ready` with reason `provider_transport_unhealthy`, `no_ready_price_providers`, `no_ready_quote_providers`, or `close_wait_threshold_exceeded`
 
 ## Triage Checklist
 
 1. Confirm `/v1/ready`.
 2. Check 5xx ratio and p95 latency.
-3. Check provider availability gauges.
-4. Filter logs by `request_id`.
-5. Verify upstream key configuration and network reachability.
+3. Check admission and transport metrics:
+   `token_price_agg_admission_rejections_total`,
+   `token_price_agg_provider_pool_timeouts_total`,
+   `token_price_agg_provider_transport_recycles_total`,
+   `token_price_agg_provider_circuit_state`, and
+   `token_price_agg_process_close_wait_sockets`.
+4. Check provider availability gauges and provider in-flight calls.
+5. Filter logs by `request_id`.
+6. Verify upstream key configuration and network reachability.
+
+If `provider_pool_timeouts_total` or `process_close_wait_sockets` climbs while host-level curl to
+the provider still works, treat the instance as transport-wedged. Readiness should remove it from
+normal traffic; restart the process if transport recycle does not recover it quickly.
 
 ## API Key Operations
 

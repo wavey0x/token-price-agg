@@ -104,6 +104,7 @@ def test_price_endpoint_provider_query_styles(provider_params: list[tuple[str, s
 
 
 def test_price_endpoint_default_precedence_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PROVIDERS_ENABLED", "defillama,curve")
     monkeypatch.setenv("PRICE_PROVIDER_PRIORITY", "defillama,curve")
     token_checksum = token("USDC")
 

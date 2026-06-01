@@ -8,6 +8,7 @@ from typing import Literal
 import httpx
 
 from token_price_agg.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from token_price_agg.observability.metrics import record_provider_pool_timeout
 from token_price_agg.providers.clients.http import HttpClient, HttpResponse, JsonBody, QueryParams
 from token_price_agg.providers.utils import status_from_http_code
 
@@ -60,6 +61,11 @@ async def timed_get(
         response = await client.get(url=url, params=params, headers=headers, timeout_ms=timeout_ms)
     except httpx.PoolTimeout as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
+        record_provider_pool_timeout(
+            provider=provider_id or "unknown",
+            operation=operation or "unknown",
+        )
+        await client.record_pool_timeout()
         _log_transport_failure(
             client=client,
             exc=exc,
@@ -130,6 +136,11 @@ async def timed_post(
         )
     except httpx.PoolTimeout as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
+        record_provider_pool_timeout(
+            provider=provider_id or "unknown",
+            operation=operation or "unknown",
+        )
+        await client.record_pool_timeout()
         _log_transport_failure(
             client=client,
             exc=exc,

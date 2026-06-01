@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 
 from token_price_agg.app.config import Settings
-from token_price_agg.core.errors import ProviderStatus
+from token_price_agg.core.errors import AdmissionRejectedError, ErrorInfo, ProviderStatus
 from token_price_agg.core.models import PriceResult, ProviderPriceRequest, TokenRef
 from token_price_agg.core.provider_runner import ProviderOperationRunner
 from token_price_agg.providers.base import ProviderPlugin
@@ -53,3 +53,214 @@ async def test_provider_runner_cancels_child_tasks_when_parent_is_cancelled() ->
         await task
 
     assert events == ["started", "cancelled"]
+
+
+@pytest.mark.asyncio
+async def test_provider_runner_rejects_global_admission_when_capacity_is_full() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class SlowPlugin(ProviderPlugin):
+        id: ClassVar[str] = "slow"
+        supports_price: ClassVar[bool] = True
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            started.set()
+            await release.wait()
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.OK,
+                token=req.token,
+                price_usd=Decimal("1"),
+                latency_ms=1,
+            )
+
+    runner = ProviderOperationRunner(
+        settings=Settings(
+            provider_fanout_per_request=2,
+            provider_global_units=1,
+            provider_per_principal_units=10,
+            provider_per_provider_units=2,
+            admission_acquire_timeout_ms=1,
+        )
+    )
+    req = ProviderPriceRequest(chain_id=1, token=TokenRef(chain_id=1, address=USDC))
+    first = asyncio.create_task(
+        runner.run_prices(
+            plugins=[SlowPlugin()],
+            req=req,
+            deadline_ms=5000,
+            principal_id="api_key:first",
+        )
+    )
+    await started.wait()
+
+    with pytest.raises(AdmissionRejectedError) as exc_info:
+        await runner.run_prices(
+            plugins=[SlowPlugin()],
+            req=req,
+            deadline_ms=5000,
+            principal_id="api_key:second",
+        )
+
+    release.set()
+    await first
+    assert exc_info.value.code == "SERVICE_OVERLOADED"
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_provider_runner_rejects_principal_admission_when_capacity_is_full() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class SlowPlugin(ProviderPlugin):
+        id: ClassVar[str] = "slow"
+        supports_price: ClassVar[bool] = True
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            started.set()
+            await release.wait()
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.OK,
+                token=req.token,
+                price_usd=Decimal("1"),
+                latency_ms=1,
+            )
+
+    runner = ProviderOperationRunner(
+        settings=Settings(
+            provider_fanout_per_request=2,
+            provider_global_units=10,
+            provider_per_principal_units=1,
+            provider_per_provider_units=2,
+            admission_acquire_timeout_ms=1,
+        )
+    )
+    req = ProviderPriceRequest(chain_id=1, token=TokenRef(chain_id=1, address=USDC))
+    first = asyncio.create_task(
+        runner.run_prices(
+            plugins=[SlowPlugin()],
+            req=req,
+            deadline_ms=5000,
+            principal_id="api_key:same",
+        )
+    )
+    await started.wait()
+
+    with pytest.raises(AdmissionRejectedError) as exc_info:
+        await runner.run_prices(
+            plugins=[SlowPlugin()],
+            req=req,
+            deadline_ms=5000,
+            principal_id="api_key:same",
+        )
+
+    release.set()
+    await first
+    assert exc_info.value.code == "RATE_LIMITED"
+    assert exc_info.value.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_provider_runner_returns_provider_failure_when_provider_lane_is_full() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class SlowPlugin(ProviderPlugin):
+        id: ClassVar[str] = "slow"
+        supports_price: ClassVar[bool] = True
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            started.set()
+            await release.wait()
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.OK,
+                token=req.token,
+                price_usd=Decimal("1"),
+                latency_ms=1,
+            )
+
+    runner = ProviderOperationRunner(
+        settings=Settings(
+            provider_fanout_per_request=2,
+            provider_global_units=10,
+            provider_per_principal_units=10,
+            provider_per_provider_units=1,
+            admission_acquire_timeout_ms=1,
+        )
+    )
+    req = ProviderPriceRequest(chain_id=1, token=TokenRef(chain_id=1, address=USDC))
+    first = asyncio.create_task(
+        runner.run_prices(
+            plugins=[SlowPlugin()],
+            req=req,
+            deadline_ms=5000,
+            principal_id="api_key:first",
+        )
+    )
+    await started.wait()
+
+    results = await runner.run_prices(
+        plugins=[SlowPlugin()],
+        req=req,
+        deadline_ms=5000,
+        principal_id="api_key:second",
+    )
+
+    release.set()
+    await first
+    assert results[0].status == ProviderStatus.ERROR
+    assert results[0].error is not None
+    assert results[0].error.code == "PROVIDER_UNAVAILABLE"
+    assert results[0].error.message == "Provider capacity unavailable"
+
+
+@pytest.mark.asyncio
+async def test_provider_runner_opens_provider_circuit_after_retriable_failures() -> None:
+    class FailingPlugin(ProviderPlugin):
+        id: ClassVar[str] = "failing"
+        supports_price: ClassVar[bool] = True
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            self.calls += 1
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.ERROR,
+                token=req.token,
+                latency_ms=1,
+                error=ErrorInfo(
+                    code="INTERNAL_TRANSPORT_TIMEOUT",
+                    message="pool timeout",
+                ),
+            )
+
+    plugin = FailingPlugin()
+    runner = ProviderOperationRunner(
+        settings=Settings(
+            provider_fanout_per_request=1,
+            provider_global_units=5,
+            provider_per_principal_units=5,
+            provider_per_provider_units=5,
+            provider_circuit_failure_threshold=2,
+            provider_circuit_failure_window_s=30,
+            provider_circuit_open_duration_s=30,
+            admission_acquire_timeout_ms=1,
+        )
+    )
+    req = ProviderPriceRequest(chain_id=1, token=TokenRef(chain_id=1, address=USDC))
+
+    await runner.run_prices(plugins=[plugin], req=req, deadline_ms=1000)
+    await runner.run_prices(plugins=[plugin], req=req, deadline_ms=1000)
+    results = await runner.run_prices(plugins=[plugin], req=req, deadline_ms=1000)
+
+    assert plugin.calls == 2
+    assert results[0].status == ProviderStatus.ERROR
+    assert results[0].error is not None
+    assert results[0].error.code == "PROVIDER_UNAVAILABLE"

@@ -242,9 +242,39 @@ Key sections:
   - `provider_request_timeout_ms`
   - `provider_max_retries` (default `0`)
   - `provider_http_trust_env` (default `false`; opt in only if the service should use `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`)
+- `[transport]`
+  - `provider_pool_timeout_ms` (short local pool wait before returning `INTERNAL_TRANSPORT_TIMEOUT`)
+  - `provider_connect_timeout_ms`
+  - `provider_read_timeout_ms` (defaults to `provider_request_timeout_ms`)
+  - `provider_write_timeout_ms`
+  - `provider_max_connections_per_provider` (defaults to `provider_global_limit`)
+  - `provider_max_keepalive_connections_per_provider`
+  - `provider_keepalive_expiry_s`
+  - `provider_client_ttl_s`
+  - `provider_client_max_requests`
+  - `provider_recycle_pool_timeout_threshold`
+  - `provider_recycle_window_s`
 - `[concurrency]`
   - `provider_fanout_per_request`
   - `provider_global_limit`
+  - `provider_global_units`
+  - `provider_per_principal_units`
+  - `provider_principal_limiter_idle_ttl_s`
+  - `provider_principal_limiter_max_entries`
+  - `provider_per_provider_units`
+  - `vault_global_units`
+  - `admission_acquire_timeout_ms`
+  - `web3_limit`
+- `[circuit_breakers]`
+  - `failure_window_s`
+  - `failure_threshold`
+  - `open_duration_s`
+  - `half_open_probe_count`
+- `[vault]`
+  - `positive_cache_ttl_s`
+  - `negative_cache_ttl_s`
+- `[readiness]`
+  - `close_wait_ready_threshold`
 - `[providers]`
   - `enabled = [...]`
   - `price_priority = [...]`
@@ -267,6 +297,12 @@ Settings precedence:
 Aggregate deadline behavior (no extra config knobs):
 - price deadline = `provider_request_timeout_ms + 100ms`
 - quote deadline = `provider_request_timeout_ms + 300ms`
+
+Load shedding happens before provider fan-out. Each selected runnable provider costs one provider
+capacity unit, and `use_underlying=true` also reserves bounded vault resolution capacity. If global
+provider capacity is exhausted the API returns `503`; if one principal exhausts its concurrent
+provider capacity the API returns `429`. Per-provider capacity and open circuit breakers return
+provider-level failures so other providers can still answer the aggregate request.
 
 ## API Key CLI
 
@@ -383,6 +419,12 @@ This file defines:
 ## Observability
 
 - `GET /v1/health` liveness
-- `GET /v1/ready` readiness
+- `GET /v1/ready` readiness; fails when all providers for an operation are circuit-open, provider
+  transport is wedged, or process `CLOSE-WAIT` sockets exceed `close_wait_ready_threshold`
 - `GET /metrics` Prometheus endpoint
 - `X-Request-ID` is accepted and echoed in responses
+- endpoint labels are normalized to known routes or `/unknown` to avoid cardinality growth
+
+Provider transport metrics include admission rejections, provider pool timeouts, HTTP client
+recycles, provider circuit state/transitions, provider in-flight calls, and process `CLOSE-WAIT`
+socket count.

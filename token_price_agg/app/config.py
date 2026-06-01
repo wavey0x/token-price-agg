@@ -65,6 +65,83 @@ class Settings(BaseSettings):
             AliasPath("timeouts", "provider_http_trust_env"),
         ),
     )
+    provider_pool_timeout_ms: int = Field(
+        default=25,
+        validation_alias=AliasChoices(
+            "provider_pool_timeout_ms",
+            AliasPath("transport", "provider_pool_timeout_ms"),
+        ),
+    )
+    provider_connect_timeout_ms: int = Field(
+        default=500,
+        validation_alias=AliasChoices(
+            "provider_connect_timeout_ms",
+            AliasPath("transport", "provider_connect_timeout_ms"),
+        ),
+    )
+    provider_read_timeout_ms: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "provider_read_timeout_ms",
+            AliasPath("transport", "provider_read_timeout_ms"),
+        ),
+    )
+    provider_write_timeout_ms: int = Field(
+        default=500,
+        validation_alias=AliasChoices(
+            "provider_write_timeout_ms",
+            AliasPath("transport", "provider_write_timeout_ms"),
+        ),
+    )
+    provider_max_connections_per_provider: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "provider_max_connections_per_provider",
+            AliasPath("transport", "provider_max_connections_per_provider"),
+        ),
+    )
+    provider_max_keepalive_connections_per_provider: int = Field(
+        default=2,
+        validation_alias=AliasChoices(
+            "provider_max_keepalive_connections_per_provider",
+            AliasPath("transport", "provider_max_keepalive_connections_per_provider"),
+        ),
+    )
+    provider_keepalive_expiry_s: float = Field(
+        default=2.0,
+        validation_alias=AliasChoices(
+            "provider_keepalive_expiry_s",
+            AliasPath("transport", "provider_keepalive_expiry_s"),
+        ),
+    )
+    provider_client_ttl_s: int = Field(
+        default=300,
+        validation_alias=AliasChoices(
+            "provider_client_ttl_s",
+            AliasPath("transport", "provider_client_ttl_s"),
+        ),
+    )
+    provider_client_max_requests: int = Field(
+        default=5000,
+        validation_alias=AliasChoices(
+            "provider_client_max_requests",
+            AliasPath("transport", "provider_client_max_requests"),
+        ),
+    )
+    provider_recycle_pool_timeout_threshold: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "provider_recycle_pool_timeout_threshold",
+            AliasPath("transport", "provider_recycle_pool_timeout_threshold"),
+        ),
+    )
+    provider_recycle_window_s: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "provider_recycle_window_s",
+            AliasPath("transport", "provider_recycle_window_s"),
+        ),
+    )
 
     provider_fanout_per_request: int = Field(
         default=8,
@@ -80,11 +157,109 @@ class Settings(BaseSettings):
             AliasPath("concurrency", "provider_global_limit"),
         ),
     )
+    provider_global_units: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "provider_global_units",
+            AliasPath("concurrency", "provider_global_units"),
+        ),
+    )
+    provider_per_principal_units: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "provider_per_principal_units",
+            AliasPath("concurrency", "provider_per_principal_units"),
+        ),
+    )
+    provider_principal_limiter_idle_ttl_s: int = Field(
+        default=300,
+        validation_alias=AliasChoices(
+            "provider_principal_limiter_idle_ttl_s",
+            AliasPath("concurrency", "provider_principal_limiter_idle_ttl_s"),
+        ),
+    )
+    provider_principal_limiter_max_entries: int = Field(
+        default=10000,
+        validation_alias=AliasChoices(
+            "provider_principal_limiter_max_entries",
+            AliasPath("concurrency", "provider_principal_limiter_max_entries"),
+        ),
+    )
+    provider_per_provider_units: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "provider_per_provider_units",
+            AliasPath("concurrency", "provider_per_provider_units"),
+        ),
+    )
+    vault_global_units: int = Field(
+        default=16,
+        validation_alias=AliasChoices(
+            "vault_global_units",
+            AliasPath("concurrency", "vault_global_units"),
+        ),
+    )
+    admission_acquire_timeout_ms: int = Field(
+        default=25,
+        validation_alias=AliasChoices(
+            "admission_acquire_timeout_ms",
+            AliasPath("concurrency", "admission_acquire_timeout_ms"),
+        ),
+    )
     web3_limit: int = Field(
         default=32,
         validation_alias=AliasChoices(
             "web3_limit",
             AliasPath("concurrency", "web3_limit"),
+        ),
+    )
+    provider_circuit_failure_window_s: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "provider_circuit_failure_window_s",
+            AliasPath("circuit_breakers", "failure_window_s"),
+        ),
+    )
+    provider_circuit_failure_threshold: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "provider_circuit_failure_threshold",
+            AliasPath("circuit_breakers", "failure_threshold"),
+        ),
+    )
+    provider_circuit_open_duration_s: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "provider_circuit_open_duration_s",
+            AliasPath("circuit_breakers", "open_duration_s"),
+        ),
+    )
+    provider_circuit_half_open_probe_count: int = Field(
+        default=2,
+        validation_alias=AliasChoices(
+            "provider_circuit_half_open_probe_count",
+            AliasPath("circuit_breakers", "half_open_probe_count"),
+        ),
+    )
+    vault_positive_cache_ttl_s: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "vault_positive_cache_ttl_s",
+            AliasPath("vault", "positive_cache_ttl_s"),
+        ),
+    )
+    vault_negative_cache_ttl_s: int = Field(
+        default=300,
+        validation_alias=AliasChoices(
+            "vault_negative_cache_ttl_s",
+            AliasPath("vault", "negative_cache_ttl_s"),
+        ),
+    )
+    close_wait_ready_threshold: int = Field(
+        default=80,
+        validation_alias=AliasChoices(
+            "close_wait_ready_threshold",
+            AliasPath("readiness", "close_wait_ready_threshold"),
         ),
     )
     token_metadata_db_path: str = Field(
@@ -272,20 +447,80 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize_provider_settings(self) -> Settings:
-        if self.provider_request_timeout_ms <= 0:
-            raise ValueError("PROVIDER_REQUEST_TIMEOUT_MS must be > 0")
-        if self.provider_max_retries < 0:
-            raise ValueError("PROVIDER_MAX_RETRIES must be >= 0")
-        if self.provider_fanout_per_request <= 0:
-            raise ValueError("PROVIDER_FANOUT_PER_REQUEST must be > 0")
-        if self.provider_global_limit <= 0:
-            raise ValueError("PROVIDER_GLOBAL_LIMIT must be > 0")
-        if self.web3_limit <= 0:
-            raise ValueError("WEB3_LIMIT must be > 0")
-        if self.api_key_rate_limit_rpm <= 0:
-            raise ValueError("API_KEY_RATE_LIMIT_RPM must be > 0")
-        if self.api_key_unauth_min_interval_seconds <= 0:
-            raise ValueError("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS must be > 0")
+        _require_positive(
+            (
+                ("PROVIDER_REQUEST_TIMEOUT_MS", self.provider_request_timeout_ms),
+                ("PROVIDER_POOL_TIMEOUT_MS", self.provider_pool_timeout_ms),
+                ("PROVIDER_CONNECT_TIMEOUT_MS", self.provider_connect_timeout_ms),
+                ("PROVIDER_WRITE_TIMEOUT_MS", self.provider_write_timeout_ms),
+                ("PROVIDER_CLIENT_TTL_S", self.provider_client_ttl_s),
+                ("PROVIDER_CLIENT_MAX_REQUESTS", self.provider_client_max_requests),
+                (
+                    "PROVIDER_RECYCLE_POOL_TIMEOUT_THRESHOLD",
+                    self.provider_recycle_pool_timeout_threshold,
+                ),
+                ("PROVIDER_RECYCLE_WINDOW_S", self.provider_recycle_window_s),
+                ("ADMISSION_ACQUIRE_TIMEOUT_MS", self.admission_acquire_timeout_ms),
+                (
+                    "PROVIDER_CIRCUIT_FAILURE_WINDOW_S",
+                    self.provider_circuit_failure_window_s,
+                ),
+                (
+                    "PROVIDER_CIRCUIT_FAILURE_THRESHOLD",
+                    self.provider_circuit_failure_threshold,
+                ),
+                (
+                    "PROVIDER_CIRCUIT_OPEN_DURATION_S",
+                    self.provider_circuit_open_duration_s,
+                ),
+                (
+                    "PROVIDER_CIRCUIT_HALF_OPEN_PROBE_COUNT",
+                    self.provider_circuit_half_open_probe_count,
+                ),
+                ("VAULT_POSITIVE_CACHE_TTL_S", self.vault_positive_cache_ttl_s),
+                ("VAULT_NEGATIVE_CACHE_TTL_S", self.vault_negative_cache_ttl_s),
+                ("PROVIDER_FANOUT_PER_REQUEST", self.provider_fanout_per_request),
+                ("PROVIDER_GLOBAL_LIMIT", self.provider_global_limit),
+                ("PROVIDER_PER_PRINCIPAL_UNITS", self.provider_per_principal_units),
+                (
+                    "PROVIDER_PRINCIPAL_LIMITER_IDLE_TTL_S",
+                    self.provider_principal_limiter_idle_ttl_s,
+                ),
+                (
+                    "PROVIDER_PRINCIPAL_LIMITER_MAX_ENTRIES",
+                    self.provider_principal_limiter_max_entries,
+                ),
+                ("PROVIDER_PER_PROVIDER_UNITS", self.provider_per_provider_units),
+                ("VAULT_GLOBAL_UNITS", self.vault_global_units),
+                ("WEB3_LIMIT", self.web3_limit),
+                ("API_KEY_RATE_LIMIT_RPM", self.api_key_rate_limit_rpm),
+                (
+                    "API_KEY_UNAUTH_MIN_INTERVAL_SECONDS",
+                    self.api_key_unauth_min_interval_seconds,
+                ),
+            )
+        )
+        _require_optional_positive(
+            (
+                ("PROVIDER_READ_TIMEOUT_MS", self.provider_read_timeout_ms),
+                (
+                    "PROVIDER_MAX_CONNECTIONS_PER_PROVIDER",
+                    self.provider_max_connections_per_provider,
+                ),
+                ("PROVIDER_GLOBAL_UNITS", self.provider_global_units),
+            )
+        )
+        _require_non_negative(
+            (
+                ("PROVIDER_MAX_RETRIES", self.provider_max_retries),
+                (
+                    "PROVIDER_MAX_KEEPALIVE_CONNECTIONS_PER_PROVIDER",
+                    self.provider_max_keepalive_connections_per_provider,
+                ),
+                ("PROVIDER_KEEPALIVE_EXPIRY_S", self.provider_keepalive_expiry_s),
+                ("CLOSE_WAIT_READY_THRESHOLD", self.close_wait_ready_threshold),
+            )
+        )
 
         return self
 
@@ -296,6 +531,18 @@ class Settings(BaseSettings):
     @property
     def aggregate_quote_deadline_ms(self) -> int:
         return self.provider_request_timeout_ms + 300
+
+    @property
+    def effective_provider_read_timeout_ms(self) -> int:
+        return self.provider_read_timeout_ms or self.provider_request_timeout_ms
+
+    @property
+    def effective_provider_max_connections_per_provider(self) -> int:
+        return self.provider_max_connections_per_provider or self.provider_global_limit
+
+    @property
+    def effective_provider_global_units(self) -> int:
+        return self.provider_global_units or self.provider_global_limit
 
 
 def _parse_string_list(value: object) -> list[str] | None:
@@ -312,6 +559,24 @@ def _parse_string_list(value: object) -> list[str] | None:
     if isinstance(value, list):
         return [str(item) for item in value]
     return None
+
+
+def _require_positive(fields: tuple[tuple[str, int | float], ...]) -> None:
+    for field_name, value in fields:
+        if value <= 0:
+            raise ValueError(f"{field_name} must be > 0")
+
+
+def _require_optional_positive(fields: tuple[tuple[str, int | None], ...]) -> None:
+    for field_name, value in fields:
+        if value is not None and value <= 0:
+            raise ValueError(f"{field_name} must be > 0")
+
+
+def _require_non_negative(fields: tuple[tuple[str, int | float], ...]) -> None:
+    for field_name, value in fields:
+        if value < 0:
+            raise ValueError(f"{field_name} must be >= 0")
 
 
 @lru_cache(maxsize=1)

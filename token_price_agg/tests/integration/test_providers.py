@@ -115,6 +115,31 @@ async def test_provider_http_read_timeout_stays_provider_timeout() -> None:
 
 
 @pytest.mark.asyncio
+async def test_provider_http_client_recycles_after_repeated_pool_timeouts() -> None:
+    client = HttpClient(
+        timeout_ms=1,
+        max_retries=0,
+        connect_timeout_ms=1,
+        read_timeout_ms=1,
+        write_timeout_ms=1,
+        recycle_pool_timeout_threshold=2,
+        recycle_window_s=30,
+        provider_id="test",
+    )
+
+    try:
+        await client.record_pool_timeout()
+        assert client.recently_recycled_due_to_pool_timeout() is False
+
+        await client.record_pool_timeout()
+
+        assert client.recently_recycled_due_to_pool_timeout() is True
+        assert client.recent_pool_timeout_count() == 0
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_defillama_price_success() -> None:
     client = HttpClient(timeout_ms=500, max_retries=0)
     provider = DefiLlamaProvider(client=client)

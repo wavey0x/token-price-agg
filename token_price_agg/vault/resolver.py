@@ -23,10 +23,13 @@ from token_price_agg.web3.client import AsyncRpcClient
 
 class VaultResolver:
     def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         self._rpc_client = AsyncRpcClient(rpc_urls=settings.rpc_urls)
         self._erc4626 = Erc4626Adapter(self._rpc_client)
         self._yearn_v2 = YearnV2Adapter(self._rpc_client)
         self._semaphore = asyncio.Semaphore(settings.web3_limit)
+        self._positive_cache: dict[tuple[int, str], _VaultCacheEntry] = {}
+        self._negative_cache: dict[tuple[int, str], float] = {}
 
     async def resolve_price_request(
         self,
@@ -125,16 +128,56 @@ class VaultResolver:
         return converted, resolution
 
     async def _detect_vault(self, address: str, chain_id: int) -> _VaultInfo | None:
+        key = (chain_id, address.lower())
+        now = time.monotonic()
+        cache_hit, cached = self._cached_vault(key=key, now=now)
+        if cache_hit:
+            return cached
+
         async with self._semaphore:
+            now = time.monotonic()
+            cache_hit, cached = self._cached_vault(key=key, now=now)
+            if cache_hit:
+                return cached
+
             erc4626 = await self._erc4626.detect(address, chain_id)
             if erc4626 is not None:
-                return _VaultInfo.from_erc4626(erc4626)
+                vault = _VaultInfo.from_erc4626(erc4626)
+                self._positive_cache[key] = _VaultCacheEntry(
+                    vault=vault,
+                    expires_at=time.monotonic() + self._settings.vault_positive_cache_ttl_s,
+                )
+                self._negative_cache.pop(key, None)
+                return vault
 
             yearn = await self._yearn_v2.detect(address, chain_id)
             if yearn is not None:
-                return _VaultInfo.from_yearn_v2(yearn)
+                vault = _VaultInfo.from_yearn_v2(yearn)
+                self._positive_cache[key] = _VaultCacheEntry(
+                    vault=vault,
+                    expires_at=time.monotonic() + self._settings.vault_positive_cache_ttl_s,
+                )
+                self._negative_cache.pop(key, None)
+                return vault
 
+        self._negative_cache[key] = time.monotonic() + self._settings.vault_negative_cache_ttl_s
         return None
+
+    def _cached_vault(
+        self,
+        *,
+        key: tuple[int, str],
+        now: float,
+    ) -> tuple[bool, _VaultInfo | None]:
+        cached = self._positive_cache.get(key)
+        if cached is not None and now < cached.expires_at:
+            return True, cached.vault
+
+        negative_expires_at = self._negative_cache.get(key)
+        if negative_expires_at is not None and now < negative_expires_at:
+            return True, None
+
+        return False, None
 
 
 @dataclass(frozen=True)
@@ -142,6 +185,12 @@ class QuoteVaultResolution:
     input_vault_context: VaultContext | None = None
     output_vault_context: VaultContext | None = None
     output_assets_to_shares: Callable[[int], int] | None = None
+
+
+@dataclass(frozen=True)
+class _VaultCacheEntry:
+    vault: _VaultInfo
+    expires_at: float
 
 
 class _VaultInfo:

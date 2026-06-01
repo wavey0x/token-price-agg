@@ -2,6 +2,16 @@ from __future__ import annotations
 
 from prometheus_client import Counter, Gauge, Histogram
 
+_KNOWN_ENDPOINTS = {
+    "/v1/price",
+    "/v1/quote",
+    "/v1/health",
+    "/v1/ready",
+    "/v1/providers",
+    "/v1/token",
+    "/metrics",
+}
+
 HTTP_REQUESTS_TOTAL = Counter(
     "token_price_agg_http_requests_total",
     "Total HTTP requests",
@@ -73,6 +83,53 @@ RATE_LIMIT_TOTAL = Counter(
     labelnames=("endpoint",),
 )
 
+ADMISSION_REJECTIONS_TOTAL = Counter(
+    "token_price_agg_admission_rejections_total",
+    "Total requests rejected by admission control",
+    labelnames=("reason", "operation"),
+)
+
+ADMISSION_INFLIGHT_UNITS = Gauge(
+    "token_price_agg_admission_inflight_units",
+    "In-flight capacity units reserved by admission control",
+    labelnames=("scope", "operation"),
+)
+
+PROVIDER_INFLIGHT_CALLS = Gauge(
+    "token_price_agg_provider_inflight_calls",
+    "In-flight provider calls",
+    labelnames=("provider", "operation"),
+)
+
+PROVIDER_POOL_TIMEOUTS_TOTAL = Counter(
+    "token_price_agg_provider_pool_timeouts_total",
+    "Provider calls that timed out before acquiring a local HTTP pool slot",
+    labelnames=("provider", "operation"),
+)
+
+PROVIDER_TRANSPORT_RECYCLES_TOTAL = Counter(
+    "token_price_agg_provider_transport_recycles_total",
+    "Provider HTTP client recycle events",
+    labelnames=("provider", "reason"),
+)
+
+PROVIDER_CIRCUIT_STATE = Gauge(
+    "token_price_agg_provider_circuit_state",
+    "Provider circuit state gauge (0=closed, 1=half_open, 2=open)",
+    labelnames=("provider",),
+)
+
+PROVIDER_CIRCUIT_TRANSITIONS_TOTAL = Counter(
+    "token_price_agg_provider_circuit_transitions_total",
+    "Provider circuit state transitions",
+    labelnames=("provider", "state"),
+)
+
+PROCESS_CLOSE_WAIT_SOCKETS = Gauge(
+    "token_price_agg_process_close_wait_sockets",
+    "CLOSE-WAIT sockets owned by this process",
+)
+
 
 def observe_http_request(
     *,
@@ -81,6 +138,7 @@ def observe_http_request(
     status_code: int,
     duration_seconds: float,
 ) -> None:
+    endpoint = normalize_endpoint(endpoint)
     status_class = f"{status_code // 100}xx"
     HTTP_REQUESTS_TOTAL.labels(endpoint=endpoint, method=method, status_class=status_class).inc()
     HTTP_REQUEST_LATENCY_SECONDS.labels(endpoint=endpoint, method=method).observe(duration_seconds)
@@ -95,10 +153,12 @@ def dec_inflight_request() -> None:
 
 
 def record_partial_response(*, endpoint: str) -> None:
+    endpoint = normalize_endpoint(endpoint)
     PARTIAL_RESPONSES_TOTAL.labels(endpoint=endpoint).inc()
 
 
 def record_all_failed_response(*, endpoint: str) -> None:
+    endpoint = normalize_endpoint(endpoint)
     ALL_FAILED_RESPONSES_TOTAL.labels(endpoint=endpoint).inc()
 
 
@@ -129,4 +189,46 @@ def record_auth_result(*, result: str) -> None:
 
 
 def record_rate_limited(*, endpoint: str) -> None:
+    endpoint = normalize_endpoint(endpoint)
     RATE_LIMIT_TOTAL.labels(endpoint=endpoint).inc()
+
+
+def record_admission_rejection(*, reason: str, operation: str) -> None:
+    ADMISSION_REJECTIONS_TOTAL.labels(reason=reason, operation=operation).inc()
+
+
+def set_admission_inflight_units(*, scope: str, operation: str, units: int) -> None:
+    ADMISSION_INFLIGHT_UNITS.labels(scope=scope, operation=operation).set(units)
+
+
+def inc_provider_inflight_call(*, provider: str, operation: str) -> None:
+    PROVIDER_INFLIGHT_CALLS.labels(provider=provider, operation=operation).inc()
+
+
+def dec_provider_inflight_call(*, provider: str, operation: str) -> None:
+    PROVIDER_INFLIGHT_CALLS.labels(provider=provider, operation=operation).dec()
+
+
+def record_provider_pool_timeout(*, provider: str, operation: str) -> None:
+    PROVIDER_POOL_TIMEOUTS_TOTAL.labels(provider=provider, operation=operation).inc()
+
+
+def record_provider_transport_recycle(*, provider: str, reason: str) -> None:
+    PROVIDER_TRANSPORT_RECYCLES_TOTAL.labels(provider=provider, reason=reason).inc()
+
+
+def set_provider_circuit_state(*, provider: str, state: str) -> None:
+    state_value = {"closed": 0, "half_open": 1, "open": 2}.get(state, 0)
+    PROVIDER_CIRCUIT_STATE.labels(provider=provider).set(state_value)
+
+
+def record_provider_circuit_transition(*, provider: str, state: str) -> None:
+    PROVIDER_CIRCUIT_TRANSITIONS_TOTAL.labels(provider=provider, state=state).inc()
+
+
+def set_process_close_wait_sockets(count: int) -> None:
+    PROCESS_CLOSE_WAIT_SOCKETS.set(count)
+
+
+def normalize_endpoint(endpoint: str) -> str:
+    return endpoint if endpoint in _KNOWN_ENDPOINTS else "/unknown"

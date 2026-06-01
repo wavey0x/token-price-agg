@@ -25,6 +25,39 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 "[concurrency]",
                 "provider_fanout_per_request = 5",
                 "provider_global_limit = 99",
+                "provider_global_units = 42",
+                "provider_per_principal_units = 7",
+                "provider_principal_limiter_idle_ttl_s = 321",
+                "provider_principal_limiter_max_entries = 1234",
+                "provider_per_provider_units = 11",
+                "vault_global_units = 13",
+                "admission_acquire_timeout_ms = 9",
+                "",
+                "[transport]",
+                "provider_pool_timeout_ms = 20",
+                "provider_connect_timeout_ms = 300",
+                "provider_read_timeout_ms = 700",
+                "provider_write_timeout_ms = 400",
+                "provider_max_connections_per_provider = 17",
+                "provider_max_keepalive_connections_per_provider = 3",
+                "provider_keepalive_expiry_s = 1.5",
+                "provider_client_ttl_s = 60",
+                "provider_client_max_requests = 1000",
+                "provider_recycle_pool_timeout_threshold = 4",
+                "provider_recycle_window_s = 12",
+                "",
+                "[circuit_breakers]",
+                "failure_window_s = 10",
+                "failure_threshold = 3",
+                "open_duration_s = 4",
+                "half_open_probe_count = 1",
+                "",
+                "[vault]",
+                "positive_cache_ttl_s = 15",
+                "negative_cache_ttl_s = 90",
+                "",
+                "[readiness]",
+                "close_wait_ready_threshold = 12",
                 "",
                 "[providers]",
                 'enabled = ["curve", "defillama"]',
@@ -58,6 +91,31 @@ def test_settings_loads_toml_when_env_overrides_absent(
         "PROVIDER_HTTP_TRUST_ENV",
         "PROVIDER_FANOUT_PER_REQUEST",
         "PROVIDER_GLOBAL_LIMIT",
+        "PROVIDER_GLOBAL_UNITS",
+        "PROVIDER_PER_PRINCIPAL_UNITS",
+        "PROVIDER_PRINCIPAL_LIMITER_IDLE_TTL_S",
+        "PROVIDER_PRINCIPAL_LIMITER_MAX_ENTRIES",
+        "PROVIDER_PER_PROVIDER_UNITS",
+        "VAULT_GLOBAL_UNITS",
+        "ADMISSION_ACQUIRE_TIMEOUT_MS",
+        "PROVIDER_POOL_TIMEOUT_MS",
+        "PROVIDER_CONNECT_TIMEOUT_MS",
+        "PROVIDER_READ_TIMEOUT_MS",
+        "PROVIDER_WRITE_TIMEOUT_MS",
+        "PROVIDER_MAX_CONNECTIONS_PER_PROVIDER",
+        "PROVIDER_MAX_KEEPALIVE_CONNECTIONS_PER_PROVIDER",
+        "PROVIDER_KEEPALIVE_EXPIRY_S",
+        "PROVIDER_CLIENT_TTL_S",
+        "PROVIDER_CLIENT_MAX_REQUESTS",
+        "PROVIDER_RECYCLE_POOL_TIMEOUT_THRESHOLD",
+        "PROVIDER_RECYCLE_WINDOW_S",
+        "PROVIDER_CIRCUIT_FAILURE_WINDOW_S",
+        "PROVIDER_CIRCUIT_FAILURE_THRESHOLD",
+        "PROVIDER_CIRCUIT_OPEN_DURATION_S",
+        "PROVIDER_CIRCUIT_HALF_OPEN_PROBE_COUNT",
+        "VAULT_POSITIVE_CACHE_TTL_S",
+        "VAULT_NEGATIVE_CACHE_TTL_S",
+        "CLOSE_WAIT_READY_THRESHOLD",
         "CHAIN_IDS",
         "RPC_URLS",
         "PROVIDERS_ENABLED",
@@ -80,6 +138,34 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.provider_http_trust_env is True
     assert settings.provider_fanout_per_request == 5
     assert settings.provider_global_limit == 99
+    assert settings.provider_global_units == 42
+    assert settings.effective_provider_global_units == 42
+    assert settings.provider_per_principal_units == 7
+    assert settings.provider_principal_limiter_idle_ttl_s == 321
+    assert settings.provider_principal_limiter_max_entries == 1234
+    assert settings.provider_per_provider_units == 11
+    assert settings.vault_global_units == 13
+    assert settings.admission_acquire_timeout_ms == 9
+    assert settings.provider_pool_timeout_ms == 20
+    assert settings.provider_connect_timeout_ms == 300
+    assert settings.provider_read_timeout_ms == 700
+    assert settings.effective_provider_read_timeout_ms == 700
+    assert settings.provider_write_timeout_ms == 400
+    assert settings.provider_max_connections_per_provider == 17
+    assert settings.effective_provider_max_connections_per_provider == 17
+    assert settings.provider_max_keepalive_connections_per_provider == 3
+    assert settings.provider_keepalive_expiry_s == 1.5
+    assert settings.provider_client_ttl_s == 60
+    assert settings.provider_client_max_requests == 1000
+    assert settings.provider_recycle_pool_timeout_threshold == 4
+    assert settings.provider_recycle_window_s == 12
+    assert settings.provider_circuit_failure_window_s == 10
+    assert settings.provider_circuit_failure_threshold == 3
+    assert settings.provider_circuit_open_duration_s == 4
+    assert settings.provider_circuit_half_open_probe_count == 1
+    assert settings.vault_positive_cache_ttl_s == 15
+    assert settings.vault_negative_cache_ttl_s == 90
+    assert settings.close_wait_ready_threshold == 12
     assert settings.chain_ids == [1, 10]
     assert settings.rpc_urls == ["https://rpc.1.example", "https://rpc.10.example"]
     assert settings.providers_enabled == ["curve", "defillama"]

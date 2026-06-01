@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from token_price_agg.api.routes.aggregate_utils import (
     aggregate_with_provider_order,
+    get_principal_id,
     get_request_id,
     metadata_for_address,
 )
@@ -113,6 +114,7 @@ async def _handle_quote_request(
             provider_ids=payload.providers,
             use_underlying=payload.use_underlying,
             timeout_ms=timeout_ms,
+            principal_id=get_principal_id(request),
         ),
         requested_provider_ids=payload.providers,
         default_priority=settings.quote_provider_priority,

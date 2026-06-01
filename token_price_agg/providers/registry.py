@@ -26,36 +26,60 @@ class Operation(str, Enum):
 class ProviderRegistry:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._http_client = HttpClient(
-            timeout_ms=settings.provider_request_timeout_ms,
-            max_retries=settings.provider_max_retries,
-            trust_env=settings.provider_http_trust_env,
-            max_connections=settings.provider_global_limit,
-            max_keepalive_connections=min(20, settings.provider_global_limit),
-            keepalive_expiry_s=5.0,
-        )
+        self._http_clients: dict[str, HttpClient] = {}
         self._plugins = self._build_plugins()
         self._warn_invalid_priority_entries()
         self._sync_provider_availability_metrics()
+
+    def _new_http_client(self, *, provider_id: str) -> HttpClient:
+        client = HttpClient(
+            timeout_ms=self._settings.provider_request_timeout_ms,
+            max_retries=self._settings.provider_max_retries,
+            trust_env=self._settings.provider_http_trust_env,
+            max_connections=self._settings.effective_provider_max_connections_per_provider,
+            max_keepalive_connections=(
+                self._settings.provider_max_keepalive_connections_per_provider
+            ),
+            keepalive_expiry_s=self._settings.provider_keepalive_expiry_s,
+            pool_timeout_ms=self._settings.provider_pool_timeout_ms,
+            connect_timeout_ms=self._settings.provider_connect_timeout_ms,
+            read_timeout_ms=self._settings.effective_provider_read_timeout_ms,
+            write_timeout_ms=self._settings.provider_write_timeout_ms,
+            client_ttl_s=self._settings.provider_client_ttl_s,
+            client_max_requests=self._settings.provider_client_max_requests,
+            recycle_pool_timeout_threshold=(
+                self._settings.provider_recycle_pool_timeout_threshold
+            ),
+            recycle_window_s=self._settings.provider_recycle_window_s,
+            provider_id=provider_id,
+        )
+        self._http_clients[provider_id] = client
+        return client
 
     def _build_plugins(self) -> dict[str, ProviderPlugin]:
         plugins: dict[str, ProviderPlugin] = {}
         enabled = set(self._settings.providers_enabled or [])
 
         if DefiLlamaProvider.id in enabled:
-            plugins[DefiLlamaProvider.id] = DefiLlamaProvider(client=self._http_client)
+            plugins[DefiLlamaProvider.id] = DefiLlamaProvider(
+                client=self._new_http_client(provider_id=DefiLlamaProvider.id)
+            )
 
         if CurveProvider.id in enabled:
-            plugins[CurveProvider.id] = CurveProvider(client=self._http_client)
+            plugins[CurveProvider.id] = CurveProvider(
+                client=self._new_http_client(provider_id=CurveProvider.id)
+            )
 
         if OdosProvider.id in enabled:
-            plugins[OdosProvider.id] = OdosProvider(client=self._http_client)
+            plugins[OdosProvider.id] = OdosProvider(
+                client=self._new_http_client(provider_id=OdosProvider.id)
+            )
 
         if LiFiProvider.id in enabled:
             lifi_available = bool(self._settings.lifi_api_key)
             lifi_reason = None if lifi_available else "missing_api_key"
             plugins[LiFiProvider.id] = LiFiProvider(
-                client=self._http_client,
+                client=self._new_http_client(provider_id=LiFiProvider.id),
                 api_key=self._settings.lifi_api_key,
                 deny_exchanges=self._settings.lifi_deny_exchanges,
                 available=lifi_available,
@@ -66,7 +90,7 @@ class ProviderRegistry:
             enso_available = bool(self._settings.enso_api_key)
             enso_reason = None if enso_available else "missing_api_key"
             plugins[EnsoProvider.id] = EnsoProvider(
-                client=self._http_client,
+                client=self._new_http_client(provider_id=EnsoProvider.id),
                 api_key=self._settings.enso_api_key,
                 available=enso_available,
                 unavailable_reason=enso_reason,
@@ -133,7 +157,46 @@ class ProviderRegistry:
         return plugin.supports_quote
 
     async def aclose(self) -> None:
-        await self._http_client.close()
+        for client in self._http_clients.values():
+            await client.close()
+
+    def available_operation_count(
+        self,
+        *,
+        operation: Operation,
+        chain_id: int | None = None,
+    ) -> int:
+        return len(self.available_provider_ids(operation=operation, chain_id=chain_id))
+
+    def available_provider_ids(
+        self,
+        *,
+        operation: Operation,
+        chain_id: int | None = None,
+    ) -> list[str]:
+        provider_ids: list[str] = []
+        for plugin in self._plugins.values():
+            if not plugin.available:
+                continue
+            if chain_id is not None and chain_id not in plugin.supported_chains:
+                continue
+            if not self._supports(plugin, operation):
+                continue
+            provider_ids.append(plugin.id)
+        return provider_ids
+
+    def transport_unhealthy(self) -> bool:
+        return any(
+            client.recent_pool_timeout_count() > 0
+            or client.recently_recycled_due_to_pool_timeout()
+            for client in self._http_clients.values()
+        )
+
+    async def recycle_transports(self, *, reason: str) -> None:
+        for client in self._http_clients.values():
+            if client.recently_recycled(reason=reason):
+                continue
+            await client.recycle(reason=reason)
 
     def _sync_provider_availability_metrics(self) -> None:
         for provider_id, plugin in self._plugins.items():
