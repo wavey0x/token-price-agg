@@ -25,6 +25,8 @@ The service must:
 - Provider API-key auth for upstreams that require it:
   - `LIFI_API_KEY`
   - `ENSO_API_KEY`
+- Optional Odos authenticated access:
+  - `ODOS_API_KEY`
 - Parallel fan-out across providers.
 - Standard normalized response shape with per-provider status.
 - Vault-aware conversion (`use_underlying`) using web3.py:
@@ -69,6 +71,10 @@ Provider IDs are stable short strings used in request params and responses.
   - Price docs: https://docs.enso.build/api-reference/tokens/token-price
   - Quote docs: https://docs.enso.build/api-reference/defi-shortcuts/optimal-route-between-two-tokens
   - Auth: requires `ENSO_API_KEY` from environment
+- `odos`
+  - Price docs: https://docs.odos.xyz/api/pricing/
+  - Quote docs: https://docs.odos.xyz/api/sor/quote
+  - Auth: optional `ODOS_API_KEY`; no-key public access remains available within upstream limits
 
 ## 6. High-Level Architecture
 ```mermaid
@@ -120,11 +126,14 @@ graph TD
 ### 7.2.2 Provider Credential Config (MVP)
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
+- `ODOS_API_KEY` (optional; enables Odos authenticated/enterprise API access)
+- `ODOS_BASE_URL` (optional; overrides Odos public/enterprise base URL selection)
 
 Startup behavior:
 - Missing required API key does not crash the service.
 - Provider is marked disabled/unavailable with reason `missing_api_key`.
 - Requests that explicitly target a disabled provider return `invalid_request` for that provider.
+- Missing optional `ODOS_API_KEY` does not disable `odos`; it uses the Odos public API host.
 
 ### 7.3 Price Request
 `GET /v1/price` query params:
@@ -520,6 +529,7 @@ token_price_agg/
 - Verify partial responses and deterministic sorting.
 - Verify `use_underlying=true` workflows with mocked web3 calls.
 - Verify provider enable/disable behavior when `LIFI_API_KEY` / `ENSO_API_KEY` are present or missing.
+- Verify Odos host/header behavior when `ODOS_API_KEY` is present or missing.
 
 ### 17.3 Chain-aware Tests
 - Forked mainnet tests (anvil or equivalent) for:

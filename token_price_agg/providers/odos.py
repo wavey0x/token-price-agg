@@ -15,6 +15,7 @@ from token_price_agg.providers.parsing import decimal_to_bps, parse_decimal, par
 from token_price_agg.providers.utils import status_from_http_code
 
 _ODOS_NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
+_DEFAULT_ODOS_BASE_URL = "https://api.odos.xyz"
 _UNSUPPORTED_TOKEN_DETAIL_MARKERS = (
     "no price available for this chain and address",
     "routing unavailable for token",
@@ -27,18 +28,35 @@ class OdosProvider(ProviderPlugin):
     supports_price = True
     supports_quote = True
 
-    def __init__(self, *, client: HttpClient, available: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        client: HttpClient,
+        api_key: str | None = None,
+        base_url: str = _DEFAULT_ODOS_BASE_URL,
+        available: bool = True,
+    ) -> None:
         super().__init__(available=available)
         self._client = client
+        self._api_key = _normalize_optional_string(api_key)
+        self._base_url = base_url.rstrip("/")
+
+    def _headers(self, *, json_body: bool = False) -> dict[str, str]:
+        headers = {"accept": "application/json"}
+        if json_body:
+            headers["content-type"] = "application/json"
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        return headers
 
     async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
         call = await timed_get(
             client=self._client,
             url=(
-                f"https://api.odos.xyz/pricing/token/{req.chain_id}/"
+                f"{self._base_url}/pricing/token/{req.chain_id}/"
                 f"{_to_odos_token_address(req.token.address)}"
             ),
-            headers={"accept": "application/json"},
+            headers=self._headers(),
             timeout_ms=req.timeout_ms,
             provider_id=self.id,
             operation="price",
@@ -117,11 +135,8 @@ class OdosProvider(ProviderPlugin):
     async def get_quote(self, req: ProviderQuoteRequest) -> QuoteResult:
         call = await timed_post(
             client=self._client,
-            url="https://api.odos.xyz/sor/quote/v3",
-            headers={
-                "accept": "application/json",
-                "content-type": "application/json",
-            },
+            url=f"{self._base_url}/sor/quote/v3",
+            headers=self._headers(json_body=True),
             json=_build_quote_payload(req),
             timeout_ms=req.timeout_ms,
             provider_id=self.id,
@@ -221,6 +236,13 @@ def _to_odos_token_address(address: str) -> str:
     if address.lower() == NATIVE_TOKEN_ALIAS.lower():
         return _ODOS_NATIVE_TOKEN_ADDRESS
     return address
+
+
+def _normalize_optional_string(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 def _build_quote_payload(req: ProviderQuoteRequest) -> dict[str, object]:

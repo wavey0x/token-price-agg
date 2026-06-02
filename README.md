@@ -59,7 +59,8 @@ cp .env.example .env
 Minimum fields to review in `.env`:
 
 - `LIFI_API_KEY` and `ENSO_API_KEY` (optional, required only if enabling those providers)
-- `odos` does not require an API key
+- `ODOS_API_KEY` (optional; enables Odos authenticated/enterprise API access)
+- `odos` remains available without an API key, using Odos public API limits
 
 Notes:
 - `APP_VERSION` is optional (default is `0.1.0`).
@@ -281,6 +282,8 @@ Key sections:
   - `quote_priority = [...]`
 - `[providers.lifi]`
   - `deny_exchanges = [...]` (sent to Li.Fi quote requests as `denyExchanges`)
+- `[providers.odos]`
+  - `base_url = "..."` (optional; defaults to Odos enterprise host when `ODOS_API_KEY` is set, otherwise public host)
 - `[security]`
   - `api_key_auth_enabled = false`
   - `api_key_db_path = "data/api_keys.sqlite3"`

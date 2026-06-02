@@ -72,7 +72,9 @@ class ProviderRegistry:
 
         if OdosProvider.id in enabled:
             plugins[OdosProvider.id] = OdosProvider(
-                client=self._new_http_client(provider_id=OdosProvider.id)
+                client=self._new_http_client(provider_id=OdosProvider.id),
+                api_key=self._settings.odos_api_key,
+                base_url=self._settings.effective_odos_base_url,
             )
 
         if LiFiProvider.id in enabled:

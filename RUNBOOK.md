@@ -25,6 +25,8 @@ Required/important env vars:
 - `RPC_URLS` (enables best-effort `use_underlying=true` vault resolution)
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
+- `ODOS_API_KEY` (optional; enables Odos authenticated/enterprise API access)
+- `ODOS_BASE_URL` (optional; overrides Odos public/enterprise base URL selection)
 - `TOKEN_METADATA_DB_PATH` (default: `data/token_metadata.sqlite3`)
 - `PROVIDER_REQUEST_TIMEOUT_MS` (default: `800`)
 - `PROVIDER_MAX_RETRIES` (default: `0`)

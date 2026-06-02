@@ -469,6 +469,37 @@ async def test_odos_price_success() -> None:
 
 
 @pytest.mark.asyncio
+async def test_odos_price_uses_api_key_and_base_url() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = OdosProvider(
+        client=client,
+        api_key="odos-secret",
+        base_url="https://enterprise-api.odos.xyz",
+    )
+
+    req = ProviderPriceRequest(
+        chain_id=1,
+        token=TokenRef(chain_id=1, address="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+    )
+
+    def _price_handler(request: Request) -> Response:
+        assert request.headers["x-api-key"] == "odos-secret"
+        return Response(200, json={"currencyId": "USD", "price": 1.002})
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(
+            "https://enterprise-api.odos.xyz/pricing/token/1/"
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        ).mock(side_effect=_price_handler)
+        result = await provider.get_price(req)
+
+    await client.close()
+
+    assert result.status == ProviderStatus.OK
+    assert result.price_usd == Decimal("1.002")
+
+
+@pytest.mark.asyncio
 async def test_odos_quote_success() -> None:
     client = HttpClient(timeout_ms=500, max_retries=0)
     provider = OdosProvider(client=client)
@@ -509,6 +540,38 @@ async def test_odos_quote_success() -> None:
         "priceImpact": "0.001",
         "percentDiff": -0.1,
     }
+
+
+@pytest.mark.asyncio
+async def test_odos_quote_uses_api_key_and_base_url() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = OdosProvider(
+        client=client,
+        api_key="odos-secret",
+        base_url="https://enterprise-api.odos.xyz/",
+    )
+    req = ProviderQuoteRequest(
+        chain_id=1,
+        token_in=TokenRef(chain_id=1, address="0xD533a949740bb3306d119CC777fa900bA034cd52"),
+        token_out=TokenRef(chain_id=1, address="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        amount_in=10**18,
+    )
+
+    def _quote_handler(request: Request) -> Response:
+        assert request.headers["x-api-key"] == "odos-secret"
+        assert request.headers["content-type"] == "application/json"
+        return Response(200, json={"outAmounts": ["2125893537"]})
+
+    with respx.mock(assert_all_called=True) as router:
+        router.post("https://enterprise-api.odos.xyz/sor/quote/v3").mock(
+            side_effect=_quote_handler
+        )
+        result = await provider.get_quote(req)
+
+    await client.close()
+
+    assert result.status == ProviderStatus.OK
+    assert result.amount_out == 2125893537
 
 
 @pytest.mark.asyncio

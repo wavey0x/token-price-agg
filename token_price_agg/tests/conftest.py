@@ -42,6 +42,8 @@ def _set_default_env(monkeypatch: pytest.MonkeyPatch) -> None:
     # Explicitly override .env values so tests can assert missing-key behavior.
     monkeypatch.setenv("LIFI_API_KEY", "")
     monkeypatch.setenv("ENSO_API_KEY", "")
+    monkeypatch.setenv("ODOS_API_KEY", "")
+    monkeypatch.setenv("ODOS_BASE_URL", "")
 
 
 @pytest.fixture(autouse=True)
