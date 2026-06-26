@@ -31,9 +31,7 @@ class RpcStub:
             return [
                 (
                     True,
-                    _WEB3.codec.encode(
-                        ["address"], ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
-                    ),
+                    _WEB3.codec.encode(["address"], ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]),
                 ),
                 (True, _WEB3.codec.encode(["uint256"], [18])),
                 (True, _WEB3.codec.encode(["uint256"], [2 * 10**18])),
@@ -62,9 +60,7 @@ class Erc4626RpcStub:
             return [
                 (
                     True,
-                    _WEB3.codec.encode(
-                        ["address"], ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]
-                    ),
+                    _WEB3.codec.encode(["address"], ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]),
                 ),
                 (True, _WEB3.codec.encode(["uint256"], [18])),
             ]

@@ -373,10 +373,7 @@ def _auth_row_failure_reason(
 
 
 def _ensure_api_keys_columns(conn: sqlite3.Connection) -> None:
-    columns = {
-        str(row[1])
-        for row in conn.execute("PRAGMA table_info(api_keys)").fetchall()
-    }
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(api_keys)").fetchall()}
     if "rate_limit_rpm" not in columns:
         conn.execute(_SQL_ALTER_API_KEYS_ADD_RATE_LIMIT_RPM)
 

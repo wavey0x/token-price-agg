@@ -61,9 +61,7 @@ class TokenMetadataCache:
                 logo_status=(
                     str(row["logo_status"]) if row["logo_status"] is not None else "unknown"
                 ),
-                logo_source=(
-                    str(row["logo_source"]) if row["logo_source"] is not None else None
-                ),
+                logo_source=(str(row["logo_source"]) if row["logo_source"] is not None else None),
                 logo_checked_at=(
                     int(row["logo_checked_at"]) if row["logo_checked_at"] is not None else None
                 ),

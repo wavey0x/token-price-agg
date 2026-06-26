@@ -457,9 +457,9 @@ async def test_odos_price_success() -> None:
     )
 
     with respx.mock(assert_all_called=True) as router:
-        router.get("https://api.odos.xyz/pricing/token/1/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").mock(
-            return_value=Response(200, json={"currencyId": "USD", "price": 1.001})
-        )
+        router.get(
+            "https://api.odos.xyz/pricing/token/1/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        ).mock(return_value=Response(200, json={"currencyId": "USD", "price": 1.001}))
         result = await provider.get_price(req)
 
     await client.close()
@@ -563,9 +563,7 @@ async def test_odos_quote_uses_api_key_and_base_url() -> None:
         return Response(200, json={"outAmounts": ["2125893537"]})
 
     with respx.mock(assert_all_called=True) as router:
-        router.post("https://enterprise-api.odos.xyz/sor/quote/v3").mock(
-            side_effect=_quote_handler
-        )
+        router.post("https://enterprise-api.odos.xyz/sor/quote/v3").mock(side_effect=_quote_handler)
         result = await provider.get_quote(req)
 
     await client.close()
@@ -616,7 +614,9 @@ async def test_odos_price_unsupported_token_maps_to_unsupported_status() -> None
     )
 
     with respx.mock(assert_all_called=True) as router:
-        router.get("https://api.odos.xyz/pricing/token/1/0x1111111111111111111111111111111111111111").mock(
+        router.get(
+            "https://api.odos.xyz/pricing/token/1/0x1111111111111111111111111111111111111111"
+        ).mock(
             return_value=Response(
                 400,
                 json={"detail": "No price available for this chain and address"},
@@ -648,8 +648,7 @@ async def test_odos_quote_unsupported_token_maps_to_unsupported_status() -> None
                 400,
                 json={
                     "detail": (
-                        "Routing unavailable for token "
-                        "[0x1111111111111111111111111111111111111111]"
+                        "Routing unavailable for token [0x1111111111111111111111111111111111111111]"
                     ),
                     "errorCode": 4016,
                 },

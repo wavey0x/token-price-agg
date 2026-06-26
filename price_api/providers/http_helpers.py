@@ -272,8 +272,7 @@ def timeout_error_info(*, call: HttpCallResult, provider_name: str) -> ErrorInfo
         return ErrorInfo(
             code=error_code,
             message=(
-                f"{provider_name} internal transport timed out before acquiring "
-                "outbound capacity"
+                f"{provider_name} internal transport timed out before acquiring outbound capacity"
             ),
         )
     return ErrorInfo(code=error_code, message=f"{provider_name} request timed out")

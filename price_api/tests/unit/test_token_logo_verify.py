@@ -34,8 +34,7 @@ def test_build_logo_candidates_order_and_dedupe() -> None:
         "smoldapp",
     ]
     assert (
-        candidates[1].url
-        == "https://raw.githubusercontent.com/yearn/tokenAssets/main/"
+        candidates[1].url == "https://raw.githubusercontent.com/yearn/tokenAssets/main/"
         f"tokens/1/{USDC.lower()}/logo-128.png"
     )
     assert candidates[3].url == f"https://assets.smold.app/api/token/1/{USDC.lower()}/logo-128.png"
@@ -306,9 +305,7 @@ async def test_verify_candidates_rejects_declared_oversized_logo() -> None:
             )
         )
 
-        result = await logo_verifier.verify_candidates(
-            [LogoCandidate(source="provider", url=url)]
-        )
+        result = await logo_verifier.verify_candidates([LogoCandidate(source="provider", url=url)])
 
     assert result.logo_status == "invalid"
     assert result.attempts[-1].method == "GET"
@@ -322,9 +319,7 @@ async def test_verify_candidates_sniffs_get_body_without_content_type() -> None:
         router.head(url).mock(return_value=Response(405))
         router.get(url).mock(return_value=Response(200, content=b"\x89PNG\r\n\x1a\nrest"))
 
-        result = await logo_verifier.verify_candidates(
-            [LogoCandidate(source="provider", url=url)]
-        )
+        result = await logo_verifier.verify_candidates([LogoCandidate(source="provider", url=url)])
 
     assert result.logo_status == "valid"
     assert result.logo_url == url

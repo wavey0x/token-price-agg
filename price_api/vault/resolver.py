@@ -266,9 +266,7 @@ def _vault_context(vault: _VaultInfo, block_number: int) -> VaultContext:
     )
 
 
-def _resolved_vault_type(
-    *, vault_in: _VaultInfo | None, vault_out: _VaultInfo | None
-) -> str:
+def _resolved_vault_type(*, vault_in: _VaultInfo | None, vault_out: _VaultInfo | None) -> str:
     if vault_in is None and vault_out is None:
         return "unknown"
     if vault_in is not None and vault_out is not None:

@@ -47,9 +47,7 @@ class ProviderRegistry:
             write_timeout_ms=self._settings.provider_write_timeout_ms,
             client_ttl_s=self._settings.provider_client_ttl_s,
             client_max_requests=self._settings.provider_client_max_requests,
-            recycle_pool_timeout_threshold=(
-                self._settings.provider_recycle_pool_timeout_threshold
-            ),
+            recycle_pool_timeout_threshold=(self._settings.provider_recycle_pool_timeout_threshold),
             recycle_window_s=self._settings.provider_recycle_window_s,
             provider_id=provider_id,
         )
@@ -189,8 +187,7 @@ class ProviderRegistry:
 
     def transport_unhealthy(self) -> bool:
         return any(
-            client.recent_pool_timeout_count() > 0
-            or client.recently_recycled_due_to_pool_timeout()
+            client.recent_pool_timeout_count() > 0 or client.recently_recycled_due_to_pool_timeout()
             for client in self._http_clients.values()
         )
 

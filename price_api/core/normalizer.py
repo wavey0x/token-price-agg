@@ -45,12 +45,16 @@ def normalize_quote_request(
     token_out_ref = TokenRef(chain_id=chain_id, address=token_out)
     token_in_ref, original_in = _apply_remap(chain_id, token_in_ref)
     token_out_ref, original_out = _apply_remap(chain_id, token_out_ref)
-    return ProviderQuoteRequest(
-        chain_id=chain_id,
-        token_in=token_in_ref,
-        token_out=token_out_ref,
-        amount_in=parsed_amount_in,
-    ), original_in, original_out
+    return (
+        ProviderQuoteRequest(
+            chain_id=chain_id,
+            token_in=token_in_ref,
+            token_out=token_out_ref,
+            amount_in=parsed_amount_in,
+        ),
+        original_in,
+        original_out,
+    )
 
 
 def _status_rank(status: ProviderStatus) -> int:

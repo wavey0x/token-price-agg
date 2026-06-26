@@ -58,9 +58,7 @@ class AnonymousRateLimiter:
     def _cleanup(self, *, now: int, min_interval_seconds: int) -> None:
         cutoff = now - max(_RETENTION_SECONDS, min_interval_seconds * 3)
         stale_keys = [
-            key
-            for key, (window_start, _) in self._windows.items()
-            if window_start < cutoff
+            key for key, (window_start, _) in self._windows.items() if window_start < cutoff
         ]
         for key in stale_keys:
             self._windows.pop(key, None)

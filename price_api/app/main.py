@@ -318,9 +318,7 @@ def _record_auth_failure_metrics(
     if not metrics_enabled:
         return
     result = (
-        failure_reason.value
-        if failure_reason is not None
-        else AuthFailureReason.INVALID_KEY.value
+        failure_reason.value if failure_reason is not None else AuthFailureReason.INVALID_KEY.value
     )
     record_auth_result(result=result)
 

@@ -117,9 +117,7 @@ def _handle_list(args: argparse.Namespace, store: ApiKeyStore) -> int:
 
     for row in rows:
         status = "deleted" if row.revoked_at is not None else "active"
-        rate_limit = (
-            str(row.rate_limit_rpm) if row.rate_limit_rpm is not None else "default"
-        )
+        rate_limit = str(row.rate_limit_rpm) if row.rate_limit_rpm is not None else "default"
         print(
             " ".join(
                 [

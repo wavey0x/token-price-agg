@@ -158,9 +158,7 @@ class ProviderOperationRunner:
                 continue
             circuit_allowed_provider_ids.add(provider_id)
 
-            provider_reservation = await self._capacity.provider_limiter(
-                provider_id
-            ).try_acquire(
+            provider_reservation = await self._capacity.provider_limiter(provider_id).try_acquire(
                 units=1,
                 timeout_ms=self._settings.admission_acquire_timeout_ms,
             )

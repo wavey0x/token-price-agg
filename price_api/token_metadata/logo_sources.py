@@ -189,11 +189,7 @@ class TokenLogoSourceManager:
                 continue
 
             state = self._cache.get_logo_source_sync_state(source=source.id, chain_id=chain_id)
-            if (
-                not force
-                and state is not None
-                and now - state.synced_at < _SOURCE_REFRESH_SECONDS
-            ):
+            if not force and state is not None and now - state.synced_at < _SOURCE_REFRESH_SECONDS:
                 continue
 
             try:

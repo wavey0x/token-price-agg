@@ -98,9 +98,7 @@ class CircuitBreaker:
     def circuit_open_providers(self) -> set[str]:
         now = time.monotonic()
         return {
-            provider_id
-            for provider_id, open_until in self._open_until.items()
-            if now < open_until
+            provider_id for provider_id, open_until in self._open_until.items() if now < open_until
         }
 
     def _close(self, provider_id: str) -> None:

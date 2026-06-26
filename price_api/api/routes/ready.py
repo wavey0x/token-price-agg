@@ -21,12 +21,8 @@ async def ready(
     settings: Settings = Depends(get_settings),
 ) -> ReadyResponse | JSONResponse:
     available_count = registry.available_provider_count(chain_id=1)
-    price_providers = set(
-        registry.available_provider_ids(operation=Operation.PRICE, chain_id=1)
-    )
-    quote_providers = set(
-        registry.available_provider_ids(operation=Operation.QUOTE, chain_id=1)
-    )
+    price_providers = set(registry.available_provider_ids(operation=Operation.PRICE, chain_id=1))
+    quote_providers = set(registry.available_provider_ids(operation=Operation.QUOTE, chain_id=1))
     circuit_open = aggregator.circuit_open_providers()
     ready_price_providers = sorted(price_providers - circuit_open)
     ready_quote_providers = sorted(quote_providers - circuit_open)

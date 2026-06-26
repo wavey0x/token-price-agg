@@ -86,9 +86,7 @@ def test_authenticate_request_headers_bearer(tmp_path: Path) -> None:
     store = ApiKeyStore(db_path=str(tmp_path / "api_keys.sqlite3"))
     issued = store.issue_key(label="eve", now_ts=1)
 
-    result = store.authenticate_request_headers(
-        f"Bearer {issued.key}", None, now_ts=2
-    )
+    result = store.authenticate_request_headers(f"Bearer {issued.key}", None, now_ts=2)
     assert result.authenticated is True
     assert result.public_id == issued.public_id
 
@@ -106,9 +104,7 @@ def test_authenticate_request_headers_bearer_takes_precedence(tmp_path: Path) ->
     store = ApiKeyStore(db_path=str(tmp_path / "api_keys.sqlite3"))
     issued = store.issue_key(label="grace", now_ts=1)
 
-    result = store.authenticate_request_headers(
-        f"Bearer {issued.key}", "junk-key", now_ts=2
-    )
+    result = store.authenticate_request_headers(f"Bearer {issued.key}", "junk-key", now_ts=2)
     assert result.authenticated is True
     assert result.public_id == issued.public_id
 
@@ -117,9 +113,7 @@ def test_authenticate_request_headers_falls_back_to_x_api_key(tmp_path: Path) ->
     store = ApiKeyStore(db_path=str(tmp_path / "api_keys.sqlite3"))
     issued = store.issue_key(label="heidi", now_ts=1)
 
-    result = store.authenticate_request_headers(
-        "Token not-bearer", issued.key, now_ts=2
-    )
+    result = store.authenticate_request_headers("Token not-bearer", issued.key, now_ts=2)
     assert result.authenticated is True
     assert result.public_id == issued.public_id
 

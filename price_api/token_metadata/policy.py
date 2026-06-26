@@ -31,9 +31,7 @@ def hints_from_refs(refs: list[TokenRef], *, chain_id: int) -> dict[str, TokenMe
     return out
 
 
-def collect_provider_logo_urls(
-    refs: list[TokenRef], *, chain_id: int
-) -> dict[str, list[str]]:
+def collect_provider_logo_urls(refs: list[TokenRef], *, chain_id: int) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for ref in refs:
         address = AddressValidator.normalize_address(ref.address)
