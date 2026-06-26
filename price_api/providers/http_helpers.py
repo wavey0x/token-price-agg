@@ -1,0 +1,320 @@
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass
+from typing import Literal
+
+import httpx
+
+from price_api.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from price_api.observability.metrics import record_provider_pool_timeout
+from price_api.providers.clients.http import HttpClient, HttpResponse, JsonBody, QueryParams
+from price_api.providers.utils import status_from_http_code
+
+_LOGGER = logging.getLogger("price_api.providers.transport")
+
+FailureReason = Literal["timeout", "http_error", "non_200", "invalid_json"]
+
+
+@dataclass(frozen=True, slots=True)
+class HttpCallResult:
+    latency_ms: int
+    response: HttpResponse | None = None
+    timeout: bool = False
+    timeout_error_code: ErrorCode | None = None
+    transport_error_type: str | None = None
+    http_error: httpx.HTTPError | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderTransportFailure:
+    reason: FailureReason
+    status: ProviderStatus
+    error_code: ErrorCode
+    message: str
+    latency_ms: int
+
+    def to_error_info(self) -> ErrorInfo:
+        return ErrorInfo(code=self.error_code, message=self.message)
+
+
+@dataclass(frozen=True, slots=True)
+class JsonTransportOutcome:
+    latency_ms: int
+    payload: dict[str, object] | None = None
+    failure: ProviderTransportFailure | None = None
+
+
+async def timed_get(
+    *,
+    client: HttpClient,
+    url: str,
+    params: QueryParams | None = None,
+    headers: dict[str, str] | None = None,
+    timeout_ms: int | None = None,
+    provider_id: str | None = None,
+    operation: str | None = None,
+) -> HttpCallResult:
+    started = time.perf_counter()
+    try:
+        response = await client.get(url=url, params=params, headers=headers, timeout_ms=timeout_ms)
+    except httpx.PoolTimeout as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        record_provider_pool_timeout(
+            provider=provider_id or "unknown",
+            operation=operation or "unknown",
+        )
+        await client.record_pool_timeout()
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=latency_ms,
+            timeout=True,
+            timeout_error_code=ErrorCode.INTERNAL_TRANSPORT_TIMEOUT,
+            transport_error_type=type(exc).__name__,
+        )
+    except httpx.TimeoutException as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=latency_ms,
+            timeout=True,
+            timeout_error_code=ErrorCode.TIMEOUT,
+            transport_error_type=type(exc).__name__,
+        )
+    except httpx.HTTPError as exc:
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            transport_error_type=type(exc).__name__,
+            http_error=exc,
+        )
+
+    return HttpCallResult(
+        latency_ms=int((time.perf_counter() - started) * 1000),
+        response=response,
+    )
+
+
+async def timed_post(
+    *,
+    client: HttpClient,
+    url: str,
+    json: JsonBody | None = None,
+    params: QueryParams | None = None,
+    headers: dict[str, str] | None = None,
+    timeout_ms: int | None = None,
+    provider_id: str | None = None,
+    operation: str | None = None,
+) -> HttpCallResult:
+    started = time.perf_counter()
+    try:
+        response = await client.post(
+            url=url,
+            json=json,
+            params=params,
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    except httpx.PoolTimeout as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        record_provider_pool_timeout(
+            provider=provider_id or "unknown",
+            operation=operation or "unknown",
+        )
+        await client.record_pool_timeout()
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=latency_ms,
+            timeout=True,
+            timeout_error_code=ErrorCode.INTERNAL_TRANSPORT_TIMEOUT,
+            transport_error_type=type(exc).__name__,
+        )
+    except httpx.TimeoutException as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=latency_ms,
+            timeout=True,
+            timeout_error_code=ErrorCode.TIMEOUT,
+            transport_error_type=type(exc).__name__,
+        )
+    except httpx.HTTPError as exc:
+        _log_transport_failure(
+            client=client,
+            exc=exc,
+            provider_id=provider_id,
+            operation=operation,
+            timeout_ms=timeout_ms,
+        )
+        return HttpCallResult(
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            transport_error_type=type(exc).__name__,
+            http_error=exc,
+        )
+
+    return HttpCallResult(
+        latency_ms=int((time.perf_counter() - started) * 1000),
+        response=response,
+    )
+
+
+def json_transport_outcome(
+    *,
+    call: HttpCallResult,
+    provider_name: str,
+    invalid_json_message: str = "Invalid JSON response",
+) -> JsonTransportOutcome:
+    if call.timeout:
+        error = timeout_error_info(call=call, provider_name=provider_name)
+        return JsonTransportOutcome(
+            latency_ms=call.latency_ms,
+            failure=ProviderTransportFailure(
+                reason="timeout",
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode(error.code),
+                message=error.message,
+                latency_ms=call.latency_ms,
+            ),
+        )
+
+    if call.http_error is not None:
+        return JsonTransportOutcome(
+            latency_ms=call.latency_ms,
+            failure=ProviderTransportFailure(
+                reason="http_error",
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.UPSTREAM_HTTP,
+                message=str(call.http_error),
+                latency_ms=call.latency_ms,
+            ),
+        )
+
+    response = call.response
+    if response is None:
+        return JsonTransportOutcome(
+            latency_ms=call.latency_ms,
+            failure=ProviderTransportFailure(
+                reason="http_error",
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.UPSTREAM_HTTP,
+                message=f"{provider_name} response missing",
+                latency_ms=call.latency_ms,
+            ),
+        )
+
+    failure = non_200_status(response=response, provider_name=provider_name)
+    if failure is not None:
+        status, error_code, message = failure
+        return JsonTransportOutcome(
+            latency_ms=call.latency_ms,
+            failure=ProviderTransportFailure(
+                reason="non_200",
+                status=status,
+                error_code=error_code,
+                message=message,
+                latency_ms=call.latency_ms,
+            ),
+        )
+
+    payload, invalid_json_error = expect_json_dict(
+        response=response,
+        invalid_json_message=invalid_json_message,
+    )
+    if payload is None:
+        return JsonTransportOutcome(
+            latency_ms=call.latency_ms,
+            failure=ProviderTransportFailure(
+                reason="invalid_json",
+                status=ProviderStatus.ERROR,
+                error_code=ErrorCode.UPSTREAM_PARSE,
+                message=str(invalid_json_error),
+                latency_ms=call.latency_ms,
+            ),
+        )
+
+    return JsonTransportOutcome(latency_ms=call.latency_ms, payload=payload)
+
+
+def timeout_error_info(*, call: HttpCallResult, provider_name: str) -> ErrorInfo:
+    error_code = call.timeout_error_code or ErrorCode.TIMEOUT
+    if error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT:
+        return ErrorInfo(
+            code=error_code,
+            message=(
+                f"{provider_name} internal transport timed out before acquiring "
+                "outbound capacity"
+            ),
+        )
+    return ErrorInfo(code=error_code, message=f"{provider_name} request timed out")
+
+
+def _log_transport_failure(
+    *,
+    client: HttpClient,
+    exc: httpx.HTTPError,
+    provider_id: str | None,
+    operation: str | None,
+    timeout_ms: int | None,
+) -> None:
+    _LOGGER.warning(
+        "provider_transport_failure",
+        extra={
+            "provider": provider_id or "unknown",
+            "operation": operation or "unknown",
+            "transport_error_type": type(exc).__name__,
+            "timeout_ms": timeout_ms if timeout_ms is not None else client.timeout_ms,
+            "provider_global_limit": client.max_connections,
+        },
+    )
+
+
+def non_200_status(
+    *,
+    response: HttpResponse,
+    provider_name: str,
+) -> tuple[ProviderStatus, ErrorCode, str] | None:
+    if response.status_code == 200:
+        return None
+    status, error_code = status_from_http_code(response.status_code)
+    return status, error_code, f"{provider_name} returned {response.status_code}"
+
+
+def expect_json_dict(
+    *,
+    response: HttpResponse,
+    invalid_json_message: str = "Invalid JSON response",
+) -> tuple[dict[str, object] | None, str | None]:
+    if isinstance(response.json_data, dict):
+        return response.json_data, None
+    return None, invalid_json_message

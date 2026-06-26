@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Project guidance for contributors working in `/Users/wavey/yearn/token-price-api`.
+Project guidance for contributors working in `/Users/wavey/yearn/price-api`.
 
 ## Core Goals
 

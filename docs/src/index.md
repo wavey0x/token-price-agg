@@ -1,4 +1,4 @@
-# Token Price Agg
+# Price API
 
 Ethereum token metadata, price, and quote API with plugin-style providers.
 
@@ -24,7 +24,7 @@ Ethereum token metadata, price, and quote API with plugin-style providers.
 Run the API:
 
 ```bash
-uvicorn token_price_agg.app.main:app --reload
+uvicorn price_api.app.main:app --reload
 ```
 
 Run docs server:

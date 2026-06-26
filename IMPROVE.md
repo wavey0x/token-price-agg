@@ -288,14 +288,14 @@ This keeps vault resolution explicit and observable without repeating known-nega
 Add low-cardinality metrics:
 
 ```text
-token_price_agg_admission_rejections_total{reason,operation}
-token_price_agg_admission_inflight_units{scope,operation}
-token_price_agg_provider_inflight_calls{provider,operation}
-token_price_agg_provider_pool_timeouts_total{provider,operation}
-token_price_agg_provider_transport_recycles_total{provider,reason}
-token_price_agg_provider_circuit_state{provider}
-token_price_agg_provider_circuit_transitions_total{provider,state}
-token_price_agg_process_close_wait_sockets
+price_api_admission_rejections_total{reason,operation}
+price_api_admission_inflight_units{scope,operation}
+price_api_provider_inflight_calls{provider,operation}
+price_api_provider_pool_timeouts_total{provider,operation}
+price_api_provider_transport_recycles_total{provider,reason}
+price_api_provider_circuit_state{provider}
+price_api_provider_circuit_transitions_total{provider,state}
+price_api_process_close_wait_sockets
 ```
 
 Do not label metrics with token address, request ID, raw URL, raw path, or raw exception message.
@@ -385,7 +385,6 @@ provider_recycle_window_s = 30
 
 [concurrency]
 provider_global_units = 80
-provider_per_principal_units = 20
 provider_per_provider_units = 20
 vault_global_units = 16
 admission_acquire_timeout_ms = 25
@@ -405,7 +404,7 @@ Tune these with production metrics. They are starting values, not guarantees.
 2. Split HTTP timeout config into pool/connect/read/write.
 3. Add bounded keepalive config.
 4. Add client recycling on TTL, max requests, and repeated `PoolTimeout`.
-5. Add global and per-principal weighted admission before fan-out.
+5. Add global weighted admission before fan-out.
 6. Add provider bulkheads and provider-level capacity failures.
 7. Add circuit breakers.
 8. Add vault positive and negative caches.

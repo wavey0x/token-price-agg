@@ -1,10 +1,10 @@
-# token-price-agg
+# price-api
 
 Ethereum token metadata, price, and quote API with plugin-style providers.
 
 ## Ubuntu Server Install (systemd)
 
-These steps assume Ubuntu 22.04+ and deploy to `/opt/token-price-agg`.
+These steps assume Ubuntu 22.04+ and deploy to `/opt/price-api`.
 
 ### 1) Install OS packages
 
@@ -28,8 +28,8 @@ uv --version
 sudo mkdir -p /opt
 sudo chown "$USER":"$USER" /opt
 cd /opt
-git clone <YOUR_REPO_URL> token-price-agg
-cd token-price-agg
+git clone <YOUR_REPO_URL> price-api
+cd price-api
 uv sync --frozen
 ```
 
@@ -80,28 +80,28 @@ Save the generated key securely. It is shown once at creation time.
 Use the provided unit:
 
 ```bash
-sudo cp deploy/systemd/token-price-agg.service /etc/systemd/system/token-price-agg.service
+sudo cp deploy/systemd/price-api.service /etc/systemd/system/price-api.service
 ```
 
 If needed, edit these fields in the unit file:
 
-- `WorkingDirectory=/opt/token-price-agg`
-- `EnvironmentFile=/opt/token-price-agg/.env`
-- `ExecStart=/opt/token-price-agg/.venv/bin/uvicorn ...`
+- `WorkingDirectory=/opt/price-api`
+- `EnvironmentFile=/opt/price-api/.env`
+- `ExecStart=/opt/price-api/.venv/bin/uvicorn ...`
 - `User=www-data` and `Group=www-data`
 
 Grant service user access to app files:
 
 ```bash
-sudo chown -R www-data:www-data /opt/token-price-agg
+sudo chown -R www-data:www-data /opt/price-api
 ```
 
 Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now token-price-agg
-sudo systemctl status token-price-agg
+sudo systemctl enable --now price-api
+sudo systemctl status price-api
 ```
 
 ### 7) Verify service
@@ -131,7 +131,7 @@ curl -s http://127.0.0.1:8000/metrics
 Logs:
 
 ```bash
-sudo journalctl -u token-price-agg -f
+sudo journalctl -u price-api -f
 ```
 
 ### 8) Optional: reverse proxy/firewall
@@ -143,7 +143,7 @@ sudo journalctl -u token-price-agg -f
 ## Local Run
 
 ```bash
-uvicorn token_price_agg.app.main:app --reload
+uvicorn price_api.app.main:app --reload
 ```
 
 ## Tests
@@ -259,9 +259,6 @@ Key sections:
   - `provider_fanout_per_request`
   - `provider_global_limit`
   - `provider_global_units`
-  - `provider_per_principal_units`
-  - `provider_principal_limiter_idle_ttl_s`
-  - `provider_principal_limiter_max_entries`
   - `provider_per_provider_units`
   - `vault_global_units`
   - `admission_acquire_timeout_ms`
@@ -303,8 +300,7 @@ Aggregate deadline behavior (no extra config knobs):
 
 Load shedding happens before provider fan-out. Each selected runnable provider costs one provider
 capacity unit, and `use_underlying=true` also reserves bounded vault resolution capacity. If global
-provider capacity is exhausted the API returns `503`; if one principal exhausts its concurrent
-provider capacity the API returns `429`. Per-provider capacity and open circuit breakers return
+provider capacity is exhausted the API returns `503`. Per-provider capacity and open circuit breakers return
 provider-level failures so other providers can still answer the aggregate request.
 
 ## API Key CLI
@@ -395,13 +391,13 @@ git rm --cached data/token_metadata.sqlite3
 Force-refresh a token logo on demand:
 
 ```bash
-uv run python -m token_price_agg.tools.verify_logo --chain-id 1 --token 0x22222222aEA0076fCA927a3f44dc0B4FdF9479D6
+uv run python -m price_api.tools.verify_logo --chain-id 1 --token 0x22222222aEA0076fCA927a3f44dc0B4FdF9479D6
 ```
 
 Refresh synced token-list sources on demand:
 
 ```bash
-uv run python -m token_price_agg.tools.refresh_logo_sources --chain-id 1
+uv run python -m price_api.tools.refresh_logo_sources --chain-id 1
 ```
 
 The logo verification command verifies candidates (`provider -> cached -> local_override -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) and persists:
@@ -411,7 +407,7 @@ The logo verification command verifies candidates (`provider -> cached -> local_
 ## Real Token Test Matrix
 
 Configurable token/pair fixtures are in:
-- `token_price_agg/tests/fixtures/ethereum_tokens.py`
+- `price_api/tests/fixtures/ethereum_tokens.py`
 
 This file defines:
 - `MAINNET_TOKENS`

@@ -1,0 +1,90 @@
+groups:
+  - name: price-api
+    rules:
+      - alert: PriceApiHigh5xxRatio
+        expr: |
+          (
+            sum(rate(price_api_http_requests_total{status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(price_api_http_requests_total[5m])), 1)
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api high 5xx ratio"
+          description: "5xx ratio has exceeded 2% over the last 10 minutes."
+
+      - alert: PriceApiPriceP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(price_api_http_request_latency_seconds_bucket{endpoint="/v1/price",method="GET"}[10m])
+            )
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api /v1/price p95 latency high"
+          description: "p95 latency for /v1/price is above 0.9s for 10m."
+
+      - alert: PriceApiQuoteP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(price_api_http_request_latency_seconds_bucket{endpoint="/v1/quote",method="GET"}[10m])
+            )
+          ) > 1.2
+        for: 10m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api /v1/quote p95 latency high"
+          description: "p95 latency for /v1/quote is above 1.2s for 10m."
+
+      - alert: PriceApiPartialResponsesHigh
+        expr: |
+          (
+            sum(rate(price_api_partial_responses_total[10m]))
+            /
+            clamp_min(
+              sum(rate(price_api_http_requests_total{endpoint=~"/v1/price|/v1/quote",method="GET"}[10m])),
+              1
+            )
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api partial response rate high"
+          description: "Partial response rate exceeded 20% over the last 10 minutes."
+
+      - alert: PriceApiProviderTimeoutSpike
+        expr: |
+          sum by (provider) (
+            rate(price_api_provider_calls_total{status="timeout"}[5m])
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api provider timeout spike"
+          description: "Provider {{ $labels.provider }} timeout rate exceeded threshold."
+
+      - alert: PriceApiProviderUnavailable
+        expr: price_api_provider_available == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api provider unavailable"
+          description: "Provider {{ $labels.provider }} has been unavailable for more than 15 minutes."

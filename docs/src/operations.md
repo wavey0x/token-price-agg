@@ -78,10 +78,10 @@ uv run --extra dev pytest
 
 ## Live Smoke
 
-Uses shared token matrix from `token_price_agg/tests/fixtures/ethereum_tokens.py`.
+Uses shared token matrix from `price_api/tests/fixtures/ethereum_tokens.py`.
 
 ```bash
-uv run python token_price_agg/tests/manual/smoke_get_live.py --base-url http://localhost:8000
+uv run python price_api/tests/manual/smoke_get_live.py --base-url http://localhost:8000
 ```
 
 ## Docs on Vercel
@@ -98,7 +98,7 @@ Runtime API process (`uvicorn`) is separate from docs hosting.
 
 Use dashboard JSON:
 
-- `deploy/monitoring/dashboards/token_price_agg_overview.json`
+- `deploy/monitoring/dashboards/price_api_overview.json`
 
 This dashboard is focused on downstream provider health (independent of top-level selection):
 
@@ -119,7 +119,7 @@ Prometheus scrape target for single-server local deployment:
 
 Validation checklist:
 
-1. Prometheus target is `UP` at `/targets` for `job="token-price-agg"`.
+1. Prometheus target is `UP` at `/targets` for `job="price-api"`.
 2. Import dashboard JSON into Grafana and select Prometheus datasource.
 3. Generate `/v1/price` and `/v1/quote` traffic and verify provider calls increment by `provider,operation,status`.
 4. Confirm any non-`ok` outcome increases failure % gauges.

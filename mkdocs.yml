@@ -1,7 +1,7 @@
-site_name: Token Price Agg Docs
+site_name: Price API Docs
 site_description: Ethereum token price and quote aggregation API
-site_url: https://token-price-agg.vercel.app
-repo_name: token-price-agg
+site_url: https://price-api.vercel.app
+repo_name: price-api
 docs_dir: docs/src
 site_dir: docs/site
 

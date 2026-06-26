@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "token-price-agg"
+name = "price-api"
 version = "0.1.0"
 description = "Ethereum token price/quote aggregator"
 readme = "README.md"
@@ -36,16 +36,16 @@ docs = [
 ]
 
 [project.scripts]
-api-key = "token_price_agg.tools.api_key:main"
+api-key = "price_api.tools.api_key:main"
 
 [tool.setuptools.packages.find]
-include = ["token_price_agg*"]
+include = ["price_api*"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-q --cov=token_price_agg --cov-report=term-missing"
+addopts = "-q --cov=price_api --cov-report=term-missing"
 asyncio_mode = "auto"
-testpaths = ["token_price_agg/tests"]
+testpaths = ["price_api/tests"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -54,7 +54,7 @@ warn_return_any = true
 warn_unused_configs = true
 plugins = []
 exclude = [
-  "token_price_agg/vault/abi",
+  "price_api/vault/abi",
 ]
 
 [[tool.mypy.overrides]]

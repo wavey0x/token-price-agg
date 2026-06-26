@@ -1,4 +1,4 @@
-# Ethereum Token Price Aggregator - SPEC
+# Ethereum Price API - SPEC
 
 Status: Draft v1
 Last Updated: 2026-03-04
@@ -466,7 +466,7 @@ OpenTelemetry hooks for provider fan-out span visibility.
 
 ## 16. Proposed Project Structure
 ```text
-token_price_agg/
+price_api/
   app/
     main.py
     config.py
