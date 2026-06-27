@@ -11,8 +11,8 @@ from price_api.app.config import Settings
 from price_api.core.circuit import CircuitBreaker
 from price_api.core.errors import (
     AdmissionRejectedError,
-    ErrorCode,
     ErrorInfo,
+    ErrorType,
     ProviderStatus,
 )
 from price_api.core.limits import CapacityLimiters, LimitReservation
@@ -301,7 +301,7 @@ class ProviderOperationRunner:
                         token=req.token,
                         latency_ms=elapsed_ms,
                         error=ErrorInfo(
-                            code=ErrorCode.INTERNAL,
+                            type=ErrorType.INTERNAL,
                             message=f"Provider execution failed: {type(exc).__name__}",
                         ),
                     )
@@ -347,7 +347,7 @@ class ProviderOperationRunner:
                         amount_in=req.amount_in,
                         latency_ms=elapsed_ms,
                         error=ErrorInfo(
-                            code=ErrorCode.INTERNAL,
+                            type=ErrorType.INTERNAL,
                             message=f"Provider execution failed: {type(exc).__name__}",
                         ),
                     )
@@ -430,7 +430,7 @@ class ProviderOperationRunner:
             token=req.token,
             latency_ms=deadline_ms,
             error=ErrorInfo(
-                code=ErrorCode.DEADLINE_EXCEEDED,
+                type=ErrorType.DEADLINE_EXCEEDED,
                 message="Provider exceeded aggregate deadline",
             ),
         )
@@ -452,7 +452,7 @@ class ProviderOperationRunner:
             amount_in=req.amount_in,
             latency_ms=deadline_ms,
             error=ErrorInfo(
-                code=ErrorCode.DEADLINE_EXCEEDED,
+                type=ErrorType.DEADLINE_EXCEEDED,
                 message="Provider exceeded aggregate deadline",
             ),
         )
@@ -472,7 +472,7 @@ class ProviderOperationRunner:
             token=req.token,
             latency_ms=0,
             error=ErrorInfo(
-                code=ErrorCode.INTERNAL,
+                type=ErrorType.INTERNAL,
                 message=f"Provider task failed: {type(exc).__name__}",
             ),
         )
@@ -494,7 +494,7 @@ class ProviderOperationRunner:
             amount_in=req.amount_in,
             latency_ms=0,
             error=ErrorInfo(
-                code=ErrorCode.INTERNAL,
+                type=ErrorType.INTERNAL,
                 message=f"Provider task failed: {type(exc).__name__}",
             ),
         )
@@ -553,7 +553,7 @@ def _static_error(*, plugin: object, reason: str) -> tuple[ProviderStatus, Error
         return (
             ProviderStatus.BAD_REQUEST,
             ErrorInfo(
-                code=ErrorCode.UNSUPPORTED_OPERATION,
+                type=ErrorType.UNSUPPORTED_OPERATION,
                 message="Provider does not support operation",
             ),
         )
@@ -561,7 +561,7 @@ def _static_error(*, plugin: object, reason: str) -> tuple[ProviderStatus, Error
         return (
             ProviderStatus.BAD_REQUEST,
             ErrorInfo(
-                code=ErrorCode.PROVIDER_UNAVAILABLE,
+                type=ErrorType.PROVIDER_UNAVAILABLE,
                 message=plugin.unavailable_reason or "Provider unavailable",
             ),
         )
@@ -569,7 +569,7 @@ def _static_error(*, plugin: object, reason: str) -> tuple[ProviderStatus, Error
         return (
             ProviderStatus.ERROR,
             ErrorInfo(
-                code=ErrorCode.PROVIDER_UNAVAILABLE,
+                type=ErrorType.PROVIDER_UNAVAILABLE,
                 message="Provider circuit is open",
             ),
         )
@@ -577,13 +577,13 @@ def _static_error(*, plugin: object, reason: str) -> tuple[ProviderStatus, Error
         return (
             ProviderStatus.ERROR,
             ErrorInfo(
-                code=ErrorCode.PROVIDER_UNAVAILABLE,
+                type=ErrorType.PROVIDER_UNAVAILABLE,
                 message="Provider capacity unavailable",
             ),
         )
     return (
         ProviderStatus.ERROR,
-        ErrorInfo(code=ErrorCode.PROVIDER_UNAVAILABLE, message="Provider unavailable"),
+        ErrorInfo(type=ErrorType.PROVIDER_UNAVAILABLE, message="Provider unavailable"),
     )
 
 

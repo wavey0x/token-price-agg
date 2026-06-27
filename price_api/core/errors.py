@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_serializer
 
 
 class ProviderStatus(str, Enum):
@@ -12,7 +12,7 @@ class ProviderStatus(str, Enum):
     BAD_REQUEST = "bad_request"
 
 
-class ErrorCode(str, Enum):
+class ErrorType(str, Enum):
     TIMEOUT = "TIMEOUT"
     RATE_LIMITED = "RATE_LIMITED"
     UPSTREAM_HTTP = "UPSTREAM_HTTP"
@@ -29,14 +29,25 @@ class ErrorCode(str, Enum):
 class ErrorInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    code: str
+    type: ErrorType
     message: str
+    code: int | None = None
     retry_after_ms: int | None = None
+
+    @model_serializer
+    def _serialize(self) -> dict[str, int | str]:
+        data: dict[str, int | str] = {"type": self.type.value}
+        if self.code is not None:
+            data["code"] = self.code
+        data["message"] = self.message
+        if self.retry_after_ms is not None:
+            data["retry_after_ms"] = self.retry_after_ms
+        return data
 
 
 class AggregatorError(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        self.code = code
+    def __init__(self, error_type: str, message: str) -> None:
+        self.type = error_type
         self.message = message
         super().__init__(message)
 
@@ -52,7 +63,7 @@ class UnsupportedOperationError(AggregatorError):
 class AdmissionRejectedError(AggregatorError):
     def __init__(
         self,
-        code: str,
+        error_type: str,
         message: str,
         *,
         status_code: int,
@@ -60,4 +71,4 @@ class AdmissionRejectedError(AggregatorError):
     ) -> None:
         self.status_code = status_code
         self.retry_after_seconds = retry_after_seconds
-        super().__init__(code, message)
+        super().__init__(error_type, message)

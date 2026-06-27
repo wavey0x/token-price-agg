@@ -109,7 +109,7 @@ def test_token_endpoint_invalid_address_returns_bad_request() -> None:
         )
 
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "INVALID_ADDRESS"
+    assert response.json()["detail"]["type"] == "INVALID_ADDRESS"
 
 
 def test_openapi_includes_token_endpoint() -> None:

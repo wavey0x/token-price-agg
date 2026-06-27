@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from price_api.app.config import Settings
-from price_api.core.errors import ErrorCode, ErrorInfo, InvalidRequestError, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, InvalidRequestError, ProviderStatus
 from price_api.core.limits import WeightedLimiter
 from price_api.core.models import (
     PriceResult,
@@ -72,7 +72,7 @@ class VaultUnderlyingService:
                 extra={
                     "chain_id": req.chain_id,
                     "token": req.token.address,
-                    "error_code": exc.code,
+                    "error_type": exc.type,
                 },
             )
             return ResolvedPriceRequest(request=req)
@@ -123,7 +123,7 @@ class VaultUnderlyingService:
                     "chain_id": req.chain_id,
                     "token_in": req.token_in.address,
                     "token_out": req.token_out.address,
-                    "error_code": exc.code,
+                    "error_type": exc.type,
                 },
             )
             return ResolvedQuoteRequest(request=req)
@@ -239,7 +239,7 @@ def _mark_quote_conversion_failure(result: QuoteResult) -> None:
     result.amount_out = None
     result.amount_out_min = None
     result.error = ErrorInfo(
-        code=ErrorCode.INVALID_VAULT_CONVERSION,
+        type=ErrorType.INVALID_VAULT_CONVERSION,
         message="Failed to convert output amount into vault share base units",
     )
 

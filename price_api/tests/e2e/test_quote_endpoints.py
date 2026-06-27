@@ -252,7 +252,7 @@ def test_quote_endpoint_curve_empty_list_maps_to_no_route() -> None:
     assert payload["quote"] is None
     assert payload["providers"]["curve"]["status"] == "no_route"
     assert payload["providers"]["curve"]["success"] is False
-    assert payload["providers"]["curve"]["error"]["code"] == "NO_ROUTE"
+    assert payload["providers"]["curve"]["error"]["type"] == "NO_ROUTE"
     assert payload["providers"]["curve"]["error"]["message"] == "No route found"
 
 
@@ -343,4 +343,4 @@ def test_quote_endpoint_deadline_exceeded_returns_timeout_and_fast_response(
     assert payload["quote"] is None
     assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["curve"]["success"] is False
-    assert payload["providers"]["curve"]["error"]["code"] == "DEADLINE_EXCEEDED"
+    assert payload["providers"]["curve"]["error"]["type"] == "DEADLINE_EXCEEDED"

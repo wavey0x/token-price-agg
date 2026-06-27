@@ -28,14 +28,15 @@
 | --- | --- |
 | `ok` | Success |
 | `no_route` | Token/pair not supported by this provider |
-| `error` | Transient failure — check `error.code` for detail |
+| `error` | Transient failure — check `error.type` for detail |
 | `bad_request` | Provider can't handle this request (unsupported operation, unavailable) |
 
-## Error Codes
+## Error Types
 
-When a provider fails, `error.code` gives the specific reason:
+When a provider fails, `error.type` gives the specific reason. `error.code` is reserved for the
+numeric upstream HTTP status when a non-success upstream HTTP response caused the provider failure.
 
-| Code | Description |
+| Type | Description |
 | --- | --- |
 | `TIMEOUT` | Upstream provider connect/read/write timed out |
 | `RATE_LIMITED` | Provider rate-limited the request |

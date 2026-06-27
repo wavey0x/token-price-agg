@@ -52,7 +52,7 @@ def test_auth_enabled_allows_missing_authorization_at_limited_rate(
     assert first.status_code == 200
     assert limited is not None
     assert limited.status_code == 429
-    assert limited.json()["detail"]["code"] == "RATE_LIMITED"
+    assert limited.json()["detail"]["type"] == "RATE_LIMITED"
     assert limited.headers["X-RateLimit-Limit"] == "1"
     assert limited.headers["X-RateLimit-Remaining"] == "0"
     assert "Retry-After" in limited.headers
@@ -132,7 +132,7 @@ def test_auth_enabled_invalid_authorization_header_is_unauthorized(
         response = client.get("/v1/health", headers={"Authorization": "Token not-bearer"})
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "UNAUTHORIZED"
+    assert response.json()["detail"]["type"] == "UNAUTHORIZED"
     assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
@@ -196,7 +196,7 @@ def test_rate_limit_returns_429_with_headers(
 
     assert fourth.status_code == 429
     payload = fourth.json()
-    assert payload["detail"]["code"] == "RATE_LIMITED"
+    assert payload["detail"]["type"] == "RATE_LIMITED"
     assert "Retry-After" in fourth.headers
     assert fourth.headers["X-RateLimit-Limit"] == "3"
     assert fourth.headers["X-RateLimit-Remaining"] == "0"

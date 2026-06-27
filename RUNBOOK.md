@@ -247,7 +247,7 @@ Useful fields:
 - `provider`
 - `operation`
 - `provider_status`
-- `error_code`
+- `error_type`
 
 Send `X-Request-ID` on test requests when tracing a single flow:
 

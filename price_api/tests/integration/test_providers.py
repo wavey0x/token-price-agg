@@ -9,7 +9,7 @@ import respx
 from httpx import Request, Response
 
 from price_api.app.config import Settings
-from price_api.core.errors import ErrorCode, ProviderStatus
+from price_api.core.errors import ErrorType, ProviderStatus
 from price_api.core.models import ProviderPriceRequest, ProviderQuoteRequest, TokenRef
 from price_api.core.provider_runner import ProviderOperationRunner
 from price_api.core.validator import NATIVE_TOKEN_ALIAS
@@ -82,10 +82,10 @@ async def test_provider_http_pool_timeout_maps_to_internal_transport_timeout() -
 
     assert first_result.response is not None
     assert second.timeout is True
-    assert second.timeout_error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT
+    assert second.timeout_error_type == ErrorType.INTERNAL_TRANSPORT_TIMEOUT
     assert second.transport_error_type == "PoolTimeout"
     assert transport.failure is not None
-    assert transport.failure.error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT
+    assert transport.failure.error_type == ErrorType.INTERNAL_TRANSPORT_TIMEOUT
     assert "internal transport" in transport.failure.message
 
 
@@ -108,10 +108,10 @@ async def test_provider_http_read_timeout_stays_provider_timeout() -> None:
         await server.wait_closed()
 
     assert call.timeout is True
-    assert call.timeout_error_code == ErrorCode.TIMEOUT
+    assert call.timeout_error_type == ErrorType.TIMEOUT
     assert call.transport_error_type == "ReadTimeout"
     assert transport.failure is not None
-    assert transport.failure.error_code == ErrorCode.TIMEOUT
+    assert transport.failure.error_type == ErrorType.TIMEOUT
 
 
 @pytest.mark.asyncio
@@ -233,7 +233,8 @@ async def test_curve_quote_empty_list_maps_to_no_route() -> None:
     assert result.status == ProviderStatus.NO_ROUTE
     assert result.amount_out is None
     assert result.error is not None
-    assert result.error.code == "NO_ROUTE"
+    assert result.error.type.value == "NO_ROUTE"
+    assert result.error.code is None
     assert result.error.message == "No route found"
 
 
@@ -260,7 +261,7 @@ async def test_lifi_unavailable_without_key() -> None:
     result = results[0]
     assert result.status == ProviderStatus.BAD_REQUEST
     assert result.error is not None
-    assert result.error.code == "PROVIDER_UNAVAILABLE"
+    assert result.error.type.value == "PROVIDER_UNAVAILABLE"
 
 
 @pytest.mark.asyncio
@@ -628,7 +629,8 @@ async def test_odos_price_unsupported_token_maps_to_unsupported_status() -> None
 
     assert result.status == ProviderStatus.NO_ROUTE
     assert result.error is not None
-    assert result.error.code == "NO_ROUTE"
+    assert result.error.type.value == "NO_ROUTE"
+    assert result.error.code == 400
 
 
 @pytest.mark.asyncio
@@ -660,5 +662,69 @@ async def test_odos_quote_unsupported_token_maps_to_unsupported_status() -> None
 
     assert result.status == ProviderStatus.NO_ROUTE
     assert result.error is not None
-    assert result.error.code == "NO_ROUTE"
-    assert "errorCode: 4016" in result.error.message
+    assert result.error.type.value == "NO_ROUTE"
+    assert result.error.code == 400
+    assert result.error.message == "No route found"
+
+
+@pytest.mark.asyncio
+async def test_odos_quote_http_500_exposes_status_and_compact_error_code_message() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = OdosProvider(client=client)
+    req = ProviderQuoteRequest(
+        chain_id=1,
+        token_in=TokenRef(chain_id=1, address="0xD533a949740bb3306d119CC777fa900bA034cd52"),
+        token_out=TokenRef(chain_id=1, address="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        amount_in=10**18,
+    )
+
+    with respx.mock(assert_all_called=True) as router:
+        router.post("https://api.odos.xyz/sor/quote/v3").mock(
+            return_value=Response(
+                500,
+                json={
+                    "detail": "Error getting quote, please try again",
+                    "traceId": None,
+                    "errorCode": 2999,
+                },
+            )
+        )
+        result = await provider.get_quote(req)
+
+    await client.close()
+
+    assert result.status == ProviderStatus.ERROR
+    assert result.error is not None
+    assert result.error.type == ErrorType.UPSTREAM_HTTP
+    assert result.error.code == 500
+    assert result.error.message == "Odos upstream error 2999"
+
+
+@pytest.mark.asyncio
+async def test_odos_quote_http_429_exposes_retry_after_hint() -> None:
+    client = HttpClient(timeout_ms=500, max_retries=0)
+    provider = OdosProvider(client=client)
+    req = ProviderQuoteRequest(
+        chain_id=1,
+        token_in=TokenRef(chain_id=1, address="0xD533a949740bb3306d119CC777fa900bA034cd52"),
+        token_out=TokenRef(chain_id=1, address="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        amount_in=10**18,
+    )
+
+    with respx.mock(assert_all_called=True) as router:
+        router.post("https://api.odos.xyz/sor/quote/v3").mock(
+            return_value=Response(
+                429,
+                headers={"Retry-After": "3"},
+                json={"detail": "Too many requests"},
+            )
+        )
+        result = await provider.get_quote(req)
+
+    await client.close()
+
+    assert result.status == ProviderStatus.ERROR
+    assert result.error is not None
+    assert result.error.type == ErrorType.RATE_LIMITED
+    assert result.error.code == 429
+    assert result.error.retry_after_ms == 3000

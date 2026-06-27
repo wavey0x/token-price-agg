@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from price_api.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -70,7 +70,7 @@ class CurveProvider(ProviderPlugin):
                 status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not supported"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="Token not supported"),
             )
 
         timestamp_val = get_first(payload, ["timestamp", "asOf"])
@@ -121,7 +121,7 @@ class CurveProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message=str(call.http_error)),
+                error=ErrorInfo(type=ErrorType.UPSTREAM_HTTP, message=str(call.http_error)),
             )
 
         response = call.response
@@ -133,20 +133,19 @@ class CurveProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=ErrorCode.UPSTREAM_HTTP, message="Curve response missing"),
+                error=ErrorInfo(type=ErrorType.UPSTREAM_HTTP, message="Curve response missing"),
             )
 
         status_failure = non_200_status(response=response, provider_name="Curve")
         if status_failure is not None:
-            status, error_code, message = status_failure
             return QuoteResult(
                 provider=self.id,
-                status=status,
+                status=status_failure.status,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=error_code, message=message),
+                error=status_failure.to_error_info(),
             )
 
         payload_obj = _extract_curve_quote_payload(response.json_data)
@@ -158,7 +157,7 @@ class CurveProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=call.latency_ms,
-                error=ErrorInfo(code=ErrorCode.UPSTREAM_PARSE, message="Invalid JSON response"),
+                error=ErrorInfo(type=ErrorType.UPSTREAM_PARSE, message="Invalid JSON response"),
             )
         latency_ms = call.latency_ms
 
@@ -175,7 +174,7 @@ class CurveProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="No route found"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="No route found"),
             )
 
         gas_value = get_first(payload_obj, ["gas", "estimatedGas"])

@@ -425,7 +425,7 @@ Structured JSON logs with:
 - provider
 - latency
 - status
-- error_code
+- error_type
 
 ### 14.2 Metrics
 Prometheus-style metrics:

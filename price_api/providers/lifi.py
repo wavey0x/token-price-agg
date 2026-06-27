@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from price_api.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -86,7 +86,7 @@ class LiFiProvider(ProviderPlugin):
                 status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not supported"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="Token not supported"),
             )
 
         as_of = parse_datetime(get_first(payload, ["timestamp", "updatedAt"]))
@@ -182,7 +182,7 @@ class LiFiProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="No route found"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="No route found"),
             )
 
         min_out = parse_base_unit_amount(

@@ -1,9 +1,11 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
-from price_api.api.schemas.responses import QuoteVaultContext
+from price_api.api.schemas.responses import PriceProviderEntry, QuoteVaultContext
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import VaultType
 
 
@@ -35,3 +37,25 @@ def test_quote_vault_context_rejects_legacy_price_per_share_field() -> None:
                 "block_number": 1,
             }
         )
+
+
+def test_error_info_omits_unset_fields_without_dropping_provider_nulls() -> None:
+    entry = PriceProviderEntry(
+        status=ProviderStatus.ERROR,
+        success=False,
+        price=None,
+        latency_ms=1,
+        retrieved_at=datetime(2026, 6, 27, 12, 0, tzinfo=timezone.utc),
+        error=ErrorInfo(type=ErrorType.TIMEOUT, message="Provider request timed out"),
+    )
+
+    dumped = entry.model_dump(mode="json")
+
+    assert dumped["error"] == {
+        "type": "TIMEOUT",
+        "message": "Provider request timed out",
+    }
+    assert "price" in dumped
+    assert dumped["price"] is None
+    assert "as_of" in dumped
+    assert dumped["as_of"] is None

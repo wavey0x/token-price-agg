@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from price_api.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
     ProviderPriceRequest,
@@ -82,7 +82,7 @@ class EnsoProvider(ProviderPlugin):
                 status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not supported"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="Token not supported"),
             )
 
         return PriceResult(
@@ -156,7 +156,7 @@ class EnsoProvider(ProviderPlugin):
                 token_out=req.token_out,
                 amount_in=req.amount_in,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="No route found"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="No route found"),
             )
 
         price_impact_bps = _parse_enso_price_impact_bps(

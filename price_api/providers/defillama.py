@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from price_api.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import PriceResult, ProviderPriceRequest
 from price_api.providers.base import ProviderPlugin
 from price_api.providers.clients.http import HttpClient
@@ -63,7 +63,7 @@ class DefiLlamaProvider(ProviderPlugin):
                 status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not found"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="Token not found"),
             )
 
         coin_data = coins.get(coin)
@@ -73,7 +73,7 @@ class DefiLlamaProvider(ProviderPlugin):
                 status=ProviderStatus.NO_ROUTE,
                 token=req.token,
                 latency_ms=latency_ms,
-                error=ErrorInfo(code=ErrorCode.NO_ROUTE, message="Token not found"),
+                error=ErrorInfo(type=ErrorType.NO_ROUTE, message="Token not found"),
             )
 
         price = parse_decimal(coin_data.get("price"))
@@ -86,7 +86,7 @@ class DefiLlamaProvider(ProviderPlugin):
                 token=req.token,
                 latency_ms=latency_ms,
                 error=ErrorInfo(
-                    code=ErrorCode.UPSTREAM_PARSE,
+                    type=ErrorType.UPSTREAM_PARSE,
                     message="Price missing from response",
                 ),
             )

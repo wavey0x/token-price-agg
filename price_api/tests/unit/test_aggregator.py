@@ -196,7 +196,7 @@ async def test_aggregate_prices_unsupported_operation_returns_provider_failure(
     assert partial is True
     assert results[0].status == ProviderStatus.BAD_REQUEST
     assert results[0].error is not None
-    assert results[0].error.code == "UNSUPPORTED_OPERATION"
+    assert results[0].error.type.value == "UNSUPPORTED_OPERATION"
 
 
 @pytest.mark.asyncio
@@ -217,7 +217,7 @@ async def test_aggregate_prices_unavailable_provider_returns_provider_failure(
     assert partial is True
     assert results[0].status == ProviderStatus.BAD_REQUEST
     assert results[0].error is not None
-    assert results[0].error.code == "PROVIDER_UNAVAILABLE"
+    assert results[0].error.type.value == "PROVIDER_UNAVAILABLE"
 
 
 @pytest.mark.asyncio
@@ -241,7 +241,7 @@ async def test_aggregate_prices_plugin_exception_returns_internal_error(
     assert partial is True
     assert results[0].status == ProviderStatus.ERROR
     assert results[0].error is not None
-    assert results[0].error.code == "INTERNAL"
+    assert results[0].error.type.value == "INTERNAL"
 
 
 @pytest.mark.asyncio
@@ -306,7 +306,7 @@ async def test_aggregate_quotes_deadline_timeout_returns_timeout_result(
     assert partial is True
     assert results[0].status == ProviderStatus.ERROR
     assert results[0].error is not None
-    assert results[0].error.code == "DEADLINE_EXCEEDED"
+    assert results[0].error.type.value == "DEADLINE_EXCEEDED"
 
 
 @pytest.mark.asyncio
@@ -733,4 +733,4 @@ async def test_aggregate_quotes_missing_output_converter_marks_provider_failed(
     assert results[0].amount_out is None
     assert results[0].amount_out_min is None
     assert results[0].error is not None
-    assert results[0].error.code == "INVALID_VAULT_CONVERSION"
+    assert results[0].error.type.value == "INVALID_VAULT_CONVERSION"

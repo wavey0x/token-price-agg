@@ -18,7 +18,7 @@ def test_price_endpoint_invalid_token_returns_bad_request() -> None:
         )
 
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "INVALID_ADDRESS"
+    assert response.json()["detail"]["type"] == "INVALID_ADDRESS"
 
 
 def test_quote_endpoint_invalid_amount_returns_bad_request() -> None:
@@ -35,7 +35,7 @@ def test_quote_endpoint_invalid_amount_returns_bad_request() -> None:
         )
 
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "INVALID_AMOUNT"
+    assert response.json()["detail"]["type"] == "INVALID_AMOUNT"
 
 
 def test_quote_endpoint_oversized_amount_returns_bad_request() -> None:
@@ -52,4 +52,4 @@ def test_quote_endpoint_oversized_amount_returns_bad_request() -> None:
         )
 
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "INVALID_AMOUNT"
+    assert response.json()["detail"]["type"] == "INVALID_AMOUNT"

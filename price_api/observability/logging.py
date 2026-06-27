@@ -55,7 +55,7 @@ class JsonLogFormatter(logging.Formatter):
             "provider",
             "operation",
             "provider_status",
-            "error_code",
+            "error_type",
             "transport_error_type",
             "timeout_ms",
             "provider_global_limit",

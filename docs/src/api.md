@@ -9,10 +9,10 @@ When `API_KEY_AUTH_ENABLED=true`, all `/v1/*` endpoints require:
 Failure behavior:
 
 - `401`:
-  - body: `{"detail":{"code":"UNAUTHORIZED","message":"..."}}`
+  - body: `{"detail":{"type":"UNAUTHORIZED","message":"..."}}`
   - header: `WWW-Authenticate: Bearer`
 - `429`:
-  - body: `{"detail":{"code":"RATE_LIMITED","message":"..."}}`
+  - body: `{"detail":{"type":"RATE_LIMITED","message":"..."}}`
   - headers: `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 
 `/metrics` remains unauthenticated.
@@ -25,7 +25,7 @@ Every per-provider entry includes a `status` field with exactly **4 possible val
 | --- | --- | --- |
 | `ok` | Provider returned data successfully | Use the data |
 | `no_route` | Provider cannot service this token/pair/chain (deterministic) | Don't retry this provider for this pair |
-| `error` | Transient failure (timeout, upstream error, rate limit, internal) | Retry may help; check `error.code` for detail |
+| `error` | Transient failure (timeout, upstream error, rate limit, internal) | Retry may help; check `error.type` for detail |
 | `bad_request` | Invalid request (unsupported operation, provider unavailable) | Fix request parameters |
 
 ### Quick integration
@@ -34,7 +34,7 @@ Every per-provider entry includes a `status` field with exactly **4 possible val
 switch (provider.status) {
   case "ok":          // use the data
   case "no_route":    // skip this provider, don't retry
-  case "error":       // retry later (check error.code if you need the reason)
+  case "error":       // retry later (check error.type if you need the reason)
   case "bad_request": // fix your request
 }
 ```
@@ -46,14 +46,13 @@ When `status` is not `ok`, the `error` object provides machine-readable detail:
 ```json
 {
   "error": {
-    "code": "TIMEOUT",
-    "message": "Provider request timed out",
-    "retry_after_ms": null
+    "type": "TIMEOUT",
+    "message": "Provider request timed out"
   }
 }
 ```
 
-| `error.code` | Parent `status` | Description |
+| `error.type` | Parent `status` | Description |
 | --- | --- | --- |
 | `TIMEOUT` | `error` | Upstream provider connect/read/write timed out |
 | `RATE_LIMITED` | `error` | Provider rate-limited the request. Check `retry_after_ms` if present. |
@@ -67,7 +66,9 @@ When `status` is not `ok`, the `error` object provides machine-readable detail:
 | `UNSUPPORTED_OPERATION` | `bad_request` | Provider does not support this operation type (e.g. quote-only provider asked for price) |
 | `PROVIDER_UNAVAILABLE` | `bad_request` | Provider is disabled (e.g. missing API key) |
 
-`retry_after_ms` is `null` unless `error.code` is `RATE_LIMITED` and the provider communicates a backoff window.
+`error.code` is present only when a non-success upstream HTTP response caused the provider failure,
+for example `500` or `429`. `retry_after_ms` is present only when the upstream provider communicates
+a real retry hint such as `Retry-After`.
 
 ### Computed Fields
 
@@ -189,7 +190,7 @@ Key fields:
 | `latency_ms` | integer | Provider response time |
 | `as_of` | string (ISO 8601) \| null | When price was last updated at source. `null` if provider doesn't report this. |
 | `retrieved_at` | string (ISO 8601) | When this API retrieved the value |
-| `error` | object \| null | `{code, message, retry_after_ms}` on failure; `null` on success |
+| `error` | object \| null | `{type, message, code?, retry_after_ms?}` on failure; `null` on success |
 
 ### Example: Price Success
 
@@ -285,9 +286,8 @@ Key fields:
       "as_of": null,
       "retrieved_at": "2026-03-05T02:32:12.130000Z",
       "error": {
-        "code": "DEADLINE_EXCEEDED",
-        "message": "Provider exceeded aggregate deadline",
-        "retry_after_ms": null
+        "type": "DEADLINE_EXCEEDED",
+        "message": "Provider exceeded aggregate deadline"
       }
     }
   },
@@ -394,7 +394,7 @@ Key fields:
 | `latency_ms` | integer | Provider response time |
 | `as_of` | string (ISO 8601) \| null | When quote was generated at source. `null` if provider doesn't report this. |
 | `retrieved_at` | string (ISO 8601) | When this API retrieved the value |
-| `error` | object \| null | `{code, message, retry_after_ms}` on failure; `null` on success |
+| `error` | object \| null | `{type, message, code?, retry_after_ms?}` on failure; `null` on success |
 | `route` | object \| null | Provider-specific route data. Only present when `include_route=true`. |
 
 ### Example: Quote Success
@@ -507,9 +507,8 @@ Key fields:
       "as_of": null,
       "retrieved_at": "2026-03-05T02:40:11.360000Z",
       "error": {
-        "code": "NO_ROUTE",
-        "message": "No route found",
-        "retry_after_ms": null
+        "type": "NO_ROUTE",
+        "message": "No route found"
       },
       "route": null
     },
@@ -525,9 +524,8 @@ Key fields:
       "as_of": null,
       "retrieved_at": "2026-03-05T02:40:11.330000Z",
       "error": {
-        "code": "PROVIDER_UNAVAILABLE",
-        "message": "missing_api_key",
-        "retry_after_ms": null
+        "type": "PROVIDER_UNAVAILABLE",
+        "message": "missing_api_key"
       },
       "route": null
     }
@@ -550,7 +548,7 @@ Request/domain errors use:
 ```json
 {
   "detail": {
-    "code": "INVALID_ADDRESS",
+    "type": "INVALID_ADDRESS",
     "message": "Invalid token address"
   }
 }

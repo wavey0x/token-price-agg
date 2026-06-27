@@ -123,7 +123,7 @@ async def invalid_request_exception_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=400,
-        content={"detail": {"code": exc.code, "message": exc.message}},
+        content={"detail": {"type": exc.type, "message": exc.message}},
     )
 
 
@@ -164,7 +164,7 @@ async def request_observability_middleware(
             "unhandled_exception",
             extra={
                 "status_code": 500,
-                "error_code": "UNHANDLED_EXCEPTION",
+                "error_type": "UNHANDLED_EXCEPTION",
             },
         )
         raise
@@ -364,7 +364,7 @@ def _rate_limited_response(
         status_code=429,
         content={
             "detail": {
-                "code": "RATE_LIMITED",
+                "type": "RATE_LIMITED",
                 "message": message,
             }
         },
@@ -421,7 +421,7 @@ def _unauthorized_response(
         status_code=401,
         content={
             "detail": {
-                "code": "UNAUTHORIZED",
+                "type": "UNAUTHORIZED",
                 "message": message,
             }
         },

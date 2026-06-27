@@ -263,7 +263,7 @@ def test_price_endpoint_deadline_exceeded_returns_timeout_and_fast_response(
     assert payload["price_data"] is None
     assert payload["providers"]["curve"]["status"] == "error"
     assert payload["providers"]["curve"]["success"] is False
-    assert payload["providers"]["curve"]["error"]["code"] == "DEADLINE_EXCEEDED"
+    assert payload["providers"]["curve"]["error"]["type"] == "DEADLINE_EXCEEDED"
 
 
 def test_price_endpoint_one_provider_fails_other_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:

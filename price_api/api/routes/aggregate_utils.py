@@ -27,7 +27,7 @@ ResultModel = PriceResult | QuoteResult
 
 
 def raise_bad_request(exc: InvalidRequestError) -> Never:
-    raise HTTPException(status_code=400, detail={"code": exc.code, "message": exc.message}) from exc
+    raise HTTPException(status_code=400, detail={"type": exc.type, "message": exc.message}) from exc
 
 
 def record_aggregate_metrics(
@@ -100,7 +100,7 @@ async def aggregate_with_provider_order[
     except AdmissionRejectedError as exc:
         raise HTTPException(
             status_code=exc.status_code,
-            detail={"code": exc.code, "message": exc.message},
+            detail={"type": exc.type, "message": exc.message},
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
     except InvalidRequestError as exc:

@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 
 from price_api.app.config import Settings
-from price_api.core.errors import AdmissionRejectedError, ErrorInfo, ProviderStatus
+from price_api.core.errors import AdmissionRejectedError, ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import PriceResult, ProviderPriceRequest, TokenRef
 from price_api.core.provider_runner import ProviderOperationRunner
 from price_api.providers.base import ProviderPlugin
@@ -102,7 +102,7 @@ async def test_provider_runner_rejects_global_admission_when_capacity_is_full() 
 
     release.set()
     await first
-    assert exc_info.value.code == "SERVICE_OVERLOADED"
+    assert exc_info.value.type == "SERVICE_OVERLOADED"
     assert exc_info.value.status_code == 503
 
 
@@ -209,7 +209,7 @@ async def test_provider_runner_returns_provider_failure_when_provider_lane_is_fu
     await first
     assert results[0].status == ProviderStatus.ERROR
     assert results[0].error is not None
-    assert results[0].error.code == "PROVIDER_UNAVAILABLE"
+    assert results[0].error.type.value == "PROVIDER_UNAVAILABLE"
     assert results[0].error.message == "Provider capacity unavailable"
 
 
@@ -231,7 +231,7 @@ async def test_provider_runner_opens_provider_circuit_after_retriable_failures()
                 token=req.token,
                 latency_ms=1,
                 error=ErrorInfo(
-                    code="INTERNAL_TRANSPORT_TIMEOUT",
+                    type=ErrorType.INTERNAL_TRANSPORT_TIMEOUT,
                     message="pool timeout",
                 ),
             )
@@ -257,4 +257,4 @@ async def test_provider_runner_opens_provider_circuit_after_retriable_failures()
     assert plugin.calls == 2
     assert results[0].status == ProviderStatus.ERROR
     assert results[0].error is not None
-    assert results[0].error.code == "PROVIDER_UNAVAILABLE"
+    assert results[0].error.type.value == "PROVIDER_UNAVAILABLE"

@@ -6,7 +6,7 @@ import pytest
 
 import price_api.core.circuit as circuit_module
 from price_api.core.circuit import CircuitBreaker
-from price_api.core.errors import ErrorInfo, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import PriceResult
 
 
@@ -59,5 +59,5 @@ def _transport_failure() -> PriceResult:
         provider="defillama",
         status=ProviderStatus.ERROR,
         latency_ms=1,
-        error=ErrorInfo(code="INTERNAL_TRANSPORT_TIMEOUT", message="pool timeout"),
+        error=ErrorInfo(type=ErrorType.INTERNAL_TRANSPORT_TIMEOUT, message="pool timeout"),
     )

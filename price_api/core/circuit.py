@@ -3,18 +3,18 @@ from __future__ import annotations
 import time
 from collections import deque
 
-from price_api.core.errors import ErrorCode, ProviderStatus
+from price_api.core.errors import ErrorType, ProviderStatus
 from price_api.core.models import PriceResult, QuoteResult
 from price_api.observability.metrics import (
     record_provider_circuit_transition,
     set_provider_circuit_state,
 )
 
-_RETRIABLE_ERROR_CODES = {
-    ErrorCode.TIMEOUT.value,
-    ErrorCode.RATE_LIMITED.value,
-    ErrorCode.UPSTREAM_HTTP.value,
-    ErrorCode.INTERNAL_TRANSPORT_TIMEOUT.value,
+_RETRIABLE_ERROR_TYPES = {
+    ErrorType.TIMEOUT.value,
+    ErrorType.RATE_LIMITED.value,
+    ErrorType.UPSTREAM_HTTP.value,
+    ErrorType.INTERNAL_TRANSPORT_TIMEOUT.value,
 }
 
 
@@ -125,4 +125,4 @@ class CircuitBreaker:
 def _is_circuit_failure(result: PriceResult | QuoteResult) -> bool:
     if result.error is None:
         return False
-    return result.error.code in _RETRIABLE_ERROR_CODES
+    return result.error.type.value in _RETRIABLE_ERROR_TYPES

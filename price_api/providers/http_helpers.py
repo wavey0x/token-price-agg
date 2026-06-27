@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Literal
 
 import httpx
 
-from price_api.core.errors import ErrorCode, ErrorInfo, ProviderStatus
+from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.observability.metrics import record_provider_pool_timeout
 from price_api.providers.clients.http import HttpClient, HttpResponse, JsonBody, QueryParams
 from price_api.providers.utils import status_from_http_code
@@ -22,7 +24,7 @@ class HttpCallResult:
     latency_ms: int
     response: HttpResponse | None = None
     timeout: bool = False
-    timeout_error_code: ErrorCode | None = None
+    timeout_error_type: ErrorType | None = None
     transport_error_type: str | None = None
     http_error: httpx.HTTPError | None = None
 
@@ -31,12 +33,19 @@ class HttpCallResult:
 class ProviderTransportFailure:
     reason: FailureReason
     status: ProviderStatus
-    error_code: ErrorCode
+    error_type: ErrorType
     message: str
     latency_ms: int
+    http_status_code: int | None = None
+    retry_after_ms: int | None = None
 
     def to_error_info(self) -> ErrorInfo:
-        return ErrorInfo(code=self.error_code, message=self.message)
+        return ErrorInfo(
+            type=self.error_type,
+            message=self.message,
+            code=self.http_status_code,
+            retry_after_ms=self.retry_after_ms,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +53,23 @@ class JsonTransportOutcome:
     latency_ms: int
     payload: dict[str, object] | None = None
     failure: ProviderTransportFailure | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HttpStatusFailure:
+    status: ProviderStatus
+    error_type: ErrorType
+    message: str
+    http_status_code: int
+    retry_after_ms: int | None = None
+
+    def to_error_info(self) -> ErrorInfo:
+        return ErrorInfo(
+            type=self.error_type,
+            message=self.message,
+            code=self.http_status_code,
+            retry_after_ms=self.retry_after_ms,
+        )
 
 
 async def timed_get(
@@ -76,7 +102,7 @@ async def timed_get(
         return HttpCallResult(
             latency_ms=latency_ms,
             timeout=True,
-            timeout_error_code=ErrorCode.INTERNAL_TRANSPORT_TIMEOUT,
+            timeout_error_type=ErrorType.INTERNAL_TRANSPORT_TIMEOUT,
             transport_error_type=type(exc).__name__,
         )
     except httpx.TimeoutException as exc:
@@ -91,7 +117,7 @@ async def timed_get(
         return HttpCallResult(
             latency_ms=latency_ms,
             timeout=True,
-            timeout_error_code=ErrorCode.TIMEOUT,
+            timeout_error_type=ErrorType.TIMEOUT,
             transport_error_type=type(exc).__name__,
         )
     except httpx.HTTPError as exc:
@@ -151,7 +177,7 @@ async def timed_post(
         return HttpCallResult(
             latency_ms=latency_ms,
             timeout=True,
-            timeout_error_code=ErrorCode.INTERNAL_TRANSPORT_TIMEOUT,
+            timeout_error_type=ErrorType.INTERNAL_TRANSPORT_TIMEOUT,
             transport_error_type=type(exc).__name__,
         )
     except httpx.TimeoutException as exc:
@@ -166,7 +192,7 @@ async def timed_post(
         return HttpCallResult(
             latency_ms=latency_ms,
             timeout=True,
-            timeout_error_code=ErrorCode.TIMEOUT,
+            timeout_error_type=ErrorType.TIMEOUT,
             transport_error_type=type(exc).__name__,
         )
     except httpx.HTTPError as exc:
@@ -202,7 +228,7 @@ def json_transport_outcome(
             failure=ProviderTransportFailure(
                 reason="timeout",
                 status=ProviderStatus.ERROR,
-                error_code=ErrorCode(error.code),
+                error_type=error.type,
                 message=error.message,
                 latency_ms=call.latency_ms,
             ),
@@ -214,7 +240,7 @@ def json_transport_outcome(
             failure=ProviderTransportFailure(
                 reason="http_error",
                 status=ProviderStatus.ERROR,
-                error_code=ErrorCode.UPSTREAM_HTTP,
+                error_type=ErrorType.UPSTREAM_HTTP,
                 message=str(call.http_error),
                 latency_ms=call.latency_ms,
             ),
@@ -227,7 +253,7 @@ def json_transport_outcome(
             failure=ProviderTransportFailure(
                 reason="http_error",
                 status=ProviderStatus.ERROR,
-                error_code=ErrorCode.UPSTREAM_HTTP,
+                error_type=ErrorType.UPSTREAM_HTTP,
                 message=f"{provider_name} response missing",
                 latency_ms=call.latency_ms,
             ),
@@ -235,15 +261,16 @@ def json_transport_outcome(
 
     failure = non_200_status(response=response, provider_name=provider_name)
     if failure is not None:
-        status, error_code, message = failure
         return JsonTransportOutcome(
             latency_ms=call.latency_ms,
             failure=ProviderTransportFailure(
                 reason="non_200",
-                status=status,
-                error_code=error_code,
-                message=message,
+                status=failure.status,
+                error_type=failure.error_type,
+                message=failure.message,
                 latency_ms=call.latency_ms,
+                http_status_code=failure.http_status_code,
+                retry_after_ms=failure.retry_after_ms,
             ),
         )
 
@@ -257,7 +284,7 @@ def json_transport_outcome(
             failure=ProviderTransportFailure(
                 reason="invalid_json",
                 status=ProviderStatus.ERROR,
-                error_code=ErrorCode.UPSTREAM_PARSE,
+                error_type=ErrorType.UPSTREAM_PARSE,
                 message=str(invalid_json_error),
                 latency_ms=call.latency_ms,
             ),
@@ -267,15 +294,15 @@ def json_transport_outcome(
 
 
 def timeout_error_info(*, call: HttpCallResult, provider_name: str) -> ErrorInfo:
-    error_code = call.timeout_error_code or ErrorCode.TIMEOUT
-    if error_code == ErrorCode.INTERNAL_TRANSPORT_TIMEOUT:
+    error_type = call.timeout_error_type or ErrorType.TIMEOUT
+    if error_type == ErrorType.INTERNAL_TRANSPORT_TIMEOUT:
         return ErrorInfo(
-            code=error_code,
+            type=error_type,
             message=(
                 f"{provider_name} internal transport timed out before acquiring outbound capacity"
             ),
         )
-    return ErrorInfo(code=error_code, message=f"{provider_name} request timed out")
+    return ErrorInfo(type=error_type, message=f"{provider_name} request timed out")
 
 
 def _log_transport_failure(
@@ -302,11 +329,57 @@ def non_200_status(
     *,
     response: HttpResponse,
     provider_name: str,
-) -> tuple[ProviderStatus, ErrorCode, str] | None:
+) -> HttpStatusFailure | None:
     if response.status_code == 200:
         return None
-    status, error_code = status_from_http_code(response.status_code)
-    return status, error_code, f"{provider_name} returned {response.status_code}"
+    status, error_type = status_from_http_code(response.status_code)
+    return HttpStatusFailure(
+        status=status,
+        error_type=error_type,
+        message=f"{provider_name} returned {response.status_code}",
+        http_status_code=response.status_code,
+        retry_after_ms=parse_retry_after_ms(response),
+    )
+
+
+def parse_retry_after_ms(
+    response: HttpResponse,
+    *,
+    now: datetime | None = None,
+) -> int | None:
+    retry_after = response.headers.get("retry-after")
+    if retry_after is None:
+        return None
+
+    stripped = retry_after.strip()
+    if not stripped:
+        return None
+
+    try:
+        seconds = int(stripped)
+    except ValueError:
+        retry_at = _parse_http_date(stripped)
+        if retry_at is None:
+            return None
+        current = now or datetime.now(tz=timezone.utc)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=timezone.utc)
+        delta_ms = int((retry_at - current).total_seconds() * 1000)
+        return delta_ms if delta_ms > 0 else None
+
+    if seconds < 0:
+        return None
+    return seconds * 1000
+
+
+def _parse_http_date(value: str) -> datetime | None:
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def expect_json_dict(
