@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pytest import MonkeyPatch
 
-from price_api.app.config import ODOS_ENTERPRISE_BASE_URL, ODOS_PUBLIC_BASE_URL, Settings
+from price_api.app.config import Settings
 
 
 def test_settings_loads_toml_when_env_overrides_absent(
@@ -64,9 +64,6 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 "[providers.lifi]",
                 'deny_exchanges = ["fly"]',
                 "",
-                "[providers.odos]",
-                'base_url = "https://odos.example.test"',
-                "",
                 "[chains]",
                 "ids = [1, 10]",
                 "",
@@ -119,8 +116,6 @@ def test_settings_loads_toml_when_env_overrides_absent(
         "PRICE_PROVIDER_PRIORITY",
         "QUOTE_PROVIDER_PRIORITY",
         "LIFI_DENY_EXCHANGES",
-        "ODOS_API_KEY",
-        "ODOS_BASE_URL",
         "API_KEY_AUTH_ENABLED",
         "API_KEY_DB_PATH",
         "API_KEY_RATE_LIMIT_RPM",
@@ -168,8 +163,6 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.price_provider_priority == ["curve"]
     assert settings.quote_provider_priority == ["curve"]
     assert settings.lifi_deny_exchanges == ["fly"]
-    assert settings.odos_base_url == "https://odos.example.test"
-    assert settings.effective_odos_base_url == "https://odos.example.test"
     assert settings.api_key_auth_enabled is True
     assert settings.api_key_db_path == "data/custom_api_keys.sqlite3"
     assert settings.api_key_rate_limit_rpm == 123
@@ -193,22 +186,6 @@ def test_lifi_deny_exchanges_can_be_set_from_env(monkeypatch: MonkeyPatch) -> No
     monkeypatch.setenv("LIFI_DENY_EXCHANGES", "fly, okx, fly")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     assert settings.lifi_deny_exchanges == ["fly", "okx"]
-
-
-def test_odos_api_key_switches_default_base_url(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv("ODOS_API_KEY", " odos-secret ")
-    monkeypatch.delenv("ODOS_BASE_URL", raising=False)
-
-    settings = Settings(_env_file=None)  # type: ignore[call-arg]
-
-    assert settings.odos_api_key == "odos-secret"
-    assert settings.effective_odos_base_url == ODOS_ENTERPRISE_BASE_URL
-
-
-def test_odos_public_base_url_is_default_without_key() -> None:
-    settings = Settings(odos_api_key=None, odos_base_url=None)
-
-    assert settings.effective_odos_base_url == ODOS_PUBLIC_BASE_URL
 
 
 def test_api_key_rate_limit_must_be_positive() -> None:

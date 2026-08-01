@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from price_api.app.config import ODOS_ENTERPRISE_BASE_URL, ODOS_PUBLIC_BASE_URL, Settings
-from price_api.providers.odos import OdosProvider
+from price_api.app.config import Settings
 from price_api.providers.registry import ProviderRegistry
 
 
@@ -34,32 +33,7 @@ def test_default_providers_enabled_are_built() -> None:
     registry = ProviderRegistry(settings)
 
     capabilities = sorted(item.id for item in registry.capabilities())
-    assert capabilities == ["curve", "defillama", "enso", "lifi", "odos"]
-
-
-def test_odos_available_without_api_key() -> None:
-    settings = Settings(providers_enabled=["odos"], odos_api_key=None, odos_base_url=None)
-    registry = ProviderRegistry(settings)
-
-    capability = registry.capabilities()[0]
-    provider = registry._plugins["odos"]
-
-    assert capability.id == "odos"
-    assert capability.available is True
-    assert capability.requires_api_key is False
-    assert isinstance(provider, OdosProvider)
-    assert provider._api_key is None
-    assert provider._base_url == ODOS_PUBLIC_BASE_URL
-
-
-def test_odos_api_key_uses_enterprise_base_url() -> None:
-    settings = Settings(providers_enabled=["odos"], odos_api_key="odos-secret")
-    registry = ProviderRegistry(settings)
-    provider = registry._plugins["odos"]
-
-    assert isinstance(provider, OdosProvider)
-    assert provider._api_key == "odos-secret"
-    assert provider._base_url == ODOS_ENTERPRISE_BASE_URL
+    assert capabilities == ["curve", "defillama", "enso", "lifi"]
 
 
 def test_provider_http_client_does_not_trust_env_by_default() -> None:

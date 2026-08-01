@@ -22,8 +22,6 @@ from pydantic_settings import (
 
 MIN_REQUEST_TIMEOUT_MS = 200
 MAX_REQUEST_TIMEOUT_MS = 10000
-ODOS_PUBLIC_BASE_URL = "https://api.odos.xyz"
-ODOS_ENTERPRISE_BASE_URL = "https://enterprise-api.odos.xyz"
 
 
 class Settings(BaseSettings):
@@ -289,7 +287,7 @@ class Settings(BaseSettings):
     )
 
     providers_enabled: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["defillama", "curve", "odos", "lifi", "enso"],
+        default_factory=lambda: ["defillama", "curve", "lifi", "enso"],
         validation_alias=AliasChoices("providers_enabled", AliasPath("providers", "enabled")),
     )
 
@@ -315,11 +313,6 @@ class Settings(BaseSettings):
             "lifi_deny_exchanges",
             AliasPath("providers", "lifi", "deny_exchanges"),
         ),
-    )
-    odos_api_key: str | None = None
-    odos_base_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("odos_base_url", AliasPath("providers", "odos", "base_url")),
     )
     enso_api_key: str | None = None
 
@@ -431,14 +424,6 @@ class Settings(BaseSettings):
             seen.add(exchange_id)
         return normalized
 
-    @field_validator("odos_api_key", "odos_base_url", mode="before")
-    @classmethod
-    def _normalize_optional_secret_or_url(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        stripped = value.strip()
-        return stripped or None
-
     @model_validator(mode="after")
     def _finalize_provider_settings(self) -> Settings:
         _require_positive(
@@ -528,14 +513,6 @@ class Settings(BaseSettings):
     @property
     def effective_provider_global_units(self) -> int:
         return self.provider_global_units or self.provider_global_limit
-
-    @property
-    def effective_odos_base_url(self) -> str:
-        if self.odos_base_url:
-            return self.odos_base_url.rstrip("/")
-        if self.odos_api_key:
-            return ODOS_ENTERPRISE_BASE_URL
-        return ODOS_PUBLIC_BASE_URL
 
 
 def _parse_string_list(value: object) -> list[str] | None:

@@ -4,7 +4,6 @@
 
 - `curve` (price + quote)
 - `defillama` (price only)
-- `odos` (price + quote, optional `ODOS_API_KEY` for authenticated/enterprise access)
 - `lifi` (price + quote, requires `LIFI_API_KEY`)
 - `enso` (price + quote, requires `ENSO_API_KEY`)
 
@@ -54,10 +53,10 @@ numeric upstream HTTP status when a non-success upstream HTTP response caused th
 
 Not all providers return all optional fields. On a successful (`ok`) response, `null` means "not available from this provider":
 
-| Field | curve | defillama | odos | lifi | enso |
-| --- | --- | --- | --- | --- | --- |
-| `as_of` | yes | yes | no | yes | yes |
-| `amount_out_min` | yes | n/a | no | yes | yes |
-| `estimated_gas` | yes | n/a | yes | yes | yes |
-| `price_impact_bps` | yes | n/a | yes | yes | yes |
-| `route` | yes | n/a | yes (minimal) | yes | yes |
+| Field | curve | defillama | lifi | enso |
+| --- | --- | --- | --- | --- |
+| `as_of` | yes | yes | yes | yes |
+| `amount_out_min` | yes | n/a | yes | yes |
+| `estimated_gas` | yes | n/a | yes | yes |
+| `price_impact_bps` | yes | n/a | yes | yes |
+| `route` | yes | n/a | yes | yes |

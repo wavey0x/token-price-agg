@@ -466,7 +466,7 @@ Key fields:
   "chain_id": 1,
   "token_in": { "chain_id": 1, "address": "0xD533a949740bb3306d119CC777fa900bA034cd52", "symbol": "CRV", "decimals": 18, "logo_url": null },
   "token_out": { "chain_id": 1, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "symbol": "USDC", "decimals": 6, "logo_url": null },
-  "provider_order": ["curve", "odos", "lifi"],
+  "provider_order": ["curve", "lifi"],
   "quote": {
     "provider": "curve",
     "amount_in": 1000000000000000000,
@@ -495,23 +495,6 @@ Key fields:
       "error": null,
       "route": null
     },
-    "odos": {
-      "status": "no_route",
-      "success": false,
-      "amount_in": null,
-      "amount_out": null,
-      "amount_out_min": null,
-      "price_impact_bps": null,
-      "estimated_gas": null,
-      "latency_ms": 120,
-      "as_of": null,
-      "retrieved_at": "2026-03-05T02:40:11.360000Z",
-      "error": {
-        "type": "NO_ROUTE",
-        "message": "No route found"
-      },
-      "route": null
-    },
     "lifi": {
       "status": "bad_request",
       "success": false,
@@ -531,9 +514,9 @@ Key fields:
     }
   },
   "summary": {
-    "requested_providers": 3,
+    "requested_providers": 2,
     "successful_providers": 1,
-    "failed_providers": 2,
+    "failed_providers": 1,
     "high_amount_out": 742100,
     "low_amount_out": 742100,
     "median_amount_out": 742100
@@ -571,7 +554,7 @@ Top-level `price`/`quote` is selected by:
 
 When `status == "ok"`, a `null` value on an optional field means the provider does not supply that data. It does not indicate an error. For example:
 
-- `as_of: null` — provider does not report a source timestamp (e.g. Odos)
-- `amount_out_min: null` — provider does not compute a minimum output (e.g. Odos)
+- `as_of: null` — provider does not report a source timestamp
+- `amount_out_min: null` — provider does not compute a minimum output
 - `estimated_gas: null` — provider does not return gas estimates
 - `route: null` — `include_route` was `false`, or provider has no route data

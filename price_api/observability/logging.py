@@ -21,7 +21,6 @@ _SENSITIVE_KEYS = {
     "x-lifi-api-key",
     "lifi_api_key",
     "enso_api_key",
-    "odos_api_key",
 }
 
 

@@ -26,13 +26,11 @@ Use `.env` for secrets and occasional overrides:
 
 - `LIFI_API_KEY`
 - `ENSO_API_KEY`
-- `ODOS_API_KEY` (optional; Odos remains available without it on public API limits)
 
 Optional env overrides:
 
 - `APP_ENV`
 - `APP_VERSION` (optional; default `0.1.0`)
-- `ODOS_BASE_URL` (optional; overrides Odos public/enterprise host selection)
 - any TOML-backed setting via its env name (for example `RPC_URLS`)
 
 Observability:

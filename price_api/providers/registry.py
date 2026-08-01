@@ -13,7 +13,6 @@ from price_api.providers.curve import CurveProvider
 from price_api.providers.defillama import DefiLlamaProvider
 from price_api.providers.enso import EnsoProvider
 from price_api.providers.lifi import LiFiProvider
-from price_api.providers.odos import OdosProvider
 
 _LOGGER = logging.getLogger("price_api.registry")
 
@@ -66,13 +65,6 @@ class ProviderRegistry:
         if CurveProvider.id in enabled:
             plugins[CurveProvider.id] = CurveProvider(
                 client=self._new_http_client(provider_id=CurveProvider.id)
-            )
-
-        if OdosProvider.id in enabled:
-            plugins[OdosProvider.id] = OdosProvider(
-                client=self._new_http_client(provider_id=OdosProvider.id),
-                api_key=self._settings.odos_api_key,
-                base_url=self._settings.effective_odos_base_url,
             )
 
         if LiFiProvider.id in enabled:
@@ -223,7 +215,6 @@ def _known_provider_ids() -> list[str]:
     return [
         DefiLlamaProvider.id,
         CurveProvider.id,
-        OdosProvider.id,
         LiFiProvider.id,
         EnsoProvider.id,
     ]

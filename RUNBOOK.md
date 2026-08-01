@@ -139,7 +139,7 @@ Quote smoke:
 
 ```bash
 curl -sS \
-  "http://127.0.0.1:8000/v1/quote?chain_id=1&token_in=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&token_out=0x6b175474e89094c44da98b954eedeac495271d0f&amount_in=1000000&providers=odos"
+  "http://127.0.0.1:8000/v1/quote?chain_id=1&token_in=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&token_out=0x6b175474e89094c44da98b954eedeac495271d0f&amount_in=1000000&providers=curve"
 ```
 
 Metrics:
@@ -174,9 +174,7 @@ Important env vars:
 - `RPC_URLS` (enables best-effort `use_underlying=true` vault resolution)
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
-- `ODOS_API_KEY` (optional; enables Odos authenticated/enterprise API access)
-- `ODOS_BASE_URL` (optional; overrides Odos public/enterprise base URL selection)
-- `PROVIDERS_ENABLED` (default: `defillama,curve,odos,lifi,enso`)
+- `PROVIDERS_ENABLED` (default: `defillama,curve,lifi,enso`)
 - `PRICE_PROVIDER_PRIORITY` (optional default precedence)
 - `QUOTE_PROVIDER_PRIORITY` (optional default precedence)
 - `API_KEY_AUTH_ENABLED` (default: `false`)

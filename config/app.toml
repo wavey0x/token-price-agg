@@ -49,17 +49,12 @@ negative_cache_ttl_s = 300
 close_wait_ready_threshold = 80
 
 [providers]
-enabled = ["defillama", "curve", "odos", "lifi", "enso"]
+enabled = ["defillama", "curve", "lifi", "enso"]
 price_priority = []
 quote_priority = []
 
 [providers.lifi]
 deny_exchanges = ["fly"]
-
-[providers.odos]
-# Optional override. Defaults to https://enterprise-api.odos.xyz when ODOS_API_KEY is set,
-# otherwise https://api.odos.xyz.
-# base_url = "https://enterprise-api.odos.xyz"
 
 [token_metadata]
 db_path = "data/token_metadata.sqlite3"
