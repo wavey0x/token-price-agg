@@ -26,9 +26,23 @@ class TokenMetadataResolver:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._cache = TokenMetadataCache(db_path=settings.token_metadata_db_path)
-        self._rpc = AsyncRpcClient(rpc_urls=settings.rpc_urls)
+        self._rpc = AsyncRpcClient(
+            rpc_urls=settings.rpc_urls,
+            request_timeout_s=settings.rpc_request_timeout_ms / 1000,
+        )
         self._logo_sources = TokenLogoSourceManager(cache=self._cache)
         self._pending_verification: set[tuple[int, str]] = set()
+        self._verification_tasks: set[asyncio.Task[None]] = set()
+
+    async def aclose(self) -> None:
+        tasks = list(self._verification_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._verification_tasks.clear()
+        self._pending_verification.clear()
+        await self._rpc.aclose()
 
     async def refresh_logo_sources(self, *, force: bool = False) -> dict[int, dict[str, int]]:
         refreshed: dict[int, dict[str, int]] = {}
@@ -112,14 +126,23 @@ class TokenMetadataResolver:
         if not unique_addresses:
             return {}
 
-        cached = self._cache.get_many(chain_id=chain_id, addresses=unique_addresses)
-        hinted = hints_from_refs(refs, chain_id=chain_id)
-        provider_logos = collect_provider_logo_urls(refs, chain_id=chain_id)
-        source_logo_candidates = self._logo_sources.get_candidates(
+        cached = await asyncio.to_thread(
+            self._cache.get_many,
             chain_id=chain_id,
             addresses=unique_addresses,
         )
-        latest_source_sync_at = self._logo_sources.latest_sync_at(chain_id=chain_id)
+        hinted = hints_from_refs(refs, chain_id=chain_id)
+        provider_logos = collect_provider_logo_urls(refs, chain_id=chain_id)
+        candidates_task = asyncio.to_thread(
+            self._logo_sources.get_candidates,
+            chain_id=chain_id,
+            addresses=unique_addresses,
+        )
+        sync_task = asyncio.to_thread(self._logo_sources.latest_sync_at, chain_id=chain_id)
+        source_logo_candidates, latest_source_sync_at = await asyncio.gather(
+            candidates_task,
+            sync_task,
+        )
 
         merged: dict[str, TokenMetadata] = {}
         for address in unique_addresses:
@@ -169,7 +192,7 @@ class TokenMetadataResolver:
                 to_persist.append(metadata.model_copy(update={"logo_url": None}))
             else:
                 to_persist.append(metadata)
-        self._cache.upsert_many(to_persist)
+        await asyncio.to_thread(self._cache.upsert_many, to_persist)
 
         # Background-verify tokens with unknown logo status
         for address in needs_verification:
@@ -195,13 +218,20 @@ class TokenMetadataResolver:
         key = (chain_id, address)
         if key in self._pending_verification:
             return
-        self._pending_verification.add(key)
 
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            self._pending_verification.discard(key)
             return
+
+        if len(self._verification_tasks) >= self._settings.token_logo_max_pending_verifications:
+            _LOGGER.debug(
+                "background_logo_verify_capacity_reached",
+                extra={"chain_id": chain_id, "address": address},
+            )
+            return
+
+        self._pending_verification.add(key)
 
         task = loop.create_task(
             self._verify_and_persist(
@@ -212,7 +242,8 @@ class TokenMetadataResolver:
                 existing=existing,
             )
         )
-        _ = task
+        self._verification_tasks.add(task)
+        task.add_done_callback(self._verification_tasks.discard)
 
     async def _verify_and_persist(
         self,
@@ -235,7 +266,7 @@ class TokenMetadataResolver:
 
             base = existing or TokenMetadata(chain_id=chain_id, address=address)
             updated = apply_verify_result(base, result)
-            self._cache.upsert_many([updated])
+            await asyncio.to_thread(self._cache.upsert_logo_verification, updated)
 
             _LOGGER.debug(
                 "background_logo_verified",

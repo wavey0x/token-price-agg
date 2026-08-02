@@ -4,23 +4,41 @@ from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
 from price_api.core.models import TokenRef
+from price_api.core.validator import MAX_POSITIVE_INT_DIGITS, MAX_UINT256
 
 _MILLISECONDS_CUTOFF = 1_000_000_000_000
 _MICROSECONDS_CUTOFF = 1_000_000_000_000_000
 _NANOSECONDS_CUTOFF = 1_000_000_000_000_000_000
+_MAX_DECIMAL_DIGITS = 100
+_MAX_ABS_DECIMAL_EXPONENT = 100
 
 
 def parse_decimal(value: object) -> Decimal | None:
     if value is None:
         return None
     if isinstance(value, Decimal):
-        return value
-    if isinstance(value, (int, float, str)):
+        parsed = value
+    elif isinstance(value, (int, float, str)):
         try:
-            return Decimal(str(value))
-        except InvalidOperation:
+            parsed = Decimal(str(value))
+        except (InvalidOperation, OverflowError, ValueError):
             return None
-    return None
+    else:
+        return None
+
+    if not parsed.is_finite():
+        return None
+    decimal_tuple = parsed.as_tuple()
+    if len(decimal_tuple.digits) > _MAX_DECIMAL_DIGITS:
+        return None
+    if parsed and abs(parsed.adjusted()) > _MAX_ABS_DECIMAL_EXPONENT:
+        return None
+    return parsed
+
+
+def parse_positive_decimal(value: object) -> Decimal | None:
+    parsed = parse_decimal(value)
+    return parsed if parsed is not None and parsed > 0 else None
 
 
 def parse_int(value: object) -> int | None:
@@ -29,11 +47,15 @@ def parse_int(value: object) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value
+        return value if 0 <= value <= MAX_UINT256 else None
     if isinstance(value, str) and value.isdigit():
-        return int(value)
+        if len(value) > MAX_POSITIVE_INT_DIGITS:
+            return None
+        parsed = int(value)
+        return parsed if parsed <= MAX_UINT256 else None
     if isinstance(value, float) and value.is_integer():
-        return int(value)
+        parsed = int(value)
+        return parsed if 0 <= parsed <= MAX_UINT256 else None
     return None
 
 
@@ -53,13 +75,15 @@ def parse_base_unit_amount(value: object, *, token_decimals: int | None) -> int 
         return None
 
     if parsed_decimal == parsed_decimal.to_integral_value():
-        return int(parsed_decimal)
+        parsed_amount = int(parsed_decimal)
+        return parsed_amount if parsed_amount <= MAX_UINT256 else None
 
     if token_decimals is None or token_decimals < 0:
         return None
 
     scaled = parsed_decimal * (Decimal(10) ** token_decimals)
-    return int(scaled.to_integral_value(rounding=ROUND_DOWN))
+    parsed_amount = int(scaled.to_integral_value(rounding=ROUND_DOWN))
+    return parsed_amount if parsed_amount <= MAX_UINT256 else None
 
 
 def parse_datetime(value: object) -> datetime | None:
@@ -72,8 +96,9 @@ def parse_datetime(value: object) -> datetime | None:
     if isinstance(value, float):
         return _from_unix_timestamp(value)
     if isinstance(value, str):
-        if value.isdigit():
-            return _from_unix_timestamp(int(value))
+        parsed_int = parse_int(value)
+        if parsed_int is not None:
+            return _from_unix_timestamp(parsed_int)
         try:
             # Accept ISO8601 with or without trailing Z.
             iso_value = value.replace("Z", "+00:00")

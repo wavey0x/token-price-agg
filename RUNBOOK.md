@@ -8,7 +8,7 @@ Operational notes for the token price API deployment.
 - Repo directory on host: `price-api`
 - systemd service: `price-api`
 - Primary branch: `master`
-- Runtime config: `config/app.toml`
+- Runtime config: `/opt/price-api/config/app.toml` selected by `PRICE_API_CONFIG_FILE`
 - Runtime secrets and host-specific overrides: `.env`
 
 Do not commit `.env` or runtime SQLite files under `data/`.
@@ -170,6 +170,7 @@ Secrets and host-specific overrides belong in `.env` on `electro`.
 
 Important env vars:
 
+- `PRICE_API_CONFIG_FILE` (absolute path to the required TOML file when explicitly set)
 - `CHAIN_IDS` (default: `1`)
 - `RPC_URLS` (enables best-effort `use_underlying=true` vault resolution)
 - `LIFI_API_KEY` (required to enable `lifi`)
@@ -177,7 +178,7 @@ Important env vars:
 - `PROVIDERS_ENABLED` (default: `defillama,curve,lifi,enso`)
 - `PRICE_PROVIDER_PRIORITY` (optional default precedence)
 - `QUOTE_PROVIDER_PRIORITY` (optional default precedence)
-- `API_KEY_AUTH_ENABLED` (default: `false`)
+- `API_KEY_AUTH_ENABLED` (default: `true`)
 - `API_KEY_DB_PATH` (default: `data/api_keys.sqlite3`)
 - `API_KEY_RATE_LIMIT_RPM` (default: `300`)
 - `API_KEY_UNAUTH_ACCESS_ENABLED` (default: `true`)

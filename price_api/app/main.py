@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -22,6 +24,7 @@ from price_api.app.dependencies import (
     get_api_key_store,
     get_provider_registry,
     get_token_metadata_resolver,
+    get_vault_resolver,
 )
 from price_api.core.errors import InvalidRequestError
 from price_api.observability.logging import (
@@ -53,6 +56,7 @@ _AUTH_STATUS_UNPROTECTED = "unprotected"
 _AUTH_STATUS_AUTHENTICATED = "authenticated"
 _AUTH_STATUS_ANONYMOUS = "anonymous"
 _AUTH_STATUS_UNAUTHORIZED = "unauthorized"
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 @asynccontextmanager
@@ -64,14 +68,32 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         app_env=settings.app_env,
         app_version=settings.app_version,
     )
+    resolver = await asyncio.to_thread(get_token_metadata_resolver)
+    registry = get_provider_registry()
+    vault_resolver = get_vault_resolver()
+    logo_refresh_task: asyncio.Task[None] | None = None
+    if settings.token_logo_refresh_on_startup:
+        logo_refresh_task = asyncio.create_task(_refresh_logo_sources(resolver))
     try:
-        resolver = get_token_metadata_resolver()
+        yield
+    finally:
+        if logo_refresh_task is not None and not logo_refresh_task.done():
+            logo_refresh_task.cancel()
+        if logo_refresh_task is not None:
+            await asyncio.gather(logo_refresh_task, return_exceptions=True)
+        await resolver.aclose()
+        await vault_resolver.aclose()
+        await registry.aclose()
+
+
+async def _refresh_logo_sources(resolver: object) -> None:
+    from price_api.token_metadata.resolver import TokenMetadataResolver
+
+    assert isinstance(resolver, TokenMetadataResolver)
+    try:
         await resolver.refresh_logo_sources()
     except Exception:
         _APP_LOGGER.exception("token_logo_source_startup_refresh_failed")
-    yield
-    registry = get_provider_registry()
-    await registry.aclose()
 
 
 app = FastAPI(
@@ -142,7 +164,7 @@ async def request_observability_middleware(
         inc_inflight_request()
 
     try:
-        short_circuit, rate_limit_result = _authorize_and_rate_limit_if_needed(
+        short_circuit, rate_limit_result = await _authorize_and_rate_limit_if_needed(
             request=request,
             settings=settings,
             request_id=request_id,
@@ -188,7 +210,12 @@ app.include_router(quotes_router)
 
 
 def _init_request_context(request: Request) -> tuple[str, RequestContextToken]:
-    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    supplied_request_id = request.headers.get("X-Request-ID")
+    request_id = (
+        supplied_request_id
+        if supplied_request_id is not None and _REQUEST_ID_RE.fullmatch(supplied_request_id)
+        else str(uuid.uuid4())
+    )
     request.state.request_id = request_id
     _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_UNPROTECTED)
     context_token = bind_request_context(
@@ -199,7 +226,7 @@ def _init_request_context(request: Request) -> tuple[str, RequestContextToken]:
     return request_id, context_token
 
 
-def _authorize_and_rate_limit_if_needed(
+async def _authorize_and_rate_limit_if_needed(
     *,
     request: Request,
     settings: Settings,
@@ -209,8 +236,9 @@ def _authorize_and_rate_limit_if_needed(
         _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_UNPROTECTED)
         return None, None
 
-    store = get_api_key_store()
-    auth_result = store.authenticate_request_headers(
+    store = await asyncio.to_thread(get_api_key_store)
+    auth_result = await asyncio.to_thread(
+        store.authenticate_request_headers,
         request.headers.get("Authorization"),
         request.headers.get("x-api-key"),
     )
@@ -228,7 +256,8 @@ def _authorize_and_rate_limit_if_needed(
             if auth_result.rate_limit_rpm is not None
             else settings.api_key_rate_limit_rpm
         )
-        rate_limit_result = store.consume_rate_limit(
+        rate_limit_result = await asyncio.to_thread(
+            store.consume_rate_limit,
             public_id=str(auth_result.public_id),
             limit_rpm=effective_limit_rpm,
         )

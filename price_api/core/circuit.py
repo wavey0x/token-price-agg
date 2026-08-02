@@ -123,6 +123,8 @@ class CircuitBreaker:
 
 
 def _is_circuit_failure(result: PriceResult | QuoteResult) -> bool:
+    if result.status in {ProviderStatus.BAD_REQUEST, ProviderStatus.NO_ROUTE}:
+        return False
     if result.error is None:
         return False
     return result.error.type.value in _RETRIABLE_ERROR_TYPES

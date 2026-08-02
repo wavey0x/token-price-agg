@@ -63,6 +63,7 @@ Minimum fields to review in `.env`:
 Notes:
 - `APP_VERSION` is optional (default is `0.1.0`).
 - For production, keep non-secrets in `config/app.toml`; use `.env` mainly for secrets and one-off overrides.
+- Set `PRICE_API_CONFIG_FILE` to an absolute path when the process may start from a different working directory.
 
 ### 5) Initialize API keys (if auth enabled)
 
@@ -237,6 +238,7 @@ Key sections:
   - `ids = [1]`
 - `[rpc]`
   - `urls = [...]` (enables best-effort `use_underlying=true` resolution)
+  - `request_timeout_ms` (explicit timeout for each RPC request)
 - `[timeouts]`
   - `provider_request_timeout_ms`
   - `provider_max_retries` (default `0`)
@@ -269,6 +271,7 @@ Key sections:
 - `[vault]`
   - `positive_cache_ttl_s`
   - `negative_cache_ttl_s`
+  - `cache_max_entries`
 - `[readiness]`
   - `close_wait_ready_threshold`
 - `[providers]`
@@ -278,7 +281,7 @@ Key sections:
 - `[providers.lifi]`
   - `deny_exchanges = [...]` (sent to Li.Fi quote requests as `denyExchanges`)
 - `[security]`
-  - `api_key_auth_enabled = false`
+  - `api_key_auth_enabled = true` (secure default; explicitly disable only for a trusted deployment)
   - `api_key_db_path = "data/api_keys.sqlite3"`
   - `api_key_rate_limit_rpm = 300`
   - `api_key_unauth_access_enabled = true`
@@ -289,6 +292,8 @@ Settings precedence:
 2. `.env`
 3. `config/app.toml`
 4. code defaults
+
+`PRICE_API_CONFIG_FILE` selects the TOML file itself; it is not a setting inside that file.
 
 Aggregate deadline behavior (no extra config knobs):
 - price deadline = `provider_request_timeout_ms + 100ms`
@@ -333,8 +338,8 @@ Price response includes:
 
 Quote response mirrors this shape using:
 - `token_in`, `token_out`, `quote`, `providers`, `provider_order`, `summary`
-- `amount_in`, `amount_out`, `amount_out_min` are strict token base-unit integers (token-decimals scale), never human-decimal strings
-- quote summary fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
+- `amount_in`, `amount_out`, `amount_out_min` are base-unit integer strings, preserving exact values in JavaScript clients
+- quote summary fields `high_amount_out`, `low_amount_out`, `median_amount_out` use the same string representation
 - quote `vault_context` (top-level `quote` only) uses:
   - `underlying_token_in`, `underlying_token_out`
   - `price_per_share_token_in`, `price_per_share_token_out` (`null` when a leg is not a vault)

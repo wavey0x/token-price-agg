@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import ClassVar, Protocol
@@ -188,7 +189,11 @@ class TokenLogoSourceManager:
             if not source.supports_chain(chain_id):
                 continue
 
-            state = self._cache.get_logo_source_sync_state(source=source.id, chain_id=chain_id)
+            state = await asyncio.to_thread(
+                self._cache.get_logo_source_sync_state,
+                source=source.id,
+                chain_id=chain_id,
+            )
             if not force and state is not None and now - state.synced_at < _SOURCE_REFRESH_SECONDS:
                 continue
 
@@ -201,12 +206,14 @@ class TokenLogoSourceManager:
                 )
                 continue
 
-            self._cache.replace_logo_source_entries(
+            await asyncio.to_thread(
+                self._cache.replace_logo_source_entries,
                 source=source.id,
                 chain_id=chain_id,
                 entries=entries,
             )
-            self._cache.upsert_logo_source_sync_state(
+            await asyncio.to_thread(
+                self._cache.upsert_logo_source_sync_state,
                 source=source.id,
                 chain_id=chain_id,
                 synced_at=now,

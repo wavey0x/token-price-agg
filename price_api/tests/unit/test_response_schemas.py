@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from price_api.api.schemas.responses import PriceProviderEntry, QuoteVaultContext
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
-from price_api.core.models import VaultType
+from price_api.core.models import PriceResult, QuoteResult, VaultContext, VaultType
 
 
 def test_quote_vault_context_uses_leg_specific_price_per_share_fields() -> None:
@@ -59,3 +59,63 @@ def test_error_info_omits_unset_fields_without_dropping_provider_nulls() -> None
     assert dumped["price"] is None
     assert "as_of" in dumped
     assert dumped["as_of"] is None
+
+
+@pytest.mark.parametrize(
+    "unsafe_price",
+    [Decimal("0"), Decimal("-1"), Decimal("NaN"), Decimal("1e101")],
+)
+def test_price_result_rejects_unsafe_success_values(unsafe_price: Decimal) -> None:
+    with pytest.raises(ValidationError):
+        PriceResult(
+            provider="unsafe",
+            status=ProviderStatus.OK,
+            price_usd=unsafe_price,
+            latency_ms=1,
+        )
+
+
+def test_quote_result_rejects_missing_or_inconsistent_success_amounts() -> None:
+    with pytest.raises(ValidationError, match="positive amount_out"):
+        QuoteResult(provider="unsafe", status=ProviderStatus.OK, amount_out=0, latency_ms=1)
+    with pytest.raises(ValidationError, match="cannot exceed"):
+        QuoteResult(
+            provider="unsafe",
+            status=ProviderStatus.OK,
+            amount_out=10,
+            amount_out_min=11,
+            latency_ms=1,
+        )
+    with pytest.raises(ValidationError):
+        QuoteResult(
+            provider="unsafe",
+            status=ProviderStatus.OK,
+            amount_out=2**256,
+            latency_ms=1,
+        )
+
+
+def test_vault_context_rejects_unsafe_rate_and_block() -> None:
+    with pytest.raises(ValidationError):
+        VaultContext(block_number=-1, price_per_share=Decimal("1"))
+    with pytest.raises(ValidationError):
+        VaultContext(block_number=1, price_per_share=Decimal("Infinity"))
+
+
+def test_normal_provider_and_vault_values_remain_valid() -> None:
+    price = PriceResult(
+        provider="safe",
+        status=ProviderStatus.OK,
+        price_usd=Decimal("1.25"),
+        latency_ms=1,
+    )
+    quote = QuoteResult(
+        provider="safe",
+        status=ProviderStatus.OK,
+        amount_out=10,
+        amount_out_min=9,
+        latency_ms=1,
+    )
+    vault = VaultContext(block_number=1, price_per_share=Decimal("1.1"))
+
+    assert price.success and quote.success and vault.price_per_share == Decimal("1.1")

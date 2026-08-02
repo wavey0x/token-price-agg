@@ -149,6 +149,38 @@ async def test_vault_resolver_reuses_negative_detection_cache_until_expiry(
     assert yearn.calls == 2
 
 
+@pytest.mark.asyncio
+async def test_vault_resolver_bounds_detection_caches() -> None:
+    resolver = VaultResolver(
+        Settings(
+            rpc_urls=["https://rpc.example"],
+            vault_cache_max_entries=2,
+        )
+    )
+    erc4626 = _FakeErc4626Adapter(None)
+    yearn = _FakeYearnAdapter(None)
+    cast(Any, resolver)._erc4626 = erc4626
+    cast(Any, resolver)._yearn_v2 = yearn
+
+    for suffix in (1, 2, 3):
+        await resolver._detect_vault(f"0x{suffix:040x}", 1)
+
+    assert len(resolver._negative_cache) == 2
+    assert (1, f"0x{1:040x}") not in resolver._negative_cache
+
+
+def test_vault_resolver_prunes_expired_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = 1000.0
+    monkeypatch.setattr(cast(Any, resolver_module).time, "monotonic", lambda: now)
+    resolver = VaultResolver(Settings(rpc_urls=["https://rpc.example"]))
+    key = (1, "0x0000000000000000000000000000000000000001")
+    resolver._store_negative(key, now + 1)
+
+    now = 1002.0
+    assert resolver._cached_vault(key=key, now=now) == (False, None)
+    assert key not in resolver._negative_cache
+
+
 class _FakeErc4626Adapter:
     def __init__(self, result: Erc4626VaultInfo | None) -> None:
         self._result = result

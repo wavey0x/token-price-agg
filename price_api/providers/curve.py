@@ -23,6 +23,7 @@ from price_api.providers.parsing import (
     parse_datetime,
     parse_decimal,
     parse_int,
+    parse_positive_decimal,
 )
 
 
@@ -63,7 +64,7 @@ class CurveProvider(ProviderPlugin):
             if isinstance(data, dict):
                 price_value = get_first(data, ["usdPrice", "usd_price", "price"])
 
-        price = parse_decimal(price_value)
+        price = parse_positive_decimal(price_value)
         if price is None:
             return PriceResult(
                 provider=self.id,
@@ -229,10 +230,11 @@ def _parse_curve_amount(value: object) -> int | None:
     if isinstance(value, list):
         for item in value:
             parsed = parse_int(item)
-            if parsed is not None:
+            if parsed is not None and parsed > 0:
                 return parsed
         return None
-    return parse_int(value)
+    parsed = parse_int(value)
+    return parsed if parsed is not None and parsed > 0 else None
 
 
 def _normalize_route(value: object) -> dict[str, object] | None:

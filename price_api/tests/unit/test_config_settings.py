@@ -52,6 +52,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 "[vault]",
                 "positive_cache_ttl_s = 15",
                 "negative_cache_ttl_s = 90",
+                "cache_max_entries = 1234",
                 "",
                 "[readiness]",
                 "close_wait_ready_threshold = 12",
@@ -69,6 +70,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 "",
                 "[rpc]",
                 'urls = ["https://rpc.1.example", "https://rpc.10.example"]',
+                "request_timeout_ms = 975",
                 "",
                 "[security]",
                 "api_key_auth_enabled = true",
@@ -156,9 +158,11 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.provider_circuit_half_open_probe_count == 1
     assert settings.vault_positive_cache_ttl_s == 15
     assert settings.vault_negative_cache_ttl_s == 90
+    assert settings.vault_cache_max_entries == 1234
     assert settings.close_wait_ready_threshold == 12
     assert settings.chain_ids == [1, 10]
     assert settings.rpc_urls == ["https://rpc.1.example", "https://rpc.10.example"]
+    assert settings.rpc_request_timeout_ms == 975
     assert settings.providers_enabled == ["curve", "defillama"]
     assert settings.price_provider_priority == ["curve"]
     assert settings.quote_provider_priority == ["curve"]
@@ -180,6 +184,40 @@ def test_providers_enabled_can_be_overridden_directly() -> None:
 def test_provider_http_trust_env_defaults_false() -> None:
     settings = Settings()
     assert settings.provider_http_trust_env is False
+
+
+def test_authentication_defaults_enabled_without_config(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("PRICE_API_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("API_KEY_AUTH_ENABLED", raising=False)
+
+    assert Settings(_env_file=None).api_key_auth_enabled is True  # type: ignore[call-arg]
+
+
+def test_explicit_config_file_is_independent_of_working_directory(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    config_path = tmp_path / "price-api.toml"
+    config_path.write_text("[security]\napi_key_auth_enabled = false\n", encoding="utf-8")
+    unrelated = tmp_path / "elsewhere"
+    unrelated.mkdir()
+    monkeypatch.chdir(unrelated)
+    monkeypatch.setenv("PRICE_API_CONFIG_FILE", str(config_path))
+    monkeypatch.delenv("API_KEY_AUTH_ENABLED", raising=False)
+
+    assert Settings(_env_file=None).api_key_auth_enabled is False  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("configured_path", ["config/app.toml", "/missing/price-api.toml"])
+def test_explicit_config_file_must_be_absolute_and_exist(
+    configured_path: str, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PRICE_API_CONFIG_FILE", configured_path)
+
+    with pytest.raises(ValueError, match="PRICE_API_CONFIG_FILE"):
+        Settings(_env_file=None)  # type: ignore[call-arg]
 
 
 def test_lifi_deny_exchanges_can_be_set_from_env(monkeypatch: MonkeyPatch) -> None:

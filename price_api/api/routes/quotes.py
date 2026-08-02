@@ -12,6 +12,7 @@ from price_api.api.routes.aggregate_utils import (
 from price_api.api.schemas.query_params import parse_provider_query_values
 from price_api.api.schemas.requests import QuoteRequest
 from price_api.api.schemas.responses import (
+    AggregateQuoteSummaryResponse,
     QuoteAggregateResponse,
     QuoteProviderEntry,
     QuoteVaultContext,
@@ -150,9 +151,9 @@ async def _handle_quote_request(
         providers_payload[provider_id] = QuoteProviderEntry(
             status=provider_result.status,
             success=provider_result.success,
-            amount_in=provider_result.amount_in,
-            amount_out=provider_result.amount_out,
-            amount_out_min=provider_result.amount_out_min,
+            amount_in=_base_unit_string(provider_result.amount_in),
+            amount_out=_base_unit_string(provider_result.amount_out),
+            amount_out_min=_base_unit_string(provider_result.amount_out_min),
             price_impact_bps=provider_result.price_impact_bps,
             estimated_gas=provider_result.estimated_gas,
             latency_ms=provider_result.latency_ms,
@@ -167,9 +168,9 @@ async def _handle_quote_request(
     if selected is not None:
         selected_quote = SelectedQuote(
             provider=selected.provider,
-            amount_in=selected.amount_in,
-            amount_out=selected.amount_out,
-            amount_out_min=selected.amount_out_min,
+            amount_in=_base_unit_string(selected.amount_in),
+            amount_out=_base_unit_string(selected.amount_out),
+            amount_out_min=_base_unit_string(selected.amount_out_min),
             price_impact_bps=selected.price_impact_bps,
             estimated_gas=selected.estimated_gas,
             latency_ms=selected.latency_ms,
@@ -190,8 +191,19 @@ async def _handle_quote_request(
         provider_order=provider_order,
         quote=selected_quote,
         providers=providers_payload,
-        summary=summary,
+        summary=AggregateQuoteSummaryResponse(
+            requested_providers=summary.requested_providers,
+            successful_providers=summary.successful_providers,
+            failed_providers=summary.failed_providers,
+            high_amount_out=_base_unit_string(summary.high_amount_out),
+            low_amount_out=_base_unit_string(summary.low_amount_out),
+            median_amount_out=_base_unit_string(summary.median_amount_out),
+        ),
     )
+
+
+def _base_unit_string(value: int | None) -> str | None:
+    return str(value) if value is not None else None
 
 
 def _to_quote_vault_context(vault_context: VaultContext | None) -> QuoteVaultContext | None:

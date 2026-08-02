@@ -11,6 +11,7 @@ _KNOWN_ENDPOINTS = {
     "/v1/token",
     "/metrics",
 }
+_KNOWN_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 
 HTTP_REQUESTS_TOTAL = Counter(
     "price_api_http_requests_total",
@@ -139,6 +140,7 @@ def observe_http_request(
     duration_seconds: float,
 ) -> None:
     endpoint = normalize_endpoint(endpoint)
+    method = normalize_method(method)
     status_class = f"{status_code // 100}xx"
     HTTP_REQUESTS_TOTAL.labels(endpoint=endpoint, method=method, status_class=status_class).inc()
     HTTP_REQUEST_LATENCY_SECONDS.labels(endpoint=endpoint, method=method).observe(duration_seconds)
@@ -232,3 +234,8 @@ def set_process_close_wait_sockets(count: int) -> None:
 
 def normalize_endpoint(endpoint: str) -> str:
     return endpoint if endpoint in _KNOWN_ENDPOINTS else "/unknown"
+
+
+def normalize_method(method: str) -> str:
+    normalized = method.upper()
+    return normalized if normalized in _KNOWN_METHODS else "OTHER"

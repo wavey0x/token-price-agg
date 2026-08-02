@@ -6,7 +6,7 @@ groups:
           (
             sum(rate(price_api_http_requests_total{status_class="5xx"}[5m]))
             /
-            clamp_min(sum(rate(price_api_http_requests_total[5m])), 1)
+            clamp_min(sum(rate(price_api_http_requests_total[5m])), 0.001)
           ) > 0.02
         for: 10m
         labels:
@@ -55,7 +55,7 @@ groups:
             /
             clamp_min(
               sum(rate(price_api_http_requests_total{endpoint=~"/v1/price|/v1/quote",method="GET"}[10m])),
-              1
+              0.001
             )
           ) > 0.2
         for: 10m
@@ -88,3 +88,34 @@ groups:
         annotations:
           summary: "price-api provider unavailable"
           description: "Provider {{ $labels.provider }} has been unavailable for more than 15 minutes."
+
+      - alert: PriceApiAdmissionRejections
+        expr: sum(rate(price_api_admission_rejections_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api is rejecting work at admission"
+          description: "Admission rejections have continued for 10 minutes."
+
+      - alert: PriceApiProviderCircuitOpen
+        expr: price_api_provider_circuit_state == 2
+        for: 5m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api provider circuit is open"
+          description: "Provider {{ $labels.provider }} circuit has remained open for 5 minutes."
+
+      - alert: PriceApiReadinessFailures
+        expr: |
+          sum(rate(price_api_http_requests_total{endpoint="/v1/ready",status_class="5xx"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: price-api
+        annotations:
+          summary: "price-api readiness endpoint is failing"
+          description: "The readiness endpoint has returned 5xx responses for 5 minutes."

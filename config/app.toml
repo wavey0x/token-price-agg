@@ -4,6 +4,7 @@ ids = [1]
 [rpc]
 # Enables best-effort `use_underlying=true` vault resolution.
 urls = []
+request_timeout_ms = 1500
 
 [timeouts]
 provider_request_timeout_ms = 2000
@@ -44,6 +45,7 @@ half_open_probe_count = 2
 [vault]
 positive_cache_ttl_s = 30
 negative_cache_ttl_s = 300
+cache_max_entries = 4096
 
 [readiness]
 close_wait_ready_threshold = 80
@@ -58,6 +60,8 @@ deny_exchanges = ["fly"]
 
 [token_metadata]
 db_path = "data/token_metadata.sqlite3"
+max_pending_verifications = 64
+refresh_on_startup = false
 
 [security]
 api_key_auth_enabled = true

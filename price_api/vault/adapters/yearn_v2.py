@@ -4,7 +4,11 @@ from dataclasses import dataclass
 
 from web3 import Web3
 
-from price_api.vault.adapters.common import load_abi
+from price_api.vault.adapters.common import (
+    decode_token_decimals,
+    load_abi,
+    validate_token_decimals,
+)
 from price_api.web3.client import AsyncRpcClient
 
 _ERC20_ABI = load_abi("erc20.json")
@@ -75,12 +79,17 @@ class YearnV2Adapter:
                 fn_name="pricePerShare",
                 args=[],
             )
+            share_decimals = validate_token_decimals(share_decimals_raw)
+            underlying_decimals = validate_token_decimals(underlying_decimals_raw)
+            price_per_share = int(pps_raw)
+            if share_decimals is None or underlying_decimals is None or price_per_share <= 0:
+                return None
             return YearnV2VaultInfo(
                 vault_address=vault_address,
                 underlying_token=str(underlying),
-                share_decimals=int(share_decimals_raw),
-                underlying_decimals=int(underlying_decimals_raw),
-                price_per_share=int(pps_raw),
+                share_decimals=share_decimals,
+                underlying_decimals=underlying_decimals,
+                price_per_share=price_per_share,
             )
         except Exception:
             return None
@@ -122,9 +131,14 @@ class YearnV2Adapter:
             return None
 
         underlying = _decode_address(token_data)
-        share_decimals = _decode_uint256(decimals_data)
+        share_decimals = decode_token_decimals(decimals_data)
         price_per_share = _decode_uint256(pps_data)
-        if underlying is None or share_decimals is None or price_per_share is None:
+        if (
+            underlying is None
+            or share_decimals is None
+            or price_per_share is None
+            or price_per_share <= 0
+        ):
             return None
 
         underlying_decimals_raw = await self._rpc_client.call(
@@ -141,8 +155,8 @@ class YearnV2Adapter:
         if not underlying_decimals_success or underlying_decimals_data is None:
             return None
 
-        underlying_decimals = _decode_uint256(underlying_decimals_data)
-        if underlying_decimals is None or underlying_decimals < 0:
+        underlying_decimals = decode_token_decimals(underlying_decimals_data)
+        if underlying_decimals is None:
             return None
 
         return YearnV2VaultInfo(

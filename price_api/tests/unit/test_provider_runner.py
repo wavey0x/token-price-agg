@@ -13,6 +13,7 @@ from price_api.core.provider_runner import ProviderOperationRunner
 from price_api.providers.base import ProviderPlugin
 
 USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+DAI = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
 
 
 @pytest.mark.asyncio
@@ -53,6 +54,96 @@ async def test_provider_runner_cancels_child_tasks_when_parent_is_cancelled() ->
         await task
 
     assert events == ["started", "cancelled"]
+
+
+@pytest.mark.asyncio
+async def test_provider_runner_releases_partial_admission_when_cancelled() -> None:
+    blocker_started = asyncio.Event()
+    release_blocker = asyncio.Event()
+
+    class ProviderA(ProviderPlugin):
+        id: ClassVar[str] = "provider-a"
+        supports_price: ClassVar[bool] = True
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.OK,
+                token=req.token,
+                price_usd=Decimal("1"),
+                latency_ms=1,
+            )
+
+    class ProviderB(ProviderPlugin):
+        id: ClassVar[str] = "provider-b"
+        supports_price: ClassVar[bool] = True
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            blocker_started.set()
+            await release_blocker.wait()
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.OK,
+                token=req.token,
+                price_usd=Decimal("1"),
+                latency_ms=1,
+            )
+
+    runner = ProviderOperationRunner(
+        settings=Settings(
+            provider_fanout_per_request=2,
+            provider_global_units=10,
+            provider_per_provider_units=1,
+            admission_acquire_timeout_ms=5000,
+        )
+    )
+    req = ProviderPriceRequest(chain_id=1, token=TokenRef(chain_id=1, address=USDC))
+    blocker = asyncio.create_task(
+        runner.run_prices(plugins=[ProviderB()], req=req, deadline_ms=5000)
+    )
+    await blocker_started.wait()
+
+    cancelled = asyncio.create_task(
+        runner.run_prices(plugins=[ProviderA(), ProviderB()], req=req, deadline_ms=5000)
+    )
+    for _ in range(100):
+        if runner._capacity.provider_limiter("provider-a").used == 1:
+            break
+        await asyncio.sleep(0)
+    cancelled.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await cancelled
+
+    assert runner._capacity.provider_limiter("provider-a").used == 0
+    assert runner._capacity.provider_limiter("provider-b").used == 1
+
+    release_blocker.set()
+    await blocker
+
+
+@pytest.mark.asyncio
+async def test_provider_runner_rejects_success_for_wrong_token_identity() -> None:
+    class WrongTokenPlugin(ProviderPlugin):
+        id: ClassVar[str] = "wrong-token"
+        supports_price: ClassVar[bool] = True
+
+        async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
+            return PriceResult(
+                provider=self.id,
+                status=ProviderStatus.OK,
+                token=TokenRef(chain_id=req.chain_id, address=DAI),
+                price_usd=Decimal("1"),
+                latency_ms=1,
+            )
+
+    runner = ProviderOperationRunner(settings=Settings())
+    req = ProviderPriceRequest(chain_id=1, token=TokenRef(chain_id=1, address=USDC))
+
+    result = (await runner.run_prices(plugins=[WrongTokenPlugin()], req=req, deadline_ms=1000))[0]
+
+    assert result.status == ProviderStatus.ERROR
+    assert result.error is not None
+    assert result.error.type == ErrorType.INTERNAL
 
 
 @pytest.mark.asyncio

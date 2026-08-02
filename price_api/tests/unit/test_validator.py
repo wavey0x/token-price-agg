@@ -33,3 +33,8 @@ def test_parse_positive_int() -> None:
 def test_parse_positive_int_invalid(invalid: str) -> None:
     with pytest.raises(InvalidRequestError):
         parse_positive_int(invalid, "amount")
+
+
+def test_parse_positive_int_rejects_value_above_uint256() -> None:
+    with pytest.raises(InvalidRequestError, match="uint256 maximum"):
+        parse_positive_int(str(2**256), "amount")

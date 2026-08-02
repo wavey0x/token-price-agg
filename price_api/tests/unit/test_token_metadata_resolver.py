@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from decimal import Decimal
 from pathlib import Path
@@ -12,6 +13,7 @@ from price_api.core.models import PriceResult, TokenMetadata, TokenRef
 from price_api.token_metadata.resolver import TokenMetadataResolver
 
 USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+DAI = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
 
 
 @pytest.mark.asyncio
@@ -266,3 +268,82 @@ async def test_resolver_preserves_multiple_provider_logo_urls(tmp_path: Path) ->
 
     # First provider logo returned ephemerally
     assert metadata[USDC].logo_url == "https://provider-a.com/usdc.png"
+
+
+def test_logo_verification_update_does_not_clobber_newer_metadata(tmp_path: Path) -> None:
+    resolver = TokenMetadataResolver(
+        Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
+    )
+    resolver._cache.upsert_many(
+        [
+            TokenMetadata(
+                chain_id=1,
+                address=USDC,
+                symbol="USDC",
+                decimals=6,
+                source="onchain_multicall",
+            )
+        ]
+    )
+
+    resolver._cache.upsert_logo_verification(
+        TokenMetadata(
+            chain_id=1,
+            address=USDC,
+            symbol="STALE",
+            decimals=18,
+            logo_url="https://example.com/usdc.png",
+            logo_status="valid",
+            logo_source="provider",
+            logo_checked_at=123,
+            logo_http_status=200,
+            source="stale",
+        )
+    )
+
+    cached = resolver._cache.get_many(chain_id=1, addresses=[USDC])[USDC]
+    assert cached.symbol == "USDC"
+    assert cached.decimals == 6
+    assert cached.source == "onchain_multicall"
+    assert cached.logo_url == "https://example.com/usdc.png"
+    assert cached.logo_status == "valid"
+
+
+@pytest.mark.asyncio
+async def test_resolver_bounds_background_logo_verification_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    resolver = TokenMetadataResolver(
+        Settings(
+            token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"),
+            rpc_urls=[],
+            token_logo_max_pending_verifications=1,
+        )
+    )
+    release = asyncio.Event()
+
+    async def _blocked_verify(**_: object) -> None:
+        await release.wait()
+
+    monkeypatch.setattr(resolver, "_verify_and_persist", _blocked_verify)
+    resolver._enqueue_verification(
+        chain_id=1,
+        address=USDC,
+        provider_logo_urls=None,
+        source_logo_candidates=None,
+        existing=None,
+    )
+    resolver._enqueue_verification(
+        chain_id=1,
+        address=DAI,
+        provider_logo_urls=None,
+        source_logo_candidates=None,
+        existing=None,
+    )
+
+    assert len(resolver._verification_tasks) == 1
+    assert resolver._pending_verification == {(1, USDC)}
+
+    release.set()
+    await resolver.aclose()

@@ -2,9 +2,14 @@
 
 ## Authentication and Rate Limits
 
-When `API_KEY_AUTH_ENABLED=true`, all `/v1/*` endpoints require:
+When `API_KEY_AUTH_ENABLED=true`, `/v1/*` endpoints accept either:
 
 - `Authorization: Bearer <api-key>`
+- `x-api-key: <api-key>`
+
+If `API_KEY_UNAUTH_ACCESS_ENABLED=true`, a request with no credentials is allowed through the
+separate per-client anonymous rate limit. Set it to `false` when every `/v1/*` request must carry a
+valid key. Invalid, revoked, or expired credentials are never treated as anonymous.
 
 Failure behavior:
 
@@ -371,7 +376,7 @@ Key fields:
 - `quote`: selected successful provider result, or `null`
 - `providers`: keyed object of per-provider results
 - `summary`: aggregate statistics
-- quote amounts are returned as strict base-unit integers (`amount_in`, `amount_out`, `amount_out_min`), not human-formatted decimals
+- quote amounts are returned as base-unit integer strings (`amount_in`, `amount_out`, `amount_out_min`) so large values remain exact in JavaScript clients
 - `summary` quote fields: `high_amount_out`, `low_amount_out`, `median_amount_out`
 - `summary` common fields: `requested_providers`, `successful_providers`, `failed_providers`
 - `vault_context` is included only in top-level `quote` (not repeated in `providers.*`)
@@ -386,9 +391,9 @@ Key fields:
 | --- | --- | --- |
 | `status` | string | `ok`, `no_route`, `error`, or `bad_request` |
 | `success` | boolean | `true` when `status == "ok"` |
-| `amount_in` | integer \| null | Input amount in base units. Mirrors the request value. |
-| `amount_out` | integer \| null | Output amount in base units. `null` on failure. |
-| `amount_out_min` | integer \| null | Minimum output for slippage. `null` if provider doesn't support or on failure. |
+| `amount_in` | string (integer) \| null | Input amount in base units. Mirrors the request value. |
+| `amount_out` | string (integer) \| null | Output amount in base units. `null` on failure. |
+| `amount_out_min` | string (integer) \| null | Minimum output for slippage. `null` if provider doesn't support or on failure. |
 | `price_impact_bps` | integer \| null | Price impact in basis points. `null` if unavailable. |
 | `estimated_gas` | integer \| null | Gas estimate. `null` if unavailable. |
 | `latency_ms` | integer | Provider response time |
@@ -420,9 +425,9 @@ Key fields:
   "provider_order": ["curve"],
   "quote": {
     "provider": "curve",
-    "amount_in": 1000000000000000000,
-    "amount_out": 742100,
-    "amount_out_min": 734679,
+    "amount_in": "1000000000000000000",
+    "amount_out": "742100",
+    "amount_out_min": "734679",
     "price_impact_bps": 14,
     "estimated_gas": 182000,
     "latency_ms": 89,
@@ -435,9 +440,9 @@ Key fields:
     "curve": {
       "status": "ok",
       "success": true,
-      "amount_in": 1000000000000000000,
-      "amount_out": 742100,
-      "amount_out_min": 734679,
+      "amount_in": "1000000000000000000",
+      "amount_out": "742100",
+      "amount_out_min": "734679",
       "price_impact_bps": 14,
       "estimated_gas": 182000,
       "latency_ms": 89,
@@ -451,9 +456,9 @@ Key fields:
     "requested_providers": 1,
     "successful_providers": 1,
     "failed_providers": 0,
-    "high_amount_out": 742100,
-    "low_amount_out": 742100,
-    "median_amount_out": 742100
+    "high_amount_out": "742100",
+    "low_amount_out": "742100",
+    "median_amount_out": "742100"
   }
 }
 ```
@@ -469,9 +474,9 @@ Key fields:
   "provider_order": ["curve", "lifi"],
   "quote": {
     "provider": "curve",
-    "amount_in": 1000000000000000000,
-    "amount_out": 742100,
-    "amount_out_min": 734679,
+    "amount_in": "1000000000000000000",
+    "amount_out": "742100",
+    "amount_out_min": "734679",
     "price_impact_bps": 14,
     "estimated_gas": 182000,
     "latency_ms": 89,
@@ -484,9 +489,9 @@ Key fields:
     "curve": {
       "status": "ok",
       "success": true,
-      "amount_in": 1000000000000000000,
-      "amount_out": 742100,
-      "amount_out_min": 734679,
+      "amount_in": "1000000000000000000",
+      "amount_out": "742100",
+      "amount_out_min": "734679",
       "price_impact_bps": 14,
       "estimated_gas": 182000,
       "latency_ms": 89,
@@ -517,9 +522,9 @@ Key fields:
     "requested_providers": 2,
     "successful_providers": 1,
     "failed_providers": 1,
-    "high_amount_out": 742100,
-    "low_amount_out": 742100,
-    "median_amount_out": 742100
+    "high_amount_out": "742100",
+    "low_amount_out": "742100",
+    "median_amount_out": "742100"
   }
 }
 ```

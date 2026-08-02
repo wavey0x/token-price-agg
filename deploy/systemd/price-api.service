@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/price-api
 EnvironmentFile=/opt/price-api/.env
-ExecStart=/opt/price-api/.venv/bin/uvicorn price_api.app.main:app --host 0.0.0.0 --port 8000
+ExecStart=/opt/price-api/.venv/bin/uvicorn price_api.app.main:app --host 127.0.0.1 --port 8000
 # If API_KEY_AUTH_ENABLED=true, ensure external health/readiness checks send
 # Authorization: Bearer <api-key> for /v1/* endpoints.
 Restart=always

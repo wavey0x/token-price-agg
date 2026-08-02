@@ -61,9 +61,15 @@ def test_quote_endpoint_supports_default_quote_matrix(
     assert payload["providers"]["curve"]["status"] == "ok"
     assert payload["providers"]["curve"]["route"] is None
     assert "vault_context" not in payload["providers"]["curve"]
-    assert payload["summary"]["high_amount_out"] == 1000000
-    assert payload["summary"]["low_amount_out"] == 1000000
-    assert payload["summary"]["median_amount_out"] == 1000000
+    assert payload["quote"]["amount_in"] == "1000000000000000000"
+    assert payload["quote"]["amount_out"] == "1000000"
+    assert payload["quote"]["amount_out_min"] == "990000"
+    assert payload["providers"]["curve"]["amount_in"] == "1000000000000000000"
+    assert payload["providers"]["curve"]["amount_out"] == "1000000"
+    assert payload["providers"]["curve"]["amount_out_min"] == "990000"
+    assert payload["summary"]["high_amount_out"] == "1000000"
+    assert payload["summary"]["low_amount_out"] == "1000000"
+    assert payload["summary"]["median_amount_out"] == "1000000"
     assert "best_amount_out" not in payload["summary"]
     assert "best_provider" not in payload["summary"]
     assert "partial" not in payload

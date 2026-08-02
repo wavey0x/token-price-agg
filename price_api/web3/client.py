@@ -10,7 +10,13 @@ from web3.providers.rpc import AsyncHTTPProvider
 class AsyncRpcClient:
     def __init__(self, *, rpc_urls: list[str], request_timeout_s: float = 1.5) -> None:
         self._clients: list[AsyncWeb3[Any]] = [
-            AsyncWeb3(AsyncHTTPProvider(url, request_kwargs={"timeout": request_timeout_s}))
+            AsyncWeb3(
+                AsyncHTTPProvider(
+                    url,
+                    request_kwargs={"timeout": request_timeout_s},
+                    exception_retry_configuration=None,
+                )
+            )
             for url in rpc_urls
         ]
 
@@ -52,3 +58,7 @@ class AsyncRpcClient:
         if last_exc is None:
             raise RuntimeError("Failed to fetch block number")
         raise last_exc
+
+    async def aclose(self) -> None:
+        for client in self._clients:
+            await client.provider.disconnect()

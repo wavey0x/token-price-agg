@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -42,6 +43,13 @@ class Settings(BaseSettings):
     rpc_urls: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         validation_alias=AliasChoices("rpc_urls", AliasPath("rpc", "urls")),
+    )
+    rpc_request_timeout_ms: int = Field(
+        default=1500,
+        validation_alias=AliasChoices(
+            "rpc_request_timeout_ms",
+            AliasPath("rpc", "request_timeout_ms"),
+        ),
     )
 
     provider_request_timeout_ms: int = Field(
@@ -234,6 +242,13 @@ class Settings(BaseSettings):
             AliasPath("vault", "negative_cache_ttl_s"),
         ),
     )
+    vault_cache_max_entries: int = Field(
+        default=4096,
+        validation_alias=AliasChoices(
+            "vault_cache_max_entries",
+            AliasPath("vault", "cache_max_entries"),
+        ),
+    )
     close_wait_ready_threshold: int = Field(
         default=80,
         validation_alias=AliasChoices(
@@ -248,8 +263,22 @@ class Settings(BaseSettings):
             AliasPath("token_metadata", "db_path"),
         ),
     )
-    api_key_auth_enabled: bool = Field(
+    token_logo_max_pending_verifications: int = Field(
+        default=64,
+        validation_alias=AliasChoices(
+            "token_logo_max_pending_verifications",
+            AliasPath("token_metadata", "max_pending_verifications"),
+        ),
+    )
+    token_logo_refresh_on_startup: bool = Field(
         default=False,
+        validation_alias=AliasChoices(
+            "token_logo_refresh_on_startup",
+            AliasPath("token_metadata", "refresh_on_startup"),
+        ),
+    )
+    api_key_auth_enabled: bool = Field(
+        default=True,
         validation_alias=AliasChoices(
             "api_key_auth_enabled",
             AliasPath("security", "api_key_auth_enabled"),
@@ -329,7 +358,7 @@ class Settings(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
-            TomlConfigSettingsSource(settings_cls, toml_file=Path("config/app.toml")),
+            TomlConfigSettingsSource(settings_cls, toml_file=_config_file_path()),
             file_secret_settings,
         )
 
@@ -458,6 +487,12 @@ class Settings(BaseSettings):
                 ),
                 ("VAULT_POSITIVE_CACHE_TTL_S", self.vault_positive_cache_ttl_s),
                 ("VAULT_NEGATIVE_CACHE_TTL_S", self.vault_negative_cache_ttl_s),
+                ("VAULT_CACHE_MAX_ENTRIES", self.vault_cache_max_entries),
+                ("RPC_REQUEST_TIMEOUT_MS", self.rpc_request_timeout_ms),
+                (
+                    "TOKEN_LOGO_MAX_PENDING_VERIFICATIONS",
+                    self.token_logo_max_pending_verifications,
+                ),
                 ("PROVIDER_FANOUT_PER_REQUEST", self.provider_fanout_per_request),
                 ("PROVIDER_GLOBAL_LIMIT", self.provider_global_limit),
                 ("PROVIDER_PER_PROVIDER_UNITS", self.provider_per_provider_units),
@@ -529,6 +564,19 @@ def _parse_string_list(value: object) -> list[str] | None:
     if isinstance(value, list):
         return [str(item) for item in value]
     return None
+
+
+def _config_file_path() -> Path:
+    configured = os.getenv("PRICE_API_CONFIG_FILE")
+    if not configured:
+        return Path("config/app.toml")
+
+    path = Path(configured)
+    if not path.is_absolute():
+        raise ValueError("PRICE_API_CONFIG_FILE must be an absolute path")
+    if not path.is_file():
+        raise ValueError("PRICE_API_CONFIG_FILE must point to an existing file")
+    return path
 
 
 def _require_positive(fields: tuple[tuple[str, int | float], ...]) -> None:

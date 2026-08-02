@@ -43,6 +43,8 @@ def _validate_price_response(symbol: str, payload: dict[str, Any]) -> None:
     providers = payload["providers"]
     assert isinstance(providers, dict)
     assert payload["provider_order"]
+    assert payload["price_data"] is not None
+    assert any(entry.get("success") is True for entry in providers.values())
 
 
 def _validate_quote_response(symbol_out: str, payload: dict[str, Any]) -> None:
@@ -53,6 +55,11 @@ def _validate_quote_response(symbol_out: str, payload: dict[str, Any]) -> None:
     providers = payload["providers"]
     assert isinstance(providers, dict)
     assert payload["provider_order"]
+    assert payload["quote"] is not None
+    assert any(entry.get("success") is True for entry in providers.values())
+    for field in ("amount_in", "amount_out", "amount_out_min"):
+        value = payload["quote"].get(field)
+        assert value is None or isinstance(value, str)
 
 
 def main() -> int:

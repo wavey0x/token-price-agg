@@ -11,6 +11,7 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 _POSITIVE_INT_RE = re.compile(r"^[1-9][0-9]*$")
 MAX_POSITIVE_INT_DIGITS = 78
+MAX_UINT256 = 2**256 - 1
 
 
 class AddressValidator:
@@ -36,8 +37,13 @@ def parse_positive_int(value: str, field_name: str) -> int:
             "INVALID_AMOUNT", f"Field '{field_name}' must be a positive integer string"
         )
     try:
-        return int(value)
+        parsed = int(value)
     except ValueError as exc:
         raise InvalidRequestError(
             "INVALID_AMOUNT", f"Field '{field_name}' must be a positive integer string"
         ) from exc
+    if parsed > MAX_UINT256:
+        raise InvalidRequestError(
+            "INVALID_AMOUNT", f"Field '{field_name}' exceeds the uint256 maximum"
+        )
+    return parsed

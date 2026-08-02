@@ -143,62 +143,60 @@ class ProviderOperationRunner:
         runnable: list[_RunnableProvider] = []
         provider_reservations: list[LimitReservation] = []
         circuit_allowed_provider_ids: set[str] = set()
-
-        for plugin in plugins:
-            assert isinstance(plugin, ProviderPlugin)
-            provider_id = plugin.id
-
-            static_reason = self._static_rejection_reason(plugin=plugin, operation=operation)
-            if static_reason is not None:
-                immediate_results.append(static_result(plugin, req, static_reason))
-                continue
-
-            if not self._circuit.allow(provider_id):
-                immediate_results.append(static_result(plugin, req, "circuit_open"))
-                continue
-            circuit_allowed_provider_ids.add(provider_id)
-
-            provider_reservation = await self._capacity.provider_limiter(provider_id).try_acquire(
-                units=1,
-                timeout_ms=self._settings.admission_acquire_timeout_ms,
-            )
-            if provider_reservation is None:
-                immediate_results.append(static_result(plugin, req, "provider_capacity"))
-                continue
-            provider_reservations.append(provider_reservation)
-            runnable.append(_RunnableProvider(plugin=plugin, provider_id=provider_id))
-
-        work_units = len(runnable)
         global_reservation: LimitReservation | None = None
-
-        if work_units > 0:
-            global_reservation = await self._capacity.global_limiter.try_acquire(
-                units=work_units,
-                timeout_ms=self._settings.admission_acquire_timeout_ms,
-            )
-            if global_reservation is None:
-                await _release_all(provider_reservations)
-                self._release_circuit_probes(circuit_allowed_provider_ids)
-                record_admission_rejection(reason="global_capacity", operation=operation)
-                self._sync_capacity_metrics(operation=operation)
-                raise AdmissionRejectedError(
-                    "SERVICE_OVERLOADED",
-                    "Provider capacity exhausted",
-                    status_code=503,
-                )
-
-        self._sync_capacity_metrics(operation=operation)
-
-        fanout_semaphore = asyncio.Semaphore(self._settings.provider_fanout_per_request)
-        deadline_s = max(deadline_ms, 1) / 1000
         tasks: dict[asyncio.Task[TResult], str] = {}
-        for runnable_provider in runnable:
-            task: asyncio.Task[TResult] = asyncio.create_task(
-                run_single_plugin(runnable_provider.plugin, req, fanout_semaphore)
-            )
-            tasks[task] = runnable_provider.provider_id
 
         try:
+            for plugin in plugins:
+                assert isinstance(plugin, ProviderPlugin)
+                provider_id = plugin.id
+
+                static_reason = self._static_rejection_reason(plugin=plugin, operation=operation)
+                if static_reason is not None:
+                    immediate_results.append(static_result(plugin, req, static_reason))
+                    continue
+
+                if not self._circuit.allow(provider_id):
+                    immediate_results.append(static_result(plugin, req, "circuit_open"))
+                    continue
+                circuit_allowed_provider_ids.add(provider_id)
+
+                provider_reservation = await self._capacity.provider_limiter(
+                    provider_id
+                ).try_acquire(
+                    units=1,
+                    timeout_ms=self._settings.admission_acquire_timeout_ms,
+                )
+                if provider_reservation is None:
+                    immediate_results.append(static_result(plugin, req, "provider_capacity"))
+                    continue
+                provider_reservations.append(provider_reservation)
+                runnable.append(_RunnableProvider(plugin=plugin, provider_id=provider_id))
+
+            work_units = len(runnable)
+            if work_units > 0:
+                global_reservation = await self._capacity.global_limiter.try_acquire(
+                    units=work_units,
+                    timeout_ms=self._settings.admission_acquire_timeout_ms,
+                )
+                if global_reservation is None:
+                    record_admission_rejection(reason="global_capacity", operation=operation)
+                    raise AdmissionRejectedError(
+                        "SERVICE_OVERLOADED",
+                        "Provider capacity exhausted",
+                        status_code=503,
+                    )
+
+            self._sync_capacity_metrics(operation=operation)
+
+            fanout_semaphore = asyncio.Semaphore(self._settings.provider_fanout_per_request)
+            deadline_s = max(deadline_ms, 1) / 1000
+            for runnable_provider in runnable:
+                task: asyncio.Task[TResult] = asyncio.create_task(
+                    run_single_plugin(runnable_provider.plugin, req, fanout_semaphore)
+                )
+                tasks[task] = runnable_provider.provider_id
+
             results = await self._wait_for_results(
                 tasks=tasks,
                 req=req,
@@ -213,6 +211,11 @@ class ProviderOperationRunner:
                 self._circuit.record_result(result)
             return results
         finally:
+            pending_tasks = [task for task in tasks if not task.done()]
+            for task in pending_tasks:
+                task.cancel()
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
             self._release_circuit_probes(circuit_allowed_provider_ids)
             await _release_all(
                 [
@@ -289,6 +292,7 @@ class ProviderOperationRunner:
                     result = await plugin.get_price(req)
                     if not isinstance(result, PriceResult):
                         raise TypeError("Provider returned non-PriceResult response")
+                    _validate_price_result_identity(result=result, req=req, provider_id=plugin.id)
                 except Exception as exc:
                     elapsed_ms = int((time.perf_counter() - started) * 1000)
                     _LOGGER.exception(
@@ -333,6 +337,7 @@ class ProviderOperationRunner:
                     result = await plugin.get_quote(req)
                     if not isinstance(result, QuoteResult):
                         raise TypeError("Provider returned non-QuoteResult response")
+                    _validate_quote_result_identity(result=result, req=req, provider_id=plugin.id)
                 except Exception as exc:
                     elapsed_ms = int((time.perf_counter() - started) * 1000)
                     _LOGGER.exception(
@@ -592,3 +597,36 @@ async def _release_all(reservations: Sequence[LimitReservation | None]) -> None:
         if reservation is None:
             continue
         await reservation.release()
+
+
+def _validate_price_result_identity(
+    *, result: PriceResult, req: ProviderPriceRequest, provider_id: str
+) -> None:
+    if result.provider != provider_id:
+        raise ValueError("Provider result identity does not match invoked provider")
+    if result.status != ProviderStatus.OK:
+        return
+    if result.token is None or result.token.chain_id != req.chain_id:
+        raise ValueError("Successful price result has invalid token identity")
+    if result.token.address != req.token.address:
+        raise ValueError("Successful price result token does not match request")
+
+
+def _validate_quote_result_identity(
+    *, result: QuoteResult, req: ProviderQuoteRequest, provider_id: str
+) -> None:
+    if result.provider != provider_id:
+        raise ValueError("Provider result identity does not match invoked provider")
+    if result.status != ProviderStatus.OK:
+        return
+    if result.token_in is None or result.token_out is None:
+        raise ValueError("Successful quote result is missing token identity")
+    if result.token_in.chain_id != req.chain_id or result.token_out.chain_id != req.chain_id:
+        raise ValueError("Successful quote result has invalid chain identity")
+    if (
+        result.token_in.address != req.token_in.address
+        or result.token_out.address != req.token_out.address
+    ):
+        raise ValueError("Successful quote result tokens do not match request")
+    if result.amount_in != req.amount_in:
+        raise ValueError("Successful quote result amount_in does not match request")

@@ -19,7 +19,6 @@ JsonBody: TypeAlias = dict[str, object]
 class HttpResponse:
     status_code: int
     json_data: dict[str, object] | list[object] | None
-    text: str
     headers: dict[str, str]
 
 
@@ -209,7 +208,6 @@ class HttpClient:
         return HttpResponse(
             status_code=response.status_code,
             json_data=json_data,
-            text=response.text,
             headers={key.lower(): value for key, value in response.headers.items()},
         )
 

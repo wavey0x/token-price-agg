@@ -126,6 +126,46 @@ class TokenMetadataCache:
             )
             conn.commit()
 
+    def upsert_logo_verification(self, item: TokenMetadata) -> None:
+        """Persist a logo check without overwriting newer token metadata fields."""
+        now = int(time.time())
+        with self._lock, closing(sqlite3.connect(self._db_path)) as conn:
+            conn.execute(
+                """
+                INSERT INTO token_metadata (
+                    chain_id,
+                    address,
+                    symbol,
+                    decimals,
+                    logo_url,
+                    logo_status,
+                    logo_source,
+                    logo_checked_at,
+                    logo_http_status,
+                    source,
+                    updated_at
+                ) VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?)
+                ON CONFLICT(chain_id, address) DO UPDATE SET
+                    logo_url = excluded.logo_url,
+                    logo_status = excluded.logo_status,
+                    logo_source = excluded.logo_source,
+                    logo_checked_at = excluded.logo_checked_at,
+                    logo_http_status = excluded.logo_http_status,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    item.chain_id,
+                    item.address,
+                    item.logo_url,
+                    item.logo_status,
+                    item.logo_source,
+                    item.logo_checked_at,
+                    item.logo_http_status,
+                    now,
+                ),
+            )
+            conn.commit()
+
     def get_logo_source_entries(
         self,
         *,

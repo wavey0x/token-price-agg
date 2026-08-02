@@ -10,7 +10,7 @@ from price_api.providers.http_helpers import (
 )
 from price_api.providers.parsing import (
     parse_datetime,
-    parse_decimal,
+    parse_positive_decimal,
     with_token_metadata,
 )
 
@@ -76,7 +76,7 @@ class DefiLlamaProvider(ProviderPlugin):
                 error=ErrorInfo(type=ErrorType.NO_ROUTE, message="Token not found"),
             )
 
-        price = parse_decimal(coin_data.get("price"))
+        price = parse_positive_decimal(coin_data.get("price"))
         as_of = parse_datetime(coin_data.get("timestamp"))
 
         if price is None:

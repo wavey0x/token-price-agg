@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TypeVar
 
 from price_api.app.config import Settings
 from price_api.core.errors import InvalidRequestError
@@ -20,16 +22,24 @@ from price_api.vault.adapters.erc4626 import Erc4626Adapter, Erc4626VaultInfo
 from price_api.vault.adapters.yearn_v2 import YearnV2Adapter, YearnV2VaultInfo
 from price_api.web3.client import AsyncRpcClient
 
+_CacheValue = TypeVar("_CacheValue")
+
 
 class VaultResolver:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._rpc_client = AsyncRpcClient(rpc_urls=settings.rpc_urls)
+        self._rpc_client = AsyncRpcClient(
+            rpc_urls=settings.rpc_urls,
+            request_timeout_s=settings.rpc_request_timeout_ms / 1000,
+        )
         self._erc4626 = Erc4626Adapter(self._rpc_client)
         self._yearn_v2 = YearnV2Adapter(self._rpc_client)
         self._semaphore = asyncio.Semaphore(settings.web3_limit)
-        self._positive_cache: dict[tuple[int, str], _VaultCacheEntry] = {}
-        self._negative_cache: dict[tuple[int, str], float] = {}
+        self._positive_cache: OrderedDict[tuple[int, str], _VaultCacheEntry] = OrderedDict()
+        self._negative_cache: OrderedDict[tuple[int, str], float] = OrderedDict()
+
+    async def aclose(self) -> None:
+        await self._rpc_client.aclose()
 
     async def resolve_price_request(
         self,
@@ -143,9 +153,12 @@ class VaultResolver:
             erc4626 = await self._erc4626.detect(address, chain_id)
             if erc4626 is not None:
                 vault = _VaultInfo.from_erc4626(erc4626)
-                self._positive_cache[key] = _VaultCacheEntry(
-                    vault=vault,
-                    expires_at=time.monotonic() + self._settings.vault_positive_cache_ttl_s,
+                self._store_positive(
+                    key,
+                    _VaultCacheEntry(
+                        vault=vault,
+                        expires_at=time.monotonic() + self._settings.vault_positive_cache_ttl_s,
+                    ),
                 )
                 self._negative_cache.pop(key, None)
                 return vault
@@ -153,14 +166,20 @@ class VaultResolver:
             yearn = await self._yearn_v2.detect(address, chain_id)
             if yearn is not None:
                 vault = _VaultInfo.from_yearn_v2(yearn)
-                self._positive_cache[key] = _VaultCacheEntry(
-                    vault=vault,
-                    expires_at=time.monotonic() + self._settings.vault_positive_cache_ttl_s,
+                self._store_positive(
+                    key,
+                    _VaultCacheEntry(
+                        vault=vault,
+                        expires_at=time.monotonic() + self._settings.vault_positive_cache_ttl_s,
+                    ),
                 )
                 self._negative_cache.pop(key, None)
                 return vault
 
-        self._negative_cache[key] = time.monotonic() + self._settings.vault_negative_cache_ttl_s
+        self._store_negative(
+            key,
+            time.monotonic() + self._settings.vault_negative_cache_ttl_s,
+        )
         return None
 
     def _cached_vault(
@@ -169,15 +188,40 @@ class VaultResolver:
         key: tuple[int, str],
         now: float,
     ) -> tuple[bool, _VaultInfo | None]:
+        self._prune_expired(now)
         cached = self._positive_cache.get(key)
         if cached is not None and now < cached.expires_at:
+            self._positive_cache.move_to_end(key)
             return True, cached.vault
 
         negative_expires_at = self._negative_cache.get(key)
         if negative_expires_at is not None and now < negative_expires_at:
+            self._negative_cache.move_to_end(key)
             return True, None
 
         return False, None
+
+    def _store_positive(self, key: tuple[int, str], entry: _VaultCacheEntry) -> None:
+        self._positive_cache[key] = entry
+        self._positive_cache.move_to_end(key)
+        self._trim_cache(self._positive_cache)
+
+    def _store_negative(self, key: tuple[int, str], expires_at: float) -> None:
+        self._negative_cache[key] = expires_at
+        self._negative_cache.move_to_end(key)
+        self._trim_cache(self._negative_cache)
+
+    def _prune_expired(self, now: float) -> None:
+        for key, entry in list(self._positive_cache.items()):
+            if now >= entry.expires_at:
+                self._positive_cache.pop(key, None)
+        for key, expires_at in list(self._negative_cache.items()):
+            if now >= expires_at:
+                self._negative_cache.pop(key, None)
+
+    def _trim_cache(self, cache: OrderedDict[tuple[int, str], _CacheValue]) -> None:
+        while len(cache) > self._settings.vault_cache_max_entries:
+            cache.popitem(last=False)
 
 
 @dataclass(frozen=True)

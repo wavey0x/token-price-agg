@@ -4,6 +4,7 @@ import json
 import logging
 
 from price_api.observability import logging as obs_logging
+from price_api.observability.metrics import normalize_method
 
 
 def test_request_context_bind_and_reset() -> None:
@@ -70,3 +71,8 @@ def test_json_formatter_includes_auth_fields() -> None:
     assert "auth_reason" not in payload
     assert payload["api_key_id"] == "df87009645a15ec6"
     assert payload["status_code"] == 429
+
+
+def test_http_metric_method_is_low_cardinality() -> None:
+    assert normalize_method("get") == "GET"
+    assert normalize_method("ARBITRARY-METHOD") == "OTHER"

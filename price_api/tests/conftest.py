@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +11,7 @@ from price_api.app.dependencies import (
     get_anonymous_rate_limiter,
     get_api_key_store,
     get_provider_registry,
+    get_token_metadata_resolver,
     get_vault_resolver,
 )
 
@@ -20,12 +22,13 @@ def _clear_cached_singletons() -> None:
     get_api_key_store.cache_clear()
     get_anonymous_rate_limiter.cache_clear()
     get_provider_registry.cache_clear()
+    get_token_metadata_resolver.cache_clear()
     get_vault_resolver.cache_clear()
     get_aggregator_service.cache_clear()
 
 
 @pytest.fixture(autouse=True)
-def _set_default_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _set_default_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CHAIN_IDS", "1")
     monkeypatch.setenv("PROVIDER_REQUEST_TIMEOUT_MS", "500")
     monkeypatch.setenv("PROVIDER_MAX_RETRIES", "0")
@@ -38,6 +41,9 @@ def _set_default_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_KEY_RATE_LIMIT_RPM", "300")
     monkeypatch.setenv("API_KEY_UNAUTH_ACCESS_ENABLED", "true")
     monkeypatch.setenv("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS", "1")
+    monkeypatch.setenv("API_KEY_DB_PATH", str(tmp_path / "api_keys.sqlite3"))
+    monkeypatch.setenv("TOKEN_METADATA_DB_PATH", str(tmp_path / "token_metadata.sqlite3"))
+    monkeypatch.setenv("TOKEN_LOGO_REFRESH_ON_STARTUP", "false")
     monkeypatch.setenv("PROVIDERS_ENABLED", "defillama,curve,lifi,enso")
     # Explicitly override .env values so tests can assert missing-key behavior.
     monkeypatch.setenv("LIFI_API_KEY", "")

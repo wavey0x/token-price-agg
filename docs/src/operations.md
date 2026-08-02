@@ -3,11 +3,13 @@
 ## Configuration
 
 Use `config/app.toml` as the primary config source for non-secrets.
+Set `PRICE_API_CONFIG_FILE` to an absolute path when the service may use another working directory.
 
 Common TOML keys:
 
 - `[chains].ids` (default `[1]`)
 - `[rpc].urls` (enables best-effort `use_underlying=true` vault resolution)
+- `[rpc].request_timeout_ms` (default `1500`)
 - `[timeouts].provider_request_timeout_ms`
 - `[timeouts].provider_max_retries`
 - `[timeouts].provider_http_trust_env` (default `false`; opt in only when provider calls should use proxy env)
@@ -16,7 +18,7 @@ Common TOML keys:
 - `[providers].enabled`
 - `[providers].price_priority`
 - `[providers].quote_priority`
-- `[security].api_key_auth_enabled` (default `false`)
+- `[security].api_key_auth_enabled` (default `true`)
 - `[security].api_key_db_path` (default `data/api_keys.sqlite3`)
 - `[security].api_key_rate_limit_rpm` (default `300`)
 - `[security].api_key_unauth_access_enabled` (default `true`)
@@ -102,7 +104,7 @@ This dashboard is focused on downstream provider health (independent of top-leve
 
 - success: `status="ok"`
 - failure: `status!="ok"`
-- window: `rate(...[12h])`
+- window: `rate(...[5m])`
 
 Top row includes separate gauges for:
 
@@ -113,7 +115,7 @@ Top row includes separate gauges for:
 
 Prometheus scrape target for single-server local deployment:
 
-- `127.0.0.1:18743`
+- `127.0.0.1:8000`
 
 Validation checklist:
 

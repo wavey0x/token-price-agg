@@ -43,6 +43,7 @@ async def _start_delayed_json_server(*, delay_s: float) -> tuple[asyncio.Server,
 
 
 @pytest.mark.asyncio
+@pytest.mark.enable_socket
 async def test_provider_http_pool_timeout_maps_to_internal_transport_timeout() -> None:
     server, url = await _start_delayed_json_server(delay_s=0.4)
     client = HttpClient(
@@ -87,6 +88,7 @@ async def test_provider_http_pool_timeout_maps_to_internal_transport_timeout() -
 
 
 @pytest.mark.asyncio
+@pytest.mark.enable_socket
 async def test_provider_http_read_timeout_stays_provider_timeout() -> None:
     server, url = await _start_delayed_json_server(delay_s=0.3)
     client = HttpClient(timeout_ms=50, max_retries=0)

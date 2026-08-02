@@ -19,6 +19,7 @@ from price_api.providers.parsing import (
     parse_datetime,
     parse_decimal,
     parse_int,
+    parse_positive_decimal,
     with_token_metadata,
 )
 
@@ -74,11 +75,13 @@ class LiFiProvider(ProviderPlugin):
         assert payload is not None
         latency_ms = transport.latency_ms
 
-        price = parse_decimal(get_first(payload, ["priceUSD", "priceUsd", "price"]))
+        price = parse_positive_decimal(get_first(payload, ["priceUSD", "priceUsd", "price"]))
         if price is None:
             token_data = payload.get("token")
             if isinstance(token_data, dict):
-                price = parse_decimal(get_first(token_data, ["priceUSD", "priceUsd", "price"]))
+                price = parse_positive_decimal(
+                    get_first(token_data, ["priceUSD", "priceUsd", "price"])
+                )
 
         if price is None:
             return PriceResult(
@@ -168,13 +171,13 @@ class LiFiProvider(ProviderPlugin):
             get_nested(payload, ["estimate", "toAmount"]),
             token_decimals=token_out_decimals,
         )
-        if amount_out is None:
+        if amount_out is None or amount_out <= 0:
             amount_out = parse_base_unit_amount(
                 get_first(payload, ["toAmount", "amountOut"]),
                 token_decimals=token_out_decimals,
             )
 
-        if amount_out is None:
+        if amount_out is None or amount_out <= 0:
             return QuoteResult(
                 provider=self.id,
                 status=ProviderStatus.NO_ROUTE,

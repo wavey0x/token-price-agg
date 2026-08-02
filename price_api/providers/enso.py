@@ -21,6 +21,7 @@ from price_api.providers.parsing import (
     parse_datetime,
     parse_decimal,
     parse_int,
+    parse_positive_decimal,
     with_token_metadata,
 )
 
@@ -75,7 +76,7 @@ class EnsoProvider(ProviderPlugin):
 
         payload = payload_data_or_root(response_payload)
 
-        price = parse_decimal(get_first(payload, ["price", "usdPrice", "priceUsd"]))
+        price = parse_positive_decimal(get_first(payload, ["price", "usdPrice", "priceUsd"]))
         if price is None:
             return PriceResult(
                 provider=self.id,
@@ -142,13 +143,13 @@ class EnsoProvider(ProviderPlugin):
             get_first(payload, ["amountOut", "toAmount", "outputAmount"]),
             token_decimals=token_out_decimals,
         )
-        if amount_out is None:
+        if amount_out is None or amount_out <= 0:
             amount_out = parse_base_unit_amount(
                 get_nested(payload, ["route", "amountOut"]),
                 token_decimals=token_out_decimals,
             )
 
-        if amount_out is None:
+        if amount_out is None or amount_out <= 0:
             return QuoteResult(
                 provider=self.id,
                 status=ProviderStatus.NO_ROUTE,

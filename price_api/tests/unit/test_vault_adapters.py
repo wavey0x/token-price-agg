@@ -3,10 +3,18 @@ from __future__ import annotations
 import pytest
 from web3 import Web3
 
+from price_api.vault.adapters.common import decode_token_decimals
 from price_api.vault.adapters.erc4626 import Erc4626Adapter
 from price_api.vault.adapters.yearn_v2 import YearnV2Adapter
 
 _WEB3 = Web3()
+
+
+def test_token_decimals_decoder_accepts_normal_value_and_rejects_unsafe_values() -> None:
+    assert decode_token_decimals(_WEB3.codec.encode(["uint256"], [18])) == 18
+    assert decode_token_decimals(_WEB3.codec.encode(["uint256"], [78])) is None
+    assert decode_token_decimals(_WEB3.codec.encode(["uint256"], [256])) is None
+    assert decode_token_decimals(b"\x12") is None
 
 
 class RpcStub:

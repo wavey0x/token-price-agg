@@ -76,6 +76,5 @@ def _response(status_code: int, *, headers: dict[str, str] | None = None) -> Htt
     return HttpResponse(
         status_code=status_code,
         json_data={},
-        text="",
         headers={key.lower(): value for key, value in (headers or {}).items()},
     )

@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict
 from price_api.core.errors import ErrorInfo, ProviderStatus
 from price_api.core.models import (
     AggregatePriceSummary,
-    AggregateQuoteSummary,
     ProviderCapability,
     VaultType,
 )
@@ -59,9 +58,9 @@ class QuoteProviderEntry(BaseModel):
 
     status: ProviderStatus
     success: bool
-    amount_in: int | None = None
-    amount_out: int | None = None
-    amount_out_min: int | None = None
+    amount_in: str | None = None
+    amount_out: str | None = None
+    amount_out_min: str | None = None
     price_impact_bps: int | None = None
     estimated_gas: int | None = None
     latency_ms: int
@@ -75,9 +74,9 @@ class SelectedQuote(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider: str
-    amount_in: int | None = None
-    amount_out: int | None = None
-    amount_out_min: int | None = None
+    amount_in: str | None = None
+    amount_out: str | None = None
+    amount_out_min: str | None = None
     price_impact_bps: int | None = None
     estimated_gas: int | None = None
     latency_ms: int
@@ -107,6 +106,17 @@ class QuoteVaultContext(BaseModel):
     block_number: int
 
 
+class AggregateQuoteSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requested_providers: int
+    successful_providers: int
+    failed_providers: int
+    high_amount_out: str | None = None
+    low_amount_out: str | None = None
+    median_amount_out: str | None = None
+
+
 class PriceAggregateResponse(BaseAggregateResponse):
     token: TokenMetadataResponse
     provider_order: list[str]
@@ -121,7 +131,7 @@ class QuoteAggregateResponse(BaseAggregateResponse):
     provider_order: list[str]
     quote: SelectedQuote | None
     providers: dict[str, QuoteProviderEntry]
-    summary: AggregateQuoteSummary
+    summary: AggregateQuoteSummaryResponse
 
 
 class TokenResponse(BaseAggregateResponse):
