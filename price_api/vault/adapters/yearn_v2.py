@@ -62,7 +62,7 @@ class YearnV2Adapter:
 
     async def _detect_with_calls(self, *, vault_address: str) -> YearnV2VaultInfo | None:
         try:
-            underlying = await self._rpc_client.call(
+            underlying_raw = await self._rpc_client.call(
                 address=vault_address,
                 abi=_YEARN_V2_ABI,
                 fn_name="token",
@@ -70,6 +70,9 @@ class YearnV2Adapter:
             )
         except Exception as exc:
             raise _VaultInterfaceNotSupported from exc
+        underlying = _normalize_address(underlying_raw)
+        if underlying is None:
+            raise _VaultInterfaceNotSupported
 
         try:
             share_decimals_raw = await self._rpc_client.call(
@@ -133,21 +136,21 @@ class YearnV2Adapter:
             args=[calls],
         )
         decoded = _normalize_multicall_result(raw)
+        underlying = _decode_interface_address(decoded)
+        if underlying is None:
+            return None
+
         if len(decoded) < 3:
             raise InvalidRequestError(
                 "INVALID_VAULT_DATA",
                 "Yearn v2 detection returned an invalid multicall response",
             )
 
-        token_success, token_data = decoded[0]
         decimals_success, decimals_data = decoded[1]
         pps_success, pps_data = decoded[2]
-        if not token_success:
-            return None
         if (
             not decimals_success
             or not pps_success
-            or token_data is None
             or decimals_data is None
             or pps_data is None
         ):
@@ -156,12 +159,10 @@ class YearnV2Adapter:
                 "Yearn v2 vault returned incomplete metadata",
             )
 
-        underlying = _decode_address(token_data)
         share_decimals = decode_token_decimals(decimals_data)
         price_per_share = _decode_uint256(pps_data)
         if (
-            underlying is None
-            or share_decimals is None
+            share_decimals is None
             or price_per_share is None
             or price_per_share <= 0
         ):
@@ -248,6 +249,22 @@ def _decode_address(data: bytes) -> str | None:
         value = _WEB3.codec.decode(["address"], data)[0]
     except Exception:
         return None
+    return _normalize_address(value)
+
+
+def _decode_interface_address(decoded: list[tuple[bool, bytes | None]]) -> str | None:
+    if not decoded:
+        raise InvalidRequestError(
+            "INVALID_VAULT_DATA",
+            "Yearn v2 detection returned an invalid multicall response",
+        )
+    success, data = decoded[0]
+    if not success or data is None:
+        return None
+    return _decode_address(data)
+
+
+def _normalize_address(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     try:

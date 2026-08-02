@@ -97,6 +97,32 @@ class NonVaultRpcStub:
         return [(False, b""), (False, b""), (False, b"")]
 
 
+class InvalidInterfaceProbeRpcStub:
+    def __init__(self, probe_data: bytes) -> None:
+        self.calls: list[str] = []
+        self.probe_data = probe_data
+
+    async def call(
+        self,
+        *,
+        address: str,
+        abi: list[dict[str, object]],
+        fn_name: str,
+        args: list[object],
+    ) -> object:
+        del address, abi, args
+        self.calls.append(fn_name)
+        if fn_name == "aggregate3":
+            return [
+                (True, self.probe_data),
+                (True, _WEB3.codec.encode(["uint256"], [18])),
+                (True, _WEB3.codec.encode(["uint256"], [10**18])),
+            ]
+        if fn_name in {"asset", "token"}:
+            return self.probe_data
+        raise AssertionError(f"unexpected RPC call: {fn_name}")
+
+
 class FailingRpcStub:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -186,6 +212,43 @@ async def test_vault_adapters_treat_failed_interface_probe_as_non_vault() -> Non
     assert yearn_info is None
     assert erc_rpc.calls == ["aggregate3"]
     assert yearn_rpc.calls == ["aggregate3"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("adapter_type", [Erc4626Adapter, YearnV2Adapter])
+@pytest.mark.parametrize("probe_data", [b"", b"\x01"])
+async def test_vault_adapters_treat_invalid_successful_interface_probe_as_non_vault(
+    adapter_type: type[object], probe_data: bytes
+) -> None:
+    rpc = InvalidInterfaceProbeRpcStub(probe_data)
+    adapter = adapter_type(rpc_client=rpc)  # type: ignore[call-arg]
+
+    info = await adapter.detect(  # type: ignore[attr-defined]
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        chain_id=1,
+    )
+
+    assert info is None
+    assert rpc.calls == ["aggregate3"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("adapter_type", [Erc4626Adapter, YearnV2Adapter])
+@pytest.mark.parametrize("probe_data", [b"", b"\x01"])
+async def test_vault_adapters_treat_invalid_direct_interface_probe_as_non_vault(
+    adapter_type: type[object], probe_data: bytes
+) -> None:
+    rpc = InvalidInterfaceProbeRpcStub(probe_data)
+    adapter = adapter_type(rpc_client=rpc)  # type: ignore[call-arg]
+
+    info = await adapter.detect(  # type: ignore[attr-defined]
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        chain_id=10,
+    )
+
+    assert info is None
+    expected_probe = "asset" if adapter_type is Erc4626Adapter else "token"
+    assert rpc.calls == [expected_probe]
 
 
 @pytest.mark.asyncio

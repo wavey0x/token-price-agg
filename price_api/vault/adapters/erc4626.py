@@ -63,7 +63,7 @@ class Erc4626Adapter:
 
     async def _detect_with_calls(self, *, vault_address: str) -> Erc4626VaultInfo | None:
         try:
-            underlying = await self._rpc_client.call(
+            underlying_raw = await self._rpc_client.call(
                 address=vault_address,
                 abi=_ERC4626_ABI,
                 fn_name="asset",
@@ -71,6 +71,9 @@ class Erc4626Adapter:
             )
         except Exception as exc:
             raise _VaultInterfaceNotSupported from exc
+        underlying = _normalize_address(underlying_raw)
+        if underlying is None:
+            raise _VaultInterfaceNotSupported
 
         try:
             share_decimals_raw = await self._rpc_client.call(
@@ -148,25 +151,25 @@ class Erc4626Adapter:
             args=[calls],
         )
         decoded = _normalize_multicall_result(raw)
+        underlying = _decode_interface_address(decoded)
+        if underlying is None:
+            return None
+
         if len(decoded) < 2:
             raise InvalidRequestError(
                 "INVALID_VAULT_DATA",
                 "ERC-4626 detection returned an invalid multicall response",
             )
 
-        asset_success, asset_data = decoded[0]
         decimals_success, decimals_data = decoded[1]
-        if not asset_success:
-            return None
-        if not decimals_success or asset_data is None or decimals_data is None:
+        if not decimals_success or decimals_data is None:
             raise InvalidRequestError(
                 "INVALID_VAULT_DATA",
                 "ERC-4626 vault returned incomplete metadata",
             )
 
-        underlying = _decode_address(asset_data)
         share_decimals = decode_token_decimals(decimals_data)
-        if underlying is None or share_decimals is None:
+        if share_decimals is None:
             raise InvalidRequestError(
                 "INVALID_VAULT_DATA",
                 "ERC-4626 vault returned malformed metadata",
@@ -272,6 +275,22 @@ def _decode_address(data: bytes) -> str | None:
         value = _WEB3.codec.decode(["address"], data)[0]
     except Exception:
         return None
+    return _normalize_address(value)
+
+
+def _decode_interface_address(decoded: list[tuple[bool, bytes | None]]) -> str | None:
+    if not decoded:
+        raise InvalidRequestError(
+            "INVALID_VAULT_DATA",
+            "ERC-4626 detection returned an invalid multicall response",
+        )
+    success, data = decoded[0]
+    if not success or data is None:
+        return None
+    return _decode_address(data)
+
+
+def _normalize_address(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     try:

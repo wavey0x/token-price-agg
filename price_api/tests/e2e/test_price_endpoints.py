@@ -19,6 +19,9 @@ from price_api.tests.e2e.helpers import (
     token_lower,
 )
 from price_api.tests.fixtures.ethereum_tokens import DEFAULT_PRICE_SYMBOLS
+from price_api.web3.client import AsyncRpcClient
+
+_WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
 
 @pytest.mark.parametrize("symbol", DEFAULT_PRICE_SYMBOLS)
@@ -171,6 +174,49 @@ def test_price_endpoint_use_underlying_fails_closed_without_rpc() -> None:
     assert payload["providers"]["defillama"]["status"] == "error"
     assert payload["providers"]["defillama"]["error"]["type"] == "VAULT_RESOLUTION_FAILED"
     assert payload["summary"]["successful_providers"] == 0
+
+
+def test_price_endpoint_use_underlying_continues_after_empty_vault_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RPC_URLS", "http://rpc.invalid")
+    rpc_calls: list[str] = []
+
+    async def _empty_vault_probe(
+        self: AsyncRpcClient,
+        *,
+        address: str,
+        abi: list[dict[str, object]],
+        fn_name: str,
+        args: list[object],
+    ) -> object:
+        del self, address, abi, args
+        rpc_calls.append(fn_name)
+        assert fn_name == "aggregate3"
+        return [(True, b""), (True, b""), (True, b"")]
+
+    monkeypatch.setattr(AsyncRpcClient, "call", _empty_vault_probe)
+
+    with respx.mock(assert_all_called=True) as router:
+        mock_defillama_price(router, _WETH, "WETH")
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/v1/price",
+                params={
+                    "chain_id": 1,
+                    "token": _WETH.lower(),
+                    "providers": "defillama",
+                    "use_underlying": "true",
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["token"]["address"] == _WETH
+    assert payload["providers"]["defillama"]["status"] == "ok"
+    assert payload["summary"]["successful_providers"] == 1
+    assert rpc_calls == ["aggregate3", "aggregate3"]
 
 
 def test_price_endpoint_explicit_unavailable_provider_returns_result_not_http_error() -> None:
