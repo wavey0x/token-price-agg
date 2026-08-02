@@ -205,7 +205,7 @@ def _authorize_and_rate_limit_if_needed(
     settings: Settings,
     request_id: str,
 ) -> tuple[Response | None, RateLimitResult | None]:
-    if not settings.api_key_auth_enabled or not request.url.path.startswith("/v1/"):
+    if not settings.api_key_auth_enabled or not request.scope["path"].startswith("/v1/"):
         _set_request_auth_state(request=request, auth_status=_AUTH_STATUS_UNPROTECTED)
         return None, None
 
