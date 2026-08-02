@@ -71,7 +71,10 @@ class Erc4626Adapter:
             )
         except Exception as exc:
             raise _VaultInterfaceNotSupported from exc
-        underlying = _normalize_address(underlying_raw)
+        underlying = _normalize_underlying_address(
+            underlying_raw,
+            vault_address=vault_address,
+        )
         if underlying is None:
             raise _VaultInterfaceNotSupported
 
@@ -151,7 +154,7 @@ class Erc4626Adapter:
             args=[calls],
         )
         decoded = _normalize_multicall_result(raw)
-        underlying = _decode_interface_address(decoded)
+        underlying = _decode_interface_address(decoded, vault_address=checksum)
         if underlying is None:
             return None
 
@@ -278,7 +281,11 @@ def _decode_address(data: bytes) -> str | None:
     return _normalize_address(value)
 
 
-def _decode_interface_address(decoded: list[tuple[bool, bytes | None]]) -> str | None:
+def _decode_interface_address(
+    decoded: list[tuple[bool, bytes | None]],
+    *,
+    vault_address: str,
+) -> str | None:
     if not decoded:
         raise InvalidRequestError(
             "INVALID_VAULT_DATA",
@@ -287,7 +294,10 @@ def _decode_interface_address(decoded: list[tuple[bool, bytes | None]]) -> str |
     success, data = decoded[0]
     if not success or data is None:
         return None
-    return _decode_address(data)
+    return _normalize_underlying_address(
+        _decode_address(data),
+        vault_address=vault_address,
+    )
 
 
 def _normalize_address(value: object) -> str | None:
@@ -297,6 +307,13 @@ def _normalize_address(value: object) -> str | None:
         return Web3.to_checksum_address(value)
     except Exception:
         return None
+
+
+def _normalize_underlying_address(value: object, *, vault_address: str) -> str | None:
+    underlying = _normalize_address(value)
+    if underlying is None or underlying == Web3.to_checksum_address(vault_address):
+        return None
+    return underlying
 
 
 def _decode_uint256(data: bytes) -> int | None:

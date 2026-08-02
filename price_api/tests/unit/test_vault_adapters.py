@@ -98,7 +98,7 @@ class NonVaultRpcStub:
 
 
 class InvalidInterfaceProbeRpcStub:
-    def __init__(self, probe_data: bytes) -> None:
+    def __init__(self, probe_data: object) -> None:
         self.calls: list[str] = []
         self.probe_data = probe_data
 
@@ -216,9 +216,16 @@ async def test_vault_adapters_treat_failed_interface_probe_as_non_vault() -> Non
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("adapter_type", [Erc4626Adapter, YearnV2Adapter])
-@pytest.mark.parametrize("probe_data", [b"", b"\x01"])
+@pytest.mark.parametrize(
+    "probe_data",
+    [
+        b"",
+        b"\x01",
+        _WEB3.codec.encode(["address"], ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]),
+    ],
+)
 async def test_vault_adapters_treat_invalid_successful_interface_probe_as_non_vault(
-    adapter_type: type[object], probe_data: bytes
+    adapter_type: type[object], probe_data: object
 ) -> None:
     rpc = InvalidInterfaceProbeRpcStub(probe_data)
     adapter = adapter_type(rpc_client=rpc)  # type: ignore[call-arg]
@@ -234,9 +241,12 @@ async def test_vault_adapters_treat_invalid_successful_interface_probe_as_non_va
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("adapter_type", [Erc4626Adapter, YearnV2Adapter])
-@pytest.mark.parametrize("probe_data", [b"", b"\x01"])
+@pytest.mark.parametrize(
+    "probe_data",
+    [b"", b"\x01", "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"],
+)
 async def test_vault_adapters_treat_invalid_direct_interface_probe_as_non_vault(
-    adapter_type: type[object], probe_data: bytes
+    adapter_type: type[object], probe_data: object
 ) -> None:
     rpc = InvalidInterfaceProbeRpcStub(probe_data)
     adapter = adapter_type(rpc_client=rpc)  # type: ignore[call-arg]

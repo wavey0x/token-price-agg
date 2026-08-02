@@ -8,6 +8,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 from httpx import Response
+from web3 import Web3
 
 from price_api.app.dependencies import get_provider_registry
 from price_api.app.main import app
@@ -21,7 +22,9 @@ from price_api.tests.e2e.helpers import (
 from price_api.tests.fixtures.ethereum_tokens import DEFAULT_PRICE_SYMBOLS
 from price_api.web3.client import AsyncRpcClient
 
+_WEB3 = Web3()
 _WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+_MAV = "0x7448c7456a97769F6cD04F1E83A4a23cCdC46aBD"
 
 
 @pytest.mark.parametrize("symbol", DEFAULT_PRICE_SYMBOLS)
@@ -214,6 +217,55 @@ def test_price_endpoint_use_underlying_continues_after_empty_vault_probes(
     assert response.status_code == 200
     payload = response.json()
     assert payload["token"]["address"] == _WETH
+    assert payload["providers"]["defillama"]["status"] == "ok"
+    assert payload["summary"]["successful_providers"] == 1
+    assert rpc_calls == ["aggregate3", "aggregate3"]
+
+
+def test_price_endpoint_use_underlying_continues_after_self_referential_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RPC_URLS", "http://rpc.invalid")
+    rpc_calls: list[str] = []
+
+    async def _self_referential_vault_probe(
+        self: AsyncRpcClient,
+        *,
+        address: str,
+        abi: list[dict[str, object]],
+        fn_name: str,
+        args: list[object],
+    ) -> object:
+        del self, address, abi, args
+        rpc_calls.append(fn_name)
+        assert fn_name == "aggregate3"
+        if len(rpc_calls) == 1:
+            return [(False, b""), (True, _WEB3.codec.encode(["uint256"], [18]))]
+        return [
+            (True, _WEB3.codec.encode(["address"], [_MAV])),
+            (True, _WEB3.codec.encode(["uint256"], [18])),
+            (False, b""),
+        ]
+
+    monkeypatch.setattr(AsyncRpcClient, "call", _self_referential_vault_probe)
+
+    with respx.mock(assert_all_called=True) as router:
+        mock_defillama_price(router, _MAV, "MAV")
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/v1/price",
+                params={
+                    "chain_id": 1,
+                    "token": _MAV.lower(),
+                    "providers": "defillama",
+                    "use_underlying": "true",
+                },
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["token"]["address"] == _MAV
     assert payload["providers"]["defillama"]["status"] == "ok"
     assert payload["summary"]["successful_providers"] == 1
     assert rpc_calls == ["aggregate3", "aggregate3"]
