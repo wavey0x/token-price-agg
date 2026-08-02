@@ -5,11 +5,13 @@ Operational notes for the token price API deployment.
 ## Production
 
 - Host: `electro`
-- Repo directory on host: `price-api`
+- Repo directory on host: `/home/wavey/price-api`
 - systemd service: `price-api`
 - Primary branch: `master`
-- Runtime config: `/opt/price-api/config/app.toml` selected by `PRICE_API_CONFIG_FILE`
-- Runtime secrets and host-specific overrides: `.env`
+- Service endpoint: `http://127.0.0.1:18743`
+- Runtime config: `/home/wavey/price-api/config/app.toml`
+- Runtime secrets and host-specific overrides: `/home/wavey/price-api/.env`
+- Service environment: `/home/wavey/price-api/venv`
 
 Do not commit `.env` or runtime SQLite files under `data/`.
 
@@ -51,10 +53,10 @@ Deploy on `electro`:
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 git status
 git pull --ff-only
-uv sync --frozen
+UV_PROJECT_ENVIRONMENT=venv uv sync --frozen
 sudo systemctl restart price-api
 sudo systemctl status price-api --no-pager
 ```
@@ -62,16 +64,17 @@ sudo systemctl status price-api --no-pager
 Verify after restart:
 
 ```bash
-curl -sS http://127.0.0.1:8000/v1/health
-curl -sS http://127.0.0.1:8000/v1/ready
+curl -sS http://127.0.0.1:18743/v1/health
+sleep 6
+curl -sS http://127.0.0.1:18743/v1/ready
 sudo journalctl -u price-api -n 100 --no-pager
 ```
 
 If `API_KEY_AUTH_ENABLED=true` and unauthenticated access is disabled, include a valid API key:
 
 ```bash
-curl -sS -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:8000/v1/health
-curl -sS -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:8000/v1/ready
+curl -sS -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:18743/v1/health
+curl -sS -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:18743/v1/ready
 ```
 
 ## Service Operations
@@ -80,7 +83,7 @@ Status:
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 sudo systemctl status price-api --no-pager
 ```
 
@@ -88,7 +91,7 @@ Restart:
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 sudo systemctl restart price-api
 ```
 
@@ -96,7 +99,7 @@ Logs:
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 sudo journalctl -u price-api -f
 ```
 
@@ -104,7 +107,7 @@ Recent logs:
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 sudo journalctl -u price-api -n 200 --no-pager
 ```
 
@@ -113,52 +116,52 @@ sudo journalctl -u price-api -n 200 --no-pager
 Health:
 
 ```bash
-curl -sS http://127.0.0.1:8000/v1/health
+curl -sS http://127.0.0.1:18743/v1/health
 ```
 
 Readiness:
 
 ```bash
-curl -sS http://127.0.0.1:8000/v1/ready
+curl -sS http://127.0.0.1:18743/v1/ready
 ```
 
 Providers:
 
 ```bash
-curl -sS http://127.0.0.1:8000/v1/providers
+curl -sS http://127.0.0.1:18743/v1/providers
 ```
 
 Price smoke:
 
 ```bash
 curl -sS \
-  "http://127.0.0.1:8000/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=defillama"
+  "http://127.0.0.1:18743/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=defillama"
 ```
 
 Quote smoke:
 
 ```bash
 curl -sS \
-  "http://127.0.0.1:8000/v1/quote?chain_id=1&token_in=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&token_out=0x6b175474e89094c44da98b954eedeac495271d0f&amount_in=1000000&providers=curve"
+  "http://127.0.0.1:18743/v1/quote?chain_id=1&token_in=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&token_out=0x6b175474e89094c44da98b954eedeac495271d0f&amount_in=1000000&providers=curve"
 ```
 
 Metrics:
 
 ```bash
-curl -sS http://127.0.0.1:8000/metrics
+curl -sS http://127.0.0.1:18743/metrics
 ```
 
 Manual live smoke helper:
 
 ```bash
-uv run python price_api/tests/manual/smoke_get_live.py --base-url http://127.0.0.1:8000
+uv run python price_api/tests/manual/smoke_get_live.py --base-url http://127.0.0.1:18743
 ```
 
 With API auth:
 
 ```bash
 uv run python price_api/tests/manual/smoke_get_live.py \
-  --base-url http://127.0.0.1:8000 \
+  --base-url http://127.0.0.1:18743 \
   --api-key "${API_KEY}"
 ```
 
@@ -201,32 +204,32 @@ Run from the deployment directory:
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 ```
 
 Create a consumer API key:
 
 ```bash
-uv run api-key generate
+venv/bin/api-key generate
 ```
 
 List keys:
 
 ```bash
-uv run api-key list
-uv run api-key list --all
+venv/bin/api-key list
+venv/bin/api-key list --all
 ```
 
 Delete key:
 
 ```bash
-uv run api-key delete <key_id>
+venv/bin/api-key delete <key_id>
 ```
 
 Set per-key rate limit override:
 
 ```bash
-uv run api-key set-rate-limit <key_id> 120
+venv/bin/api-key set-rate-limit <key_id> 120
 ```
 
 ## Logs And Correlation
@@ -251,7 +254,7 @@ Useful fields:
 Send `X-Request-ID` on test requests when tracing a single flow:
 
 ```bash
-curl -sS -H "X-Request-ID: manual-check-$(date +%s)" http://127.0.0.1:8000/v1/health
+curl -sS -H "X-Request-ID: manual-check-$(date +%s)" http://127.0.0.1:18743/v1/health
 ```
 
 ## Common Failure Modes
@@ -267,10 +270,10 @@ curl -sS -H "X-Request-ID: manual-check-$(date +%s)" http://127.0.0.1:8000/v1/he
 ## Triage
 
 1. Check service status: `sudo systemctl status price-api --no-pager`.
-2. Check readiness: `curl -sS http://127.0.0.1:8000/v1/ready`.
+2. Check readiness: `curl -sS http://127.0.0.1:18743/v1/ready`.
 3. Check recent logs: `sudo journalctl -u price-api -n 200 --no-pager`.
-4. Check provider availability: `curl -sS http://127.0.0.1:8000/v1/providers`.
-5. Check metrics: `curl -sS http://127.0.0.1:8000/metrics`.
+4. Check provider availability: `curl -sS http://127.0.0.1:18743/v1/providers`.
+5. Check metrics: `curl -sS http://127.0.0.1:18743/metrics`.
 6. Verify `.env` contains required upstream keys for enabled providers.
 7. If provider transport appears wedged, restart `price-api` and re-run readiness.
 
@@ -282,9 +285,9 @@ Preferred rollback is a normal revert commit from local checkout:
 git revert <bad_commit>
 git push origin master
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 git pull --ff-only
-uv sync --frozen
+UV_PROJECT_ENVIRONMENT=venv uv sync --frozen
 sudo systemctl restart price-api
 sudo systemctl status price-api --no-pager
 ```
@@ -293,10 +296,10 @@ Use direct host-side rollback only for urgent incidents, and record the commit r
 
 ```bash
 ssh electro
-cd price-api
+cd /home/wavey/price-api
 git log --oneline -5
 git checkout <known_good_commit>
-uv sync --frozen
+UV_PROJECT_ENVIRONMENT=venv uv sync --frozen
 sudo systemctl restart price-api
 sudo systemctl status price-api --no-pager
 ```

@@ -1,18 +1,20 @@
 [Unit]
-Description=Price API
+Description=Prices API
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/price-api
-EnvironmentFile=/opt/price-api/.env
-ExecStart=/opt/price-api/.venv/bin/uvicorn price_api.app.main:app --host 127.0.0.1 --port 8000
+WorkingDirectory=/home/wavey/price-api
+EnvironmentFile=/home/wavey/price-api/.env
+ExecStart=/home/wavey/price-api/venv/bin/python -m uvicorn price_api.app.main:app --host 127.0.0.1 --port 18743
 # If API_KEY_AUTH_ENABLED=true, ensure external health/readiness checks send
 # Authorization: Bearer <api-key> for /v1/* endpoints.
 Restart=always
 RestartSec=3
-User=www-data
-Group=www-data
+User=wavey
+Group=wavey
+SupplementaryGroups=tokenagg
+UMask=0002
 StandardOutput=journal
 StandardError=journal
 

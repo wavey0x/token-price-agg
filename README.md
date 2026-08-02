@@ -2,9 +2,10 @@
 
 Ethereum token metadata, price, and quote API with plugin-style providers.
 
-## Ubuntu Server Install (systemd)
+## Production Server Install (systemd)
 
-These steps assume Ubuntu 22.04+ and deploy to `/opt/price-api`.
+These steps describe the Ubuntu 22.04+ deployment on `electro` at
+`/home/wavey/price-api`.
 
 ### 1) Install OS packages
 
@@ -25,12 +26,10 @@ uv --version
 ### 3) Clone and install project dependencies
 
 ```bash
-sudo mkdir -p /opt
-sudo chown "$USER":"$USER" /opt
-cd /opt
+cd /home/wavey
 git clone <YOUR_REPO_URL> price-api
 cd price-api
-uv sync --frozen
+UV_PROJECT_ENVIRONMENT=venv uv sync --frozen
 ```
 
 ### 4) Configure environment
@@ -68,8 +67,8 @@ Notes:
 ### 5) Initialize API keys (if auth enabled)
 
 ```bash
-./.venv/bin/api-key generate --label "server-default"
-./.venv/bin/api-key list
+./venv/bin/api-key generate --label "server-default"
+./venv/bin/api-key list
 ```
 
 Save the generated key securely. It is shown once at creation time.
@@ -84,15 +83,15 @@ sudo cp deploy/systemd/price-api.service /etc/systemd/system/price-api.service
 
 If needed, edit these fields in the unit file:
 
-- `WorkingDirectory=/opt/price-api`
-- `EnvironmentFile=/opt/price-api/.env`
-- `ExecStart=/opt/price-api/.venv/bin/uvicorn ...`
-- `User=www-data` and `Group=www-data`
+- `WorkingDirectory=/home/wavey/price-api`
+- `EnvironmentFile=/home/wavey/price-api/.env`
+- `ExecStart=/home/wavey/price-api/venv/bin/python -m uvicorn ... --port 18743`
+- `User=wavey`, `Group=wavey`, and `SupplementaryGroups=tokenagg`
 
 Grant service user access to app files:
 
 ```bash
-sudo chown -R www-data:www-data /opt/price-api
+sudo chown -R wavey:wavey /home/wavey/price-api
 ```
 
 Enable and start:
@@ -111,20 +110,20 @@ If auth is enabled (either header style works):
 API_KEY="<your_api_key>"
 
 # Authorization: Bearer header
-curl -s -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:8000/v1/health
+curl -s -H "Authorization: Bearer ${API_KEY}" http://127.0.0.1:18743/v1/health
 
 # x-api-key header
-curl -s -H "x-api-key: ${API_KEY}" http://127.0.0.1:8000/v1/health
+curl -s -H "x-api-key: ${API_KEY}" http://127.0.0.1:18743/v1/health
 
-curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:8000/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:18743/v1/token?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 
-curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:8000/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=defillama"
+curl -s -H "Authorization: Bearer ${API_KEY}" "http://127.0.0.1:18743/v1/price?chain_id=1&token=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&providers=defillama"
 ```
 
 Metrics stays unauthenticated:
 
 ```bash
-curl -s http://127.0.0.1:8000/metrics
+curl -s http://127.0.0.1:18743/metrics
 ```
 
 Logs:
@@ -136,7 +135,7 @@ sudo journalctl -u price-api -f
 ### 8) Optional: reverse proxy/firewall
 
 - Put the service behind Nginx/Caddy and expose only 80/443 publicly.
-- Keep port `8000` bound to localhost or restricted network where possible.
+- Keep port `18743` bound to localhost or a restricted network.
 - If `API_KEY_AUTH_ENABLED=true` and `API_KEY_UNAUTH_ACCESS_ENABLED=false`, ensure external health/readiness checks include a bearer token for `/v1/*`.
 
 ## Local Run
