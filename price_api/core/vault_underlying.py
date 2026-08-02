@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
+from typing import TypeGuard
 
 from price_api.app.config import Settings
 from price_api.core.errors import ErrorInfo, ErrorType, InvalidRequestError, ProviderStatus
@@ -16,6 +18,7 @@ from price_api.core.models import (
     QuoteResult,
     VaultContext,
 )
+from price_api.core.validator import MAX_UINT256
 from price_api.observability.metrics import (
     record_admission_rejection,
     record_vault_resolution,
@@ -315,10 +318,11 @@ class VaultUnderlyingService:
             if output_context is not None:
                 assert output_assets_to_shares is not None
                 try:
-                    if result.amount_out is not None:
-                        result.amount_out = output_assets_to_shares(result.amount_out)
-                    if result.amount_out_min is not None:
-                        result.amount_out_min = output_assets_to_shares(result.amount_out_min)
+                    converted_amount_out, converted_amount_out_min = _convert_quote_output_amounts(
+                        amount_out=result.amount_out,
+                        amount_out_min=result.amount_out_min,
+                        assets_to_shares=output_assets_to_shares,
+                    )
                 except Exception:
                     _LOGGER.warning(
                         "quote_use_underlying_output_conversion_failed",
@@ -331,6 +335,8 @@ class VaultUnderlyingService:
                     )
                     _mark_quote_conversion_failure(result)
                     continue
+                result.amount_out = converted_amount_out
+                result.amount_out_min = converted_amount_out_min
             result.vault_context = _quote_vault_context(
                 input_context=input_context,
                 output_context=output_context,
@@ -401,6 +407,38 @@ def _vault_share_to_asset_multiplier(price_per_share: Decimal | None) -> Decimal
     if price_per_share is None or price_per_share <= 0:
         raise InvalidRequestError("INVALID_VAULT_RATE", "Invalid vault price_per_share")
     return price_per_share
+
+
+def _convert_quote_output_amounts(
+    *,
+    amount_out: int | None,
+    amount_out_min: int | None,
+    assets_to_shares: Callable[[int], int],
+) -> tuple[int, int | None]:
+    if amount_out is None:
+        raise ValueError("Successful quote result is missing amount_out")
+
+    converted_amount_out = assets_to_shares(amount_out)
+    converted_amount_out_min = (
+        assets_to_shares(amount_out_min) if amount_out_min is not None else None
+    )
+    if not _is_valid_converted_amount(converted_amount_out, allow_zero=False):
+        raise ValueError("Converted amount_out is outside uint256 bounds")
+    if converted_amount_out_min is not None and (
+        not _is_valid_converted_amount(converted_amount_out_min, allow_zero=True)
+        or converted_amount_out_min > converted_amount_out
+    ):
+        raise ValueError("Converted amount_out_min is invalid")
+    return converted_amount_out, converted_amount_out_min
+
+
+def _is_valid_converted_amount(value: object, *, allow_zero: bool) -> TypeGuard[int]:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, int)
+        and (value >= 0 if allow_zero else value > 0)
+        and value <= MAX_UINT256
+    )
 
 
 def _mark_quote_conversion_failure(result: QuoteResult) -> None:
