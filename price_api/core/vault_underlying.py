@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import Enum
 
 from price_api.app.config import Settings
 from price_api.core.errors import ErrorInfo, ErrorType, InvalidRequestError, ProviderStatus
@@ -16,6 +18,7 @@ from price_api.core.models import (
 )
 from price_api.observability.metrics import (
     record_admission_rejection,
+    record_vault_resolution,
     set_admission_inflight_units,
 )
 from price_api.vault.resolver import QuoteVaultResolution, VaultResolver
@@ -23,16 +26,51 @@ from price_api.vault.resolver import QuoteVaultResolution, VaultResolver
 _LOGGER = logging.getLogger(__name__)
 
 
+class VaultResolutionStatus(str, Enum):
+    NOT_REQUESTED = "not_requested"
+    NOT_VAULT = "not_vault"
+    RESOLVED = "resolved"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class VaultResolutionFailure:
+    reason: str
+    latency_ms: int
+
+    def error_info(self) -> ErrorInfo:
+        return ErrorInfo(
+            type=ErrorType.VAULT_RESOLUTION_FAILED,
+            message="Vault underlying resolution failed; provider request was not attempted",
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedPriceRequest:
     request: ProviderPriceRequest
+    status: VaultResolutionStatus
     vault_context: VaultContext | None = None
+    failure: VaultResolutionFailure | None = None
+
+    def __post_init__(self) -> None:
+        if (self.status == VaultResolutionStatus.RESOLVED) != (self.vault_context is not None):
+            raise ValueError("resolved price status requires exactly one vault context")
+        if (self.status == VaultResolutionStatus.FAILED) != (self.failure is not None):
+            raise ValueError("failed price status requires exactly one resolution failure")
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedQuoteRequest:
     request: ProviderQuoteRequest
+    status: VaultResolutionStatus
     vault_resolution: QuoteVaultResolution | None = None
+    failure: VaultResolutionFailure | None = None
+
+    def __post_init__(self) -> None:
+        if (self.status == VaultResolutionStatus.RESOLVED) != (self.vault_resolution is not None):
+            raise ValueError("resolved quote status requires exactly one vault resolution")
+        if (self.status == VaultResolutionStatus.FAILED) != (self.failure is not None):
+            raise ValueError("failed quote status requires exactly one resolution failure")
 
 
 class VaultUnderlyingService:
@@ -48,8 +86,12 @@ class VaultUnderlyingService:
         use_underlying: bool,
     ) -> ResolvedPriceRequest:
         if not use_underlying:
-            return ResolvedPriceRequest(request=req)
+            return ResolvedPriceRequest(
+                request=req,
+                status=VaultResolutionStatus.NOT_REQUESTED,
+            )
 
+        started = time.perf_counter()
         reservation = await self._limiter.try_acquire(
             units=1,
             timeout_ms=self._settings.admission_acquire_timeout_ms,
@@ -60,29 +102,61 @@ class VaultUnderlyingService:
                 "price_use_underlying_capacity_unavailable",
                 extra={"chain_id": req.chain_id, "token": req.token.address},
             )
-            return ResolvedPriceRequest(request=req)
+            record_vault_resolution(
+                result="capacity_unavailable",
+                vault_type="unknown",
+                duration_seconds=time.perf_counter() - started,
+            )
+            return _failed_price_resolution(req=req, reason="VAULT_CAPACITY", started=started)
 
         self._sync_inflight(operation="price")
         try:
             resolved_req, vault_context = await self._vault_resolver.resolve_price_request(req)
-            return ResolvedPriceRequest(request=resolved_req, vault_context=vault_context)
+            if vault_context.price_per_share is None:
+                _LOGGER.warning(
+                    "price_use_underlying_resolution_invalid",
+                    extra={
+                        "chain_id": req.chain_id,
+                        "token": req.token.address,
+                        "resolution_error_type": "INVALID_VAULT_RATE",
+                    },
+                )
+                return _failed_price_resolution(
+                    req=req,
+                    reason="INVALID_VAULT_RATE",
+                    started=started,
+                )
+            return ResolvedPriceRequest(
+                request=resolved_req,
+                status=VaultResolutionStatus.RESOLVED,
+                vault_context=vault_context,
+            )
         except InvalidRequestError as exc:
-            _LOGGER.info(
-                "price_use_underlying_resolution_skipped",
+            if exc.type == "INVALID_VAULT":
+                _LOGGER.debug(
+                    "price_use_underlying_token_not_vault",
+                    extra={"chain_id": req.chain_id, "token": req.token.address},
+                )
+                return ResolvedPriceRequest(
+                    request=req,
+                    status=VaultResolutionStatus.NOT_VAULT,
+                )
+            _LOGGER.warning(
+                "price_use_underlying_resolution_failed",
                 extra={
                     "chain_id": req.chain_id,
                     "token": req.token.address,
-                    "error_type": exc.type,
+                    "resolution_error_type": exc.type,
                 },
             )
-            return ResolvedPriceRequest(request=req)
+            return _failed_price_resolution(req=req, reason=exc.type, started=started)
         except Exception:
             _LOGGER.warning(
                 "price_use_underlying_resolution_failed",
                 extra={"chain_id": req.chain_id, "token": req.token.address},
                 exc_info=True,
             )
-            return ResolvedPriceRequest(request=req)
+            return _failed_price_resolution(req=req, reason="INTERNAL", started=started)
         finally:
             await reservation.release()
             self._sync_inflight(operation="price")
@@ -94,8 +168,12 @@ class VaultUnderlyingService:
         use_underlying: bool,
     ) -> ResolvedQuoteRequest:
         if not use_underlying:
-            return ResolvedQuoteRequest(request=req)
+            return ResolvedQuoteRequest(
+                request=req,
+                status=VaultResolutionStatus.NOT_REQUESTED,
+            )
 
+        started = time.perf_counter()
         reservation = await self._limiter.try_acquire(
             units=2,
             timeout_ms=self._settings.admission_acquire_timeout_ms,
@@ -110,23 +188,61 @@ class VaultUnderlyingService:
                     "token_out": req.token_out.address,
                 },
             )
-            return ResolvedQuoteRequest(request=req)
+            record_vault_resolution(
+                result="capacity_unavailable",
+                vault_type="unknown",
+                duration_seconds=time.perf_counter() - started,
+            )
+            return _failed_quote_resolution(req=req, reason="VAULT_CAPACITY", started=started)
 
         self._sync_inflight(operation="quote")
         try:
             resolved_req, resolution = await self._vault_resolver.resolve_quote_request(req)
-            return ResolvedQuoteRequest(request=resolved_req, vault_resolution=resolution)
+            invalid_reason = _invalid_quote_resolution_reason(resolution)
+            if invalid_reason is not None:
+                _LOGGER.warning(
+                    "quote_use_underlying_resolution_invalid",
+                    extra={
+                        "chain_id": req.chain_id,
+                        "token_in": req.token_in.address,
+                        "token_out": req.token_out.address,
+                        "resolution_error_type": invalid_reason,
+                    },
+                )
+                return _failed_quote_resolution(
+                    req=req,
+                    reason=invalid_reason,
+                    started=started,
+                )
+            return ResolvedQuoteRequest(
+                request=resolved_req,
+                status=VaultResolutionStatus.RESOLVED,
+                vault_resolution=resolution,
+            )
         except InvalidRequestError as exc:
-            _LOGGER.info(
-                "quote_use_underlying_resolution_skipped",
+            if exc.type == "INVALID_VAULT":
+                _LOGGER.debug(
+                    "quote_use_underlying_tokens_not_vaults",
+                    extra={
+                        "chain_id": req.chain_id,
+                        "token_in": req.token_in.address,
+                        "token_out": req.token_out.address,
+                    },
+                )
+                return ResolvedQuoteRequest(
+                    request=req,
+                    status=VaultResolutionStatus.NOT_VAULT,
+                )
+            _LOGGER.warning(
+                "quote_use_underlying_resolution_failed",
                 extra={
                     "chain_id": req.chain_id,
                     "token_in": req.token_in.address,
                     "token_out": req.token_out.address,
-                    "error_type": exc.type,
+                    "resolution_error_type": exc.type,
                 },
             )
-            return ResolvedQuoteRequest(request=req)
+            return _failed_quote_resolution(req=req, reason=exc.type, started=started)
         except Exception:
             _LOGGER.warning(
                 "quote_use_underlying_resolution_failed",
@@ -137,7 +253,7 @@ class VaultUnderlyingService:
                 },
                 exc_info=True,
             )
-            return ResolvedQuoteRequest(request=req)
+            return _failed_quote_resolution(req=req, reason="INTERNAL", started=started)
         finally:
             await reservation.release()
             self._sync_inflight(operation="quote")
@@ -226,6 +342,59 @@ class VaultUnderlyingService:
             operation=operation,
             units=self._limiter.used,
         )
+
+
+def _failed_price_resolution(
+    *,
+    req: ProviderPriceRequest,
+    reason: str,
+    started: float,
+) -> ResolvedPriceRequest:
+    return ResolvedPriceRequest(
+        request=req,
+        status=VaultResolutionStatus.FAILED,
+        failure=VaultResolutionFailure(
+            reason=reason,
+            latency_ms=_elapsed_ms(started),
+        ),
+    )
+
+
+def _failed_quote_resolution(
+    *,
+    req: ProviderQuoteRequest,
+    reason: str,
+    started: float,
+) -> ResolvedQuoteRequest:
+    return ResolvedQuoteRequest(
+        request=req,
+        status=VaultResolutionStatus.FAILED,
+        failure=VaultResolutionFailure(
+            reason=reason,
+            latency_ms=_elapsed_ms(started),
+        ),
+    )
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, int((time.perf_counter() - started) * 1000))
+
+
+def _invalid_quote_resolution_reason(resolution: QuoteVaultResolution | None) -> str | None:
+    if resolution is None:
+        return "MISSING_VAULT_RESOLUTION"
+
+    contexts = [
+        resolution.input_vault_context,
+        resolution.output_vault_context,
+    ]
+    if all(context is None for context in contexts):
+        return "MISSING_VAULT_CONTEXT"
+    if any(context is not None and context.price_per_share is None for context in contexts):
+        return "INVALID_VAULT_RATE"
+    if resolution.output_vault_context is not None and resolution.output_assets_to_shares is None:
+        return "MISSING_VAULT_CONVERTER"
+    return None
 
 
 def _vault_share_to_asset_multiplier(price_per_share: Decimal | None) -> Decimal:

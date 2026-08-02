@@ -200,38 +200,26 @@ def test_quote_endpoint_defaults_chain_id_to_mainnet_when_missing() -> None:
     assert payload["providers"]["curve"]["status"] == "ok"
 
 
-def test_quote_endpoint_use_underlying_is_best_effort_without_rpc() -> None:
-    with respx.mock(assert_all_called=True) as router:
-        router.get("https://www.curve.finance/api/router/v1/routes").mock(
-            return_value=Response(
-                200,
-                json={
-                    "data": {
-                        "amountOut": "1000000",
-                        "amountOutMin": "990000",
-                        "estimatedGas": 210000,
-                        "priceImpact": "0.002",
-                    }
-                },
-            )
+def test_quote_endpoint_use_underlying_fails_closed_without_rpc() -> None:
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/quote",
+            params={
+                "chain_id": 1,
+                "token_in": token_lower("CRV"),
+                "token_out": token_lower("USDC"),
+                "amount_in": "1000000000000000000",
+                "providers": "curve",
+                "use_underlying": "true",
+            },
         )
-
-        with TestClient(app) as client:
-            response = client.get(
-                "/v1/quote",
-                params={
-                    "chain_id": 1,
-                    "token_in": token_lower("CRV"),
-                    "token_out": token_lower("USDC"),
-                    "amount_in": "1000000000000000000",
-                    "providers": "curve",
-                    "use_underlying": "true",
-                },
-            )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["providers"]["curve"]["status"] == "ok"
+    assert payload["quote"] is None
+    assert payload["providers"]["curve"]["status"] == "error"
+    assert payload["providers"]["curve"]["error"]["type"] == "VAULT_RESOLUTION_FAILED"
+    assert payload["summary"]["successful_providers"] == 0
 
 
 def test_quote_endpoint_curve_empty_list_maps_to_no_route() -> None:
@@ -249,7 +237,6 @@ def test_quote_endpoint_curve_empty_list_maps_to_no_route() -> None:
                     "token_out": "0xb5571e76693ba60110b5811dd650ffefce1c955f",
                     "amount_in": "3046763837527638654979",
                     "providers": "curve",
-                    "use_underlying": "true",
                 },
             )
 

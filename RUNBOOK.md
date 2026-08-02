@@ -172,7 +172,7 @@ Important env vars:
 
 - `PRICE_API_CONFIG_FILE` (absolute path to the required TOML file when explicitly set)
 - `CHAIN_IDS` (default: `1`)
-- `RPC_URLS` (enables best-effort `use_underlying=true` vault resolution)
+- `RPC_URLS` (required for `use_underlying=true`; resolution failures fail closed per provider)
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
 - `PROVIDERS_ENABLED` (default: `defillama,curve,lifi,enso`)

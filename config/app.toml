@@ -2,7 +2,7 @@
 ids = [1]
 
 [rpc]
-# Enables best-effort `use_underlying=true` vault resolution.
+# Required for `use_underlying=true`; resolution failures fail closed per provider.
 urls = []
 request_timeout_ms = 1500
 

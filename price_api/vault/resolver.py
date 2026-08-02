@@ -56,7 +56,15 @@ class VaultResolver:
             )
             raise InvalidRequestError("RPC_NOT_CONFIGURED", "Vault resolution requires RPC_URLS")
 
-        vault = await self._detect_vault(req.token.address, req.chain_id)
+        try:
+            vault = await self._detect_vault(req.token.address, req.chain_id)
+        except Exception:
+            record_vault_resolution(
+                result="failed",
+                vault_type="unknown",
+                duration_seconds=time.perf_counter() - started,
+            )
+            raise
         if vault is None:
             record_vault_resolution(
                 result="not_vault",
@@ -67,7 +75,15 @@ class VaultResolver:
 
         underlying = _underlying_token_ref(req.token, vault.underlying_token)
         converted = ProviderPriceRequest(chain_id=req.chain_id, token=underlying)
-        context = _vault_context(vault, await self._rpc_client.block_number())
+        try:
+            context = _vault_context(vault, await self._rpc_client.block_number())
+        except Exception:
+            record_vault_resolution(
+                result="failed",
+                vault_type=vault.vault_type.value,
+                duration_seconds=time.perf_counter() - started,
+            )
+            raise
         record_vault_resolution(
             result="success",
             vault_type=vault.vault_type.value,
@@ -92,14 +108,22 @@ class VaultResolver:
         token_out = req.token_out
         amount_in = req.amount_in
 
-        vault_in = await self._detect_vault(token_in.address, req.chain_id)
-        if vault_in is not None:
-            token_in = _underlying_token_ref(token_in, vault_in.underlying_token)
-            amount_in = vault_in.convert_shares_to_assets(amount_in)
+        try:
+            vault_in = await self._detect_vault(token_in.address, req.chain_id)
+            if vault_in is not None:
+                token_in = _underlying_token_ref(token_in, vault_in.underlying_token)
+                amount_in = vault_in.convert_shares_to_assets(amount_in)
 
-        vault_out = await self._detect_vault(token_out.address, req.chain_id)
-        if vault_out is not None:
-            token_out = _underlying_token_ref(token_out, vault_out.underlying_token)
+            vault_out = await self._detect_vault(token_out.address, req.chain_id)
+            if vault_out is not None:
+                token_out = _underlying_token_ref(token_out, vault_out.underlying_token)
+        except Exception:
+            record_vault_resolution(
+                result="failed",
+                vault_type="unknown",
+                duration_seconds=time.perf_counter() - started,
+            )
+            raise
 
         if vault_in is None and vault_out is None:
             record_vault_resolution(
@@ -119,7 +143,15 @@ class VaultResolver:
             token_out=token_out,
             amount_in=amount_in,
         )
-        block_number = await self._rpc_client.block_number()
+        try:
+            block_number = await self._rpc_client.block_number()
+        except Exception:
+            record_vault_resolution(
+                result="failed",
+                vault_type=_resolved_vault_type(vault_in=vault_in, vault_out=vault_out),
+                duration_seconds=time.perf_counter() - started,
+            )
+            raise
         resolution = QuoteVaultResolution(
             input_vault_context=(
                 _vault_context(vault_in, block_number) if vault_in is not None else None

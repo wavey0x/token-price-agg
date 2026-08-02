@@ -146,7 +146,7 @@ Key fields:
 | `chain_id` | integer | no | `1` | EVM chain id. Must be `> 0`. |
 | `token` | string | yes | none | Token address to price. Case-insensitive input; output is checksummed (EIP-55). |
 | `providers` | list[string] | no | all available for price | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
-| `use_underlying` | boolean | no | `false` | Best-effort vault handling. If token is a supported vault, service prices underlying and converts back to vault share price. If vault/web3 resolution fails, request proceeds with original token unchanged. |
+| `use_underlying` | boolean | no | `false` | Strict vault handling. Supported vaults are priced via underlying value; confirmed non-vault tokens proceed unchanged. Resolution failures skip provider calls and return provider-level `VAULT_RESOLUTION_FAILED` errors. |
 | `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 200, max 10000. |
 
 `providers` accepted formats:
@@ -161,7 +161,9 @@ Key fields:
   - Yearn v2 conversion uses `pricePerShare()`.
   - Returned price = `underlying_price_usd * price_per_share`.
 - If token is not a supported vault: request proceeds with original token unchanged.
-- If RPC URLs are not configured or on-chain calls fail: request proceeds with original token unchanged.
+- If RPC URLs are not configured, on-chain calls fail, or vault data is invalid: provider calls are
+  skipped and every selected provider returns `status=error` with
+  `error.type=VAULT_RESOLUTION_FAILED`.
 
 Example:
 
@@ -350,14 +352,16 @@ curl -s \
 | `amount_in` | string (integer) | yes | none | Positive base-unit amount (for example wei). Must parse as positive integer. |
 | `providers` | list[string] | no | all available for quote | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `include_route` | boolean | no | `false` | If `true`, provider route payload is included when provider supports it. If `false`, route is omitted (`null`) in response. |
-| `use_underlying` | boolean | no | `false` | Best-effort vault handling on both legs. Supported vault legs are converted to underlying for provider quote calls, then response amounts are converted back to share units for vault output legs. If vault/web3 resolution fails, request proceeds unchanged. |
+| `use_underlying` | boolean | no | `false` | Strict vault handling on both legs. Supported vault legs are converted before provider calls and output vault amounts are converted back to share units. Confirmed non-vault tokens proceed unchanged; resolution failures return provider-level `VAULT_RESOLUTION_FAILED` errors. |
 | `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 200, max 10000. |
 
 `use_underlying` for quote:
 - Applies to both `token_in` and `token_out` if either is a supported vault.
 - For vault `token_in`, request `amount_in` is converted shares -> underlying assets before provider calls.
 - For vault `token_out`, response `amount_out` and `amount_out_min` are converted underlying assets -> shares.
-- If vault detection/web3 fails or neither token is a supported vault: request proceeds with original tokens/amounts unchanged.
+- If neither token is a supported vault: request proceeds with original tokens/amounts unchanged.
+- If vault detection/web3 fails or conversion data is incomplete: provider calls are skipped and
+  every selected provider returns `status=error` with `error.type=VAULT_RESOLUTION_FAILED`.
 
 Example:
 

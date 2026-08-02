@@ -47,10 +47,11 @@ async def quote(
         bool,
         Query(
             description=(
-                "Best-effort vault resolution for both token_in and token_out. "
+                "Strict vault resolution for both token_in and token_out. "
                 "Supported vault legs are converted to underlying before quoting "
                 "and converted back to share units in response. "
-                "If vault/web3 resolution fails, request proceeds with original tokens unchanged."
+                "Non-vault tokens proceed unchanged. If vault/web3 resolution fails, "
+                "providers return VAULT_RESOLUTION_FAILED without being called."
             )
         ),
     ] = False,

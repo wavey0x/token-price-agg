@@ -43,10 +43,10 @@ async def price(
         bool,
         Query(
             description=(
-                "Best-effort vault resolution. If token is a supported vault, price is computed "
+                "Strict vault resolution. If token is a supported vault, price is computed "
                 "using underlying and converted back to share units. "
-                "If vault/web3 resolution fails, "
-                "request proceeds with original token unchanged."
+                "Non-vault tokens proceed unchanged. If vault/web3 resolution fails, "
+                "providers return VAULT_RESOLUTION_FAILED without being called."
             )
         ),
     ] = False,

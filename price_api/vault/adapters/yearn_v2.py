@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from web3 import Web3
 
+from price_api.core.errors import InvalidRequestError
 from price_api.vault.adapters.common import (
     decode_token_decimals,
     load_abi,
@@ -45,15 +46,21 @@ class YearnV2Adapter:
 
     async def detect(self, vault_address: str, chain_id: int) -> YearnV2VaultInfo | None:
         try:
-            multicall = await self._detect_with_multicall(
-                vault_address=vault_address, chain_id=chain_id
-            )
-            if multicall is not None:
-                return multicall
-        except Exception:
-            # Fallback to single-call detection path.
-            pass
+            return await self._detect_with_multicall(vault_address=vault_address, chain_id=chain_id)
+        except InvalidRequestError:
+            raise
+        except _MulticallUnavailable:
+            try:
+                return await self._detect_with_calls(vault_address=vault_address)
+            except _VaultInterfaceNotSupported:
+                return None
+        except Exception as multicall_exc:
+            try:
+                return await self._detect_with_calls(vault_address=vault_address)
+            except _VaultInterfaceNotSupported as interface_exc:
+                raise multicall_exc from interface_exc
 
+    async def _detect_with_calls(self, *, vault_address: str) -> YearnV2VaultInfo | None:
         try:
             underlying = await self._rpc_client.call(
                 address=vault_address,
@@ -61,6 +68,10 @@ class YearnV2Adapter:
                 fn_name="token",
                 args=[],
             )
+        except Exception as exc:
+            raise _VaultInterfaceNotSupported from exc
+
+        try:
             share_decimals_raw = await self._rpc_client.call(
                 address=vault_address,
                 abi=_YEARN_V2_ABI,
@@ -83,7 +94,10 @@ class YearnV2Adapter:
             underlying_decimals = validate_token_decimals(underlying_decimals_raw)
             price_per_share = int(pps_raw)
             if share_decimals is None or underlying_decimals is None or price_per_share <= 0:
-                return None
+                raise InvalidRequestError(
+                    "INVALID_VAULT_DATA",
+                    "Yearn v2 vault returned invalid conversion data",
+                )
             return YearnV2VaultInfo(
                 vault_address=vault_address,
                 underlying_token=str(underlying),
@@ -91,15 +105,20 @@ class YearnV2Adapter:
                 underlying_decimals=underlying_decimals,
                 price_per_share=price_per_share,
             )
-        except Exception:
-            return None
+        except InvalidRequestError:
+            raise
+        except Exception as exc:
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 vault data could not be resolved",
+            ) from exc
 
     async def _detect_with_multicall(
         self, *, vault_address: str, chain_id: int
     ) -> YearnV2VaultInfo | None:
         multicall_address = _MULTICALL3_BY_CHAIN.get(chain_id)
         if multicall_address is None:
-            return None
+            raise _MulticallUnavailable
 
         checksum = Web3.to_checksum_address(vault_address)
         calls = [
@@ -115,20 +134,27 @@ class YearnV2Adapter:
         )
         decoded = _normalize_multicall_result(raw)
         if len(decoded) < 3:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 detection returned an invalid multicall response",
+            )
 
         token_success, token_data = decoded[0]
         decimals_success, decimals_data = decoded[1]
         pps_success, pps_data = decoded[2]
+        if not token_success:
+            return None
         if (
-            not token_success
-            or not decimals_success
+            not decimals_success
             or not pps_success
             or token_data is None
             or decimals_data is None
             or pps_data is None
         ):
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 vault returned incomplete metadata",
+            )
 
         underlying = _decode_address(token_data)
         share_decimals = decode_token_decimals(decimals_data)
@@ -139,7 +165,10 @@ class YearnV2Adapter:
             or price_per_share is None
             or price_per_share <= 0
         ):
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 vault returned malformed metadata",
+            )
 
         underlying_decimals_raw = await self._rpc_client.call(
             address=multicall_address,
@@ -149,15 +178,24 @@ class YearnV2Adapter:
         )
         underlying_decimals_result = _normalize_multicall_result(underlying_decimals_raw)
         if len(underlying_decimals_result) < 1:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 underlying returned an invalid multicall response",
+            )
 
         underlying_decimals_success, underlying_decimals_data = underlying_decimals_result[0]
         if not underlying_decimals_success or underlying_decimals_data is None:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 underlying token returned invalid decimals",
+            )
 
         underlying_decimals = decode_token_decimals(underlying_decimals_data)
         if underlying_decimals is None:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "Yearn v2 underlying token returned malformed decimals",
+            )
 
         return YearnV2VaultInfo(
             vault_address=vault_address,
@@ -166,6 +204,14 @@ class YearnV2Adapter:
             underlying_decimals=underlying_decimals,
             price_per_share=price_per_share,
         )
+
+
+class _MulticallUnavailable(Exception):
+    pass
+
+
+class _VaultInterfaceNotSupported(Exception):
+    pass
 
 
 def _normalize_multicall_result(value: object) -> list[tuple[bool, bytes | None]]:

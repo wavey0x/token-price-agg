@@ -163,13 +163,18 @@ def _build_vault_service(plugin: ProviderPlugin) -> AggregatorService:
 
 
 def _build_service_with_resolver(
-    plugin: ProviderPlugin, *, resolver: object, request_timeout_ms: int = 500
+    plugin: ProviderPlugin,
+    *,
+    resolver: object,
+    request_timeout_ms: int = 500,
+    vault_global_units: int = 16,
 ) -> AggregatorService:
     settings = Settings(
         providers_enabled=[plugin.id],
         provider_request_timeout_ms=request_timeout_ms,
         provider_fanout_per_request=2,
         provider_global_limit=2,
+        vault_global_units=vault_global_units,
     )
     return AggregatorService(
         settings=settings,
@@ -406,7 +411,7 @@ async def test_aggregate_quotes_applies_underlying_for_both_legs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_aggregate_prices_use_underlying_is_best_effort_on_resolution_failure(
+async def test_aggregate_prices_use_underlying_fails_closed_on_resolution_failure(
     price_request: ProviderPriceRequest,
 ) -> None:
     class FailingVaultResolver:
@@ -423,17 +428,45 @@ async def test_aggregate_prices_use_underlying_is_best_effort_on_resolution_fail
             return req, None
 
     async def _price_impl(req: ProviderPriceRequest) -> PriceResult:
-        assert req.token.address == price_request.token.address
-        return PriceResult(
-            provider="dummy",
-            status=ProviderStatus.OK,
-            token=req.token,
-            price_usd=Decimal("1"),
-            latency_ms=10,
-        )
+        raise AssertionError(f"provider must not receive unresolved request: {req}")
 
     plugin = DummyPlugin(price_impl=_price_impl)
     service = _build_service_with_resolver(plugin, resolver=FailingVaultResolver())
+    results, summary, partial = await service.aggregate_prices(
+        req=price_request,
+        provider_ids=[plugin.id],
+        use_underlying=True,
+    )
+
+    assert partial is True
+    assert summary.successful_providers == 0
+    assert summary.failed_providers == 1
+    assert results[0].status == ProviderStatus.ERROR
+    assert results[0].price_usd is None
+    assert results[0].error is not None
+    assert results[0].error.type.value == "VAULT_RESOLUTION_FAILED"
+    assert results[0].vault_context is None
+
+
+@pytest.mark.asyncio
+async def test_aggregate_prices_use_underlying_continues_for_non_vault_token(
+    price_request: ProviderPriceRequest,
+) -> None:
+    class NonVaultResolver:
+        async def resolve_price_request(
+            self,
+            req: ProviderPriceRequest,
+        ) -> tuple[ProviderPriceRequest, VaultContext]:
+            raise InvalidRequestError("INVALID_VAULT", "Token is not a supported vault")
+
+        async def resolve_quote_request(
+            self,
+            req: ProviderQuoteRequest,
+        ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution | None]:
+            return req, None
+
+    plugin = DummyPlugin()
+    service = _build_service_with_resolver(plugin, resolver=NonVaultResolver())
     results, summary, partial = await service.aggregate_prices(
         req=price_request,
         provider_ids=[plugin.id],
@@ -447,7 +480,47 @@ async def test_aggregate_prices_use_underlying_is_best_effort_on_resolution_fail
 
 
 @pytest.mark.asyncio
-async def test_aggregate_quotes_use_underlying_is_best_effort_on_resolution_failure(
+async def test_aggregate_prices_rejects_missing_vault_rate_before_provider_call(
+    price_request: ProviderPriceRequest,
+) -> None:
+    class InvalidRateResolver:
+        async def resolve_price_request(
+            self,
+            req: ProviderPriceRequest,
+        ) -> tuple[ProviderPriceRequest, VaultContext]:
+            return req, VaultContext(
+                vault_type=VaultType.ERC4626,
+                underlying_token=USDC,
+                price_per_share=None,
+                block_number=1,
+            )
+
+        async def resolve_quote_request(
+            self,
+            req: ProviderQuoteRequest,
+        ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution | None]:
+            return req, None
+
+    async def _price_impl(req: ProviderPriceRequest) -> PriceResult:
+        raise AssertionError(f"provider must not receive unsafe vault rate: {req}")
+
+    plugin = DummyPlugin(price_impl=_price_impl)
+    service = _build_service_with_resolver(plugin, resolver=InvalidRateResolver())
+    results, summary, partial = await service.aggregate_prices(
+        req=price_request,
+        provider_ids=[plugin.id],
+        use_underlying=True,
+    )
+
+    assert partial is True
+    assert summary.successful_providers == 0
+    assert summary.failed_providers == 1
+    assert results[0].error is not None
+    assert results[0].error.type.value == "VAULT_RESOLUTION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_aggregate_quotes_use_underlying_fails_closed_on_resolution_failure(
     quote_request: ProviderQuoteRequest,
 ) -> None:
     class FailingVaultResolver:
@@ -466,21 +539,10 @@ async def test_aggregate_quotes_use_underlying_is_best_effort_on_resolution_fail
             self,
             req: ProviderQuoteRequest,
         ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution]:
-            raise InvalidRequestError("INVALID_VAULT", "Token is not a supported vault")
+            raise InvalidRequestError("RPC_NOT_CONFIGURED", "Vault resolution requires RPC_URLS")
 
     async def _quote_impl(req: ProviderQuoteRequest) -> QuoteResult:
-        assert req.token_in.address == quote_request.token_in.address
-        assert req.token_out.address == quote_request.token_out.address
-        assert req.amount_in == quote_request.amount_in
-        return QuoteResult(
-            provider="dummy",
-            status=ProviderStatus.OK,
-            token_in=req.token_in,
-            token_out=req.token_out,
-            amount_in=req.amount_in,
-            amount_out=123,
-            latency_ms=10,
-        )
+        raise AssertionError(f"provider must not receive unresolved request: {req}")
 
     plugin = DummyPlugin(quote_impl=_quote_impl)
     service = _build_service_with_resolver(plugin, resolver=FailingVaultResolver())
@@ -490,9 +552,88 @@ async def test_aggregate_quotes_use_underlying_is_best_effort_on_resolution_fail
         use_underlying=True,
     )
 
+    assert partial is True
+    assert summary.successful_providers == 0
+    assert summary.failed_providers == 1
+    assert results[0].status == ProviderStatus.ERROR
+    assert results[0].amount_out is None
+    assert results[0].error is not None
+    assert results[0].error.type.value == "VAULT_RESOLUTION_FAILED"
+    assert results[0].vault_context is None
+
+
+@pytest.mark.asyncio
+async def test_aggregate_quotes_use_underlying_fails_closed_when_vault_capacity_is_unavailable(
+    quote_request: ProviderQuoteRequest,
+) -> None:
+    class ResolverMustNotRun:
+        async def resolve_price_request(
+            self,
+            req: ProviderPriceRequest,
+        ) -> tuple[ProviderPriceRequest, VaultContext]:
+            raise AssertionError(f"resolver must not run without capacity: {req}")
+
+        async def resolve_quote_request(
+            self,
+            req: ProviderQuoteRequest,
+        ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution]:
+            raise AssertionError(f"resolver must not run without capacity: {req}")
+
+    async def _quote_impl(req: ProviderQuoteRequest) -> QuoteResult:
+        raise AssertionError(f"provider must not receive unresolved request: {req}")
+
+    plugin = DummyPlugin(quote_impl=_quote_impl)
+    service = _build_service_with_resolver(
+        plugin,
+        resolver=ResolverMustNotRun(),
+        vault_global_units=1,
+    )
+    results, summary, partial = await service.aggregate_quotes(
+        req=quote_request,
+        provider_ids=[plugin.id],
+        use_underlying=True,
+    )
+
+    assert partial is True
+    assert summary.successful_providers == 0
+    assert summary.failed_providers == 1
+    assert results[0].error is not None
+    assert results[0].error.type.value == "VAULT_RESOLUTION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_aggregate_quotes_use_underlying_continues_for_non_vault_tokens(
+    quote_request: ProviderQuoteRequest,
+) -> None:
+    class NonVaultResolver:
+        async def resolve_price_request(
+            self,
+            req: ProviderPriceRequest,
+        ) -> tuple[ProviderPriceRequest, VaultContext]:
+            return req, VaultContext(
+                vault_type=VaultType.ERC4626,
+                underlying_token=req.token.address,
+                price_per_share=Decimal("1"),
+                block_number=1,
+            )
+
+        async def resolve_quote_request(
+            self,
+            req: ProviderQuoteRequest,
+        ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution]:
+            raise InvalidRequestError("INVALID_VAULT", "Tokens are not supported vaults")
+
+    plugin = DummyPlugin()
+    service = _build_service_with_resolver(plugin, resolver=NonVaultResolver())
+    results, summary, partial = await service.aggregate_quotes(
+        req=quote_request,
+        provider_ids=[plugin.id],
+        use_underlying=True,
+    )
+
     assert partial is False
     assert summary.successful_providers == 1
-    assert results[0].amount_out == 123
+    assert results[0].amount_out == quote_request.amount_in
     assert results[0].vault_context is None
 
 
@@ -672,7 +813,7 @@ async def test_aggregate_quotes_uses_exact_output_assets_to_shares_converter_whe
 
 
 @pytest.mark.asyncio
-async def test_aggregate_quotes_missing_output_converter_marks_provider_failed(
+async def test_aggregate_quotes_missing_output_converter_fails_before_provider_call(
     quote_request: ProviderQuoteRequest,
 ) -> None:
     class OutputVaultResolverMissingConverter:
@@ -707,16 +848,7 @@ async def test_aggregate_quotes_missing_output_converter_marks_provider_failed(
             )
 
     async def _quote_impl(req: ProviderQuoteRequest) -> QuoteResult:
-        return QuoteResult(
-            provider="dummy",
-            status=ProviderStatus.OK,
-            token_in=req.token_in,
-            token_out=req.token_out,
-            amount_in=req.amount_in,
-            amount_out=900_000,
-            amount_out_min=890_000,
-            latency_ms=10,
-        )
+        raise AssertionError(f"provider must not receive unsafe vault conversion: {req}")
 
     plugin = DummyPlugin(quote_impl=_quote_impl)
     service = _build_service_with_resolver(plugin, resolver=OutputVaultResolverMissingConverter())
@@ -733,4 +865,4 @@ async def test_aggregate_quotes_missing_output_converter_marks_provider_failed(
     assert results[0].amount_out is None
     assert results[0].amount_out_min is None
     assert results[0].error is not None
-    assert results[0].error.type.value == "INVALID_VAULT_CONVERSION"
+    assert results[0].error.type.value == "VAULT_RESOLUTION_FAILED"

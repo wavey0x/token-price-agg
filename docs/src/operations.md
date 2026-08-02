@@ -8,7 +8,7 @@ Set `PRICE_API_CONFIG_FILE` to an absolute path when the service may use another
 Common TOML keys:
 
 - `[chains].ids` (default `[1]`)
-- `[rpc].urls` (enables best-effort `use_underlying=true` vault resolution)
+- `[rpc].urls` (required for `use_underlying=true`; resolution failures fail closed per provider)
 - `[rpc].request_timeout_ms` (default `1500`)
 - `[timeouts].provider_request_timeout_ms`
 - `[timeouts].provider_max_retries`

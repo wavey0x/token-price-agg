@@ -237,7 +237,7 @@ Key sections:
 - `[chains]`
   - `ids = [1]`
 - `[rpc]`
-  - `urls = [...]` (enables best-effort `use_underlying=true` resolution)
+  - `urls = [...]` (required for `use_underlying=true` resolution)
   - `request_timeout_ms` (explicit timeout for each RPC request)
 - `[timeouts]`
   - `provider_request_timeout_ms`
@@ -349,8 +349,11 @@ Notes:
 - Response addresses are always EIP-55 checksummed.
 - `chain_id` defaults to `1` (Ethereum mainnet) when omitted.
 - `use_underlying` defaults to `false`.
-- `use_underlying=true` is best effort on both `/v1/price` and `/v1/quote`:
-  if vault detection or web3 calls fail, request proceeds with original tokens/amounts.
+- `use_underlying=true` leaves confirmed non-vault tokens unchanged on both `/v1/price` and
+  `/v1/quote`.
+- If vault resolution is unavailable, incomplete, or unsafe, provider calls are skipped and every
+  selected provider returns `status=error` with `error.type=VAULT_RESOLUTION_FAILED`. An unresolved
+  request is never priced or quoted as the original vault share token.
 - For vault tokens on `/v1/price`, returned `price` is vault-share USD price:
   underlying USD price multiplied by `price_per_share`
   (`pricePerShare / 10**decimals` for Yearn v2, `convertToAssets(10**decimals) / 10**decimals` for ERC-4626).

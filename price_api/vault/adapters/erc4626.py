@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from web3 import Web3
 
+from price_api.core.errors import InvalidRequestError
 from price_api.vault.adapters.common import (
     decode_token_decimals,
     load_abi,
@@ -46,15 +47,21 @@ class Erc4626Adapter:
 
     async def detect(self, vault_address: str, chain_id: int) -> Erc4626VaultInfo | None:
         try:
-            multicall = await self._detect_with_multicall(
-                vault_address=vault_address, chain_id=chain_id
-            )
-            if multicall is not None:
-                return multicall
-        except Exception:
-            # Fallback to single-call detection path.
-            pass
+            return await self._detect_with_multicall(vault_address=vault_address, chain_id=chain_id)
+        except InvalidRequestError:
+            raise
+        except _MulticallUnavailable:
+            try:
+                return await self._detect_with_calls(vault_address=vault_address)
+            except _VaultInterfaceNotSupported:
+                return None
+        except Exception as multicall_exc:
+            try:
+                return await self._detect_with_calls(vault_address=vault_address)
+            except _VaultInterfaceNotSupported as interface_exc:
+                raise multicall_exc from interface_exc
 
+    async def _detect_with_calls(self, *, vault_address: str) -> Erc4626VaultInfo | None:
         try:
             underlying = await self._rpc_client.call(
                 address=vault_address,
@@ -62,6 +69,10 @@ class Erc4626Adapter:
                 fn_name="asset",
                 args=[],
             )
+        except Exception as exc:
+            raise _VaultInterfaceNotSupported from exc
+
+        try:
             share_decimals_raw = await self._rpc_client.call(
                 address=vault_address,
                 abi=_ERC4626_ABI,
@@ -70,7 +81,10 @@ class Erc4626Adapter:
             )
             share_decimals = validate_token_decimals(share_decimals_raw)
             if share_decimals is None:
-                return None
+                raise InvalidRequestError(
+                    "INVALID_VAULT_DATA",
+                    "ERC-4626 vault returned invalid share decimals",
+                )
             underlying_decimals_raw = await self._rpc_client.call(
                 address=str(underlying),
                 abi=_ERC20_ABI,
@@ -96,7 +110,10 @@ class Erc4626Adapter:
             underlying_decimals = validate_token_decimals(underlying_decimals_raw)
             assets_per_share_int = int(assets_per_share)
             if underlying_decimals is None or assets_per_share_int <= 0:
-                return None
+                raise InvalidRequestError(
+                    "INVALID_VAULT_DATA",
+                    "ERC-4626 vault returned invalid conversion data",
+                )
             return Erc4626VaultInfo(
                 vault_address=vault_address,
                 underlying_token=str(underlying),
@@ -104,15 +121,20 @@ class Erc4626Adapter:
                 underlying_decimals=underlying_decimals,
                 assets_per_share_unit=assets_per_share_int,
             )
-        except Exception:
-            return None
+        except InvalidRequestError:
+            raise
+        except Exception as exc:
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 vault data could not be resolved",
+            ) from exc
 
     async def _detect_with_multicall(
         self, *, vault_address: str, chain_id: int
     ) -> Erc4626VaultInfo | None:
         multicall_address = _MULTICALL3_BY_CHAIN.get(chain_id)
         if multicall_address is None:
-            return None
+            raise _MulticallUnavailable
 
         checksum = Web3.to_checksum_address(vault_address)
         calls: list[tuple[str, bool, bytes]] = [
@@ -127,17 +149,28 @@ class Erc4626Adapter:
         )
         decoded = _normalize_multicall_result(raw)
         if len(decoded) < 2:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 detection returned an invalid multicall response",
+            )
 
         asset_success, asset_data = decoded[0]
         decimals_success, decimals_data = decoded[1]
-        if not asset_success or not decimals_success or asset_data is None or decimals_data is None:
+        if not asset_success:
             return None
+        if not decimals_success or asset_data is None or decimals_data is None:
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 vault returned incomplete metadata",
+            )
 
         underlying = _decode_address(asset_data)
         share_decimals = decode_token_decimals(decimals_data)
         if underlying is None or share_decimals is None:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 vault returned malformed metadata",
+            )
 
         one_share = 10**share_decimals
         convert_data = _ERC4626_CONVERT_TO_ASSETS_SELECTOR + one_share.to_bytes(32, "big")
@@ -156,14 +189,23 @@ class Erc4626Adapter:
         )
         conversion = _normalize_multicall_result(conversion_raw)
         if len(conversion) < 3:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 conversion returned an invalid multicall response",
+            )
 
         underlying_decimals_success, underlying_decimals_data = conversion[0]
         if not underlying_decimals_success or underlying_decimals_data is None:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 underlying token returned invalid decimals",
+            )
         underlying_decimals = decode_token_decimals(underlying_decimals_data)
         if underlying_decimals is None:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 underlying token returned malformed decimals",
+            )
 
         assets_per_share: int | None = None
         for success, data in conversion[1:]:
@@ -174,7 +216,10 @@ class Erc4626Adapter:
                 assets_per_share = candidate
                 break
         if assets_per_share is None:
-            return None
+            raise InvalidRequestError(
+                "INVALID_VAULT_DATA",
+                "ERC-4626 vault returned no valid share conversion",
+            )
 
         return Erc4626VaultInfo(
             vault_address=vault_address,
@@ -183,6 +228,14 @@ class Erc4626Adapter:
             underlying_decimals=underlying_decimals,
             assets_per_share_unit=assets_per_share,
         )
+
+
+class _MulticallUnavailable(Exception):
+    pass
+
+
+class _VaultInterfaceNotSupported(Exception):
+    pass
 
 
 def _normalize_multicall_result(value: object) -> list[tuple[bool, bytes | None]]:
