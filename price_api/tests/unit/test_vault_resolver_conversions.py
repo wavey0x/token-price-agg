@@ -181,6 +181,39 @@ def test_vault_resolver_prunes_expired_entries(monkeypatch: pytest.MonkeyPatch) 
     assert key not in resolver._negative_cache
 
 
+def test_vault_resolver_throttles_full_pruning_but_expires_requested_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = 1000.0
+    monkeypatch.setattr(cast(Any, resolver_module).time, "monotonic", lambda: now)
+    resolver = VaultResolver(Settings(rpc_urls=["https://rpc.example"]))
+    live_key = (1, "0x0000000000000000000000000000000000000001")
+    expiring_key = (1, "0x0000000000000000000000000000000000000002")
+    resolver._store_negative(live_key, 2000.0)
+
+    prune_calls: list[float] = []
+    original_prune = resolver._prune_expired
+
+    def _record_prune(prune_now: float) -> None:
+        prune_calls.append(prune_now)
+        original_prune(prune_now)
+
+    monkeypatch.setattr(resolver, "_prune_expired", _record_prune)
+
+    assert resolver._cached_vault(key=live_key, now=now) == (True, None)
+    resolver._store_negative(expiring_key, 1000.5)
+
+    now = 1000.75
+    assert resolver._cached_vault(key=expiring_key, now=now) == (False, None)
+    assert expiring_key not in resolver._negative_cache
+    assert resolver._cached_vault(key=live_key, now=now) == (True, None)
+    assert prune_calls == [1000.0]
+
+    now = 1001.0
+    assert resolver._cached_vault(key=live_key, now=now) == (True, None)
+    assert prune_calls == [1000.0, 1001.0]
+
+
 class _FakeErc4626Adapter:
     def __init__(self, result: Erc4626VaultInfo | None) -> None:
         self._result = result

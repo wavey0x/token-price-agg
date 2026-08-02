@@ -186,13 +186,16 @@ class TokenMetadataResolver:
                 needs_verification.append(address)
 
         # Persist metadata, but don't store unverified logo URLs
-        to_persist = []
+        to_persist: list[TokenMetadata] = []
         for metadata in merged.values():
             if metadata.logo_status == "unknown":
-                to_persist.append(metadata.model_copy(update={"logo_url": None}))
+                persisted = metadata.model_copy(update={"logo_url": None})
             else:
-                to_persist.append(metadata)
-        await asyncio.to_thread(self._cache.upsert_many, to_persist)
+                persisted = metadata
+            if persisted != cached.get(persisted.address):
+                to_persist.append(persisted)
+        if to_persist:
+            await asyncio.to_thread(self._cache.upsert_many, to_persist)
 
         # Background-verify tokens with unknown logo status
         for address in needs_verification:

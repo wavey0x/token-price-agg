@@ -23,6 +23,7 @@ from price_api.vault.adapters.yearn_v2 import YearnV2Adapter, YearnV2VaultInfo
 from price_api.web3.client import AsyncRpcClient
 
 _CacheValue = TypeVar("_CacheValue")
+_CACHE_PRUNE_INTERVAL_S = 1.0
 
 
 class VaultResolver:
@@ -37,6 +38,7 @@ class VaultResolver:
         self._semaphore = asyncio.Semaphore(settings.web3_limit)
         self._positive_cache: OrderedDict[tuple[int, str], _VaultCacheEntry] = OrderedDict()
         self._negative_cache: OrderedDict[tuple[int, str], float] = OrderedDict()
+        self._next_cache_prune_at = 0.0
 
     async def aclose(self) -> None:
         await self._rpc_client.aclose()
@@ -188,16 +190,20 @@ class VaultResolver:
         key: tuple[int, str],
         now: float,
     ) -> tuple[bool, _VaultInfo | None]:
-        self._prune_expired(now)
+        self._prune_expired_if_due(now)
         cached = self._positive_cache.get(key)
-        if cached is not None and now < cached.expires_at:
-            self._positive_cache.move_to_end(key)
-            return True, cached.vault
+        if cached is not None:
+            if now < cached.expires_at:
+                self._positive_cache.move_to_end(key)
+                return True, cached.vault
+            self._positive_cache.pop(key, None)
 
         negative_expires_at = self._negative_cache.get(key)
-        if negative_expires_at is not None and now < negative_expires_at:
-            self._negative_cache.move_to_end(key)
-            return True, None
+        if negative_expires_at is not None:
+            if now < negative_expires_at:
+                self._negative_cache.move_to_end(key)
+                return True, None
+            self._negative_cache.pop(key, None)
 
         return False, None
 
@@ -210,6 +216,12 @@ class VaultResolver:
         self._negative_cache[key] = expires_at
         self._negative_cache.move_to_end(key)
         self._trim_cache(self._negative_cache)
+
+    def _prune_expired_if_due(self, now: float) -> None:
+        if now < self._next_cache_prune_at:
+            return
+        self._next_cache_prune_at = now + _CACHE_PRUNE_INTERVAL_S
+        self._prune_expired(now)
 
     def _prune_expired(self, now: float) -> None:
         for key, entry in list(self._positive_cache.items()):

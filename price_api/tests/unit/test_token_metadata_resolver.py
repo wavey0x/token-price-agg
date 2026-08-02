@@ -159,6 +159,45 @@ async def test_resolver_uses_cached_logo_for_known_valid_cached_token(tmp_path: 
 
 
 @pytest.mark.asyncio
+async def test_resolver_skips_write_when_cached_metadata_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    resolver = TokenMetadataResolver(
+        Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
+    )
+    resolver._cache.upsert_many(
+        [
+            TokenMetadata(
+                chain_id=1,
+                address=USDC,
+                symbol="USDC",
+                decimals=6,
+                logo_status="invalid",
+                logo_checked_at=int(time.time()),
+                logo_http_status=404,
+                source="provider",
+            )
+        ]
+    )
+    writes: list[list[TokenMetadata]] = []
+
+    def _record_write(items: list[TokenMetadata]) -> None:
+        writes.append(items)
+
+    monkeypatch.setattr(resolver._cache, "upsert_many", _record_write)
+
+    metadata = await resolver.resolve_token(
+        chain_id=1,
+        request_token=TokenRef(chain_id=1, address=USDC),
+    )
+
+    assert metadata[USDC].symbol == "USDC"
+    assert metadata[USDC].decimals == 6
+    assert writes == []
+
+
+@pytest.mark.asyncio
 async def test_resolver_treats_stale_valid_as_unknown(tmp_path: Path) -> None:
     settings = Settings(token_metadata_db_path=str(tmp_path / "token_cache.sqlite3"), rpc_urls=[])
     resolver = TokenMetadataResolver(settings)
