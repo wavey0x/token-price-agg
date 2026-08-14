@@ -25,7 +25,8 @@ router = APIRouter(tags=["token"])
     summary="Get known token metadata",
     description=(
         "Returns cached and locally-known token metadata without calling downstream price or quote "
-        "providers. `logo_url` may be `null` on a cold cache while background verification runs."
+        "providers. `logo_url` is a deterministic first-party resource identifier; the image route "
+        "returns 404 while bytes are unavailable."
     ),
 )
 async def token(
@@ -68,6 +69,10 @@ async def _handle_token_request(
             token_metadata[original_token.address] = canonical_meta.model_copy(
                 update={"address": original_token.address}
             )
+        await token_metadata_resolver.observe_identities(
+            chain_id=payload.chain_id,
+            addresses=[original_token.address],
+        )
 
     return TokenResponse(
         request_id=get_request_id(request),

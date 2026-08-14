@@ -17,6 +17,7 @@ from price_api.api.routes.prices import router as prices_router
 from price_api.api.routes.providers import router as providers_router
 from price_api.api.routes.quotes import router as quotes_router
 from price_api.api.routes.ready import router as ready_router
+from price_api.api.routes.token_logos import router as token_logos_router
 from price_api.api.routes.tokens import router as tokens_router
 from price_api.app.config import Settings, get_settings
 from price_api.app.dependencies import (
@@ -71,29 +72,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     resolver = await asyncio.to_thread(get_token_metadata_resolver)
     registry = get_provider_registry()
     vault_resolver = get_vault_resolver()
-    logo_refresh_task: asyncio.Task[None] | None = None
-    if settings.token_logo_refresh_on_startup:
-        logo_refresh_task = asyncio.create_task(_refresh_logo_sources(resolver))
+    await resolver.start()
     try:
         yield
     finally:
-        if logo_refresh_task is not None and not logo_refresh_task.done():
-            logo_refresh_task.cancel()
-        if logo_refresh_task is not None:
-            await asyncio.gather(logo_refresh_task, return_exceptions=True)
         await resolver.aclose()
         await vault_resolver.aclose()
         await registry.aclose()
-
-
-async def _refresh_logo_sources(resolver: object) -> None:
-    from price_api.token_metadata.resolver import TokenMetadataResolver
-
-    assert isinstance(resolver, TokenMetadataResolver)
-    try:
-        await resolver.refresh_logo_sources()
-    except Exception:
-        _APP_LOGGER.exception("token_logo_source_startup_refresh_failed")
 
 
 app = FastAPI(
@@ -204,6 +189,7 @@ app.include_router(health_router)
 app.include_router(ready_router)
 app.include_router(providers_router)
 app.include_router(tokens_router)
+app.include_router(token_logos_router)
 app.include_router(metrics_router)
 app.include_router(prices_router)
 app.include_router(quotes_router)

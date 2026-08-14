@@ -186,20 +186,22 @@ Yes, docs can be hosted directly on Vercel as static files.
 - `GET /v1/health`
 - `GET /v1/ready`
 - `GET /metrics`
+- `GET /token-logos/{chain_id}/{address}`
 
 When `API_KEY_AUTH_ENABLED=true`:
 - API keys can be provided via `Authorization: Bearer <key>` or `x-api-key: <key>` header
 - valid keys use `API_KEY_RATE_LIMIT_RPM` by default, with optional per-key overrides via CLI
 - requests without any API key header are allowed only once per `API_KEY_UNAUTH_MIN_INTERVAL_SECONDS` per client IP when `API_KEY_UNAUTH_ACCESS_ENABLED=true`
 - invalid/revoked/expired keys still return `401`
-- `/metrics` stays unauthenticated
+- `/metrics` and `/token-logos/{chain_id}/{address}` stay unauthenticated
 
 ## Request Examples
 
 ### Token
 
-Returns known token metadata without calling downstream price/quote providers. `logo_url` may be
-`null` on a cold cache until background verification completes.
+Returns known token metadata without calling downstream price/quote providers. `logo_url` is the
+stable first-party resource identifier for the token; the image route returns `404` until owned
+bytes are available.
 
 ```bash
 curl -s \
@@ -375,13 +377,24 @@ Resolution order:
 1. Existing cache entry
 2. Provider response metadata
 3. On-chain ERC20 metadata via multicall (if RPC is configured)
-4. Logo candidates (best-effort, no request-path URL checks): provider logo, cached logo, checked-in local overrides, synced token-list sources (currently CoinGecko), yearn/tokenAssets, TrustWallet, SmolDapp
+4. Deterministic first-party `logo_url` formatting from `(chain_id, address)`
 
-Logo URL behavior:
-- `logo_status=valid` in cache: return validated logo URL.
-- `logo_status=invalid` in cache: return `logo_url=null`.
-- `logo_status=unknown`: return first provider logo URL only (best-effort). Unverified static/list fallbacks are not returned.
-- If synced token-list sources are newer than an `invalid` logo check, the token is treated as `unknown` and re-verified against the newer source set.
+Logo acquisition is separate from token metadata resolution. The lifespan-managed maintenance
+loop enrolls identities observed by token, price, and quote requests; checks bundled overrides and
+the reviewed `LOGO_SOURCES` registry; validates complete PNG, JPEG, or WebP bodies; and stores the
+original bytes plus hash and MIME type in `token_logos`. Provider and legacy cached image URLs are
+ignored. Successful images are terminal unless an owner explicitly re-enrolls them with
+`--force-existing`, and failed refreshes never delete last-known-good bytes.
+
+The public resource is:
+
+```text
+GET https://prices.wavey.info/token-logos/{chain_id}/{lowercase_address}
+```
+
+It is an unauthenticated, side-effect-free SQLite read. Successful responses carry a quoted SHA-256
+ETag and one-day public freshness; missing resources return a five-minute cacheable `404`; malformed
+identities return `400` with `no-store`.
 
 Repository hygiene:
 - SQLite files under `data/` are runtime state and should stay untracked.
@@ -391,21 +404,32 @@ Repository hygiene:
 git rm --cached data/token_metadata.sqlite3
 ```
 
-Force-refresh a token logo on demand:
+Prewarm an explicit identity-only list while keeping acquisition single-owned by the service:
 
 ```bash
-uv run python -m price_api.tools.verify_logo --chain-id 1 --token 0x22222222aEA0076fCA927a3f44dc0B4FdF9479D6
+sudo systemctl stop price-api
+uv run token-logo-prewarm --db-path data/token_metadata.sqlite3 enroll \
+  --input data/token-logo-identities.csv --confirm-service-stopped
+sudo systemctl start price-api
+uv run token-logo-prewarm --db-path data/token_metadata.sqlite3 wait \
+  --input data/token-logo-identities.csv --started-at-ms <enrollment_started_at_ms>
 ```
 
-Refresh synced token-list sources on demand:
+Use `enroll --force-existing` only for selected successful identities that must be explicitly
+reacquired. The CLI accepts `chain_id,address` identities, never image URLs. `wait` and `status` are
+read-only and report whether every identity is already a terminal success or received one attempt
+at or after the enrollment checkpoint.
 
-```bash
-uv run python -m price_api.tools.refresh_logo_sources --chain-id 1
-```
+### Adding a logo source
 
-The logo verification command verifies candidates (`provider -> cached -> local_override -> coingecko -> yearn/tokenAssets -> TrustWallet -> SmolDapp`) and persists:
-- `valid`: stores verified `logo_url`.
-- `invalid`: stores `logo_url=null` to suppress known broken links.
+Implement one adapter in `price_api/token_metadata/logo_sources.py`, register it in the visible
+`LOGO_SOURCES` tuple, and test its exact fixed metadata endpoint (if any), HTTPS image origin and
+repository/path policy, and representative bytes. Redirects, credentials, nonstandard ports,
+ambient proxy settings, and unregistered candidates must remain rejected. Deploy the reviewed
+adapter, then run the identity-only prewarm flow above for affected tokens.
+
+The registry priority is Yearn tokenAssets, Trust Wallet, CoinGecko, then the direct jsDelivr
+SmolDapp repository path. Bundled override bytes are checked before all remote adapters.
 
 ## Real Token Test Matrix
 
@@ -426,6 +450,9 @@ This file defines:
 - `GET /metrics` Prometheus endpoint
 - `X-Request-ID` is accepted and echoed in responses
 - endpoint labels are normalized to known routes or `/unknown` to avoid cardinality growth
+- dynamic image requests share the `/token-logos/{chain_id}/{address}` label; logo metrics expose
+  public hit/miss, acquisition outcome/source, due count, active acquisition count, and source-list
+  refresh age without address labels
 
 Provider transport metrics include admission rejections, provider pool timeouts, HTTP client
 recycles, provider circuit state/transitions, provider in-flight calls, and process `CLOSE-WAIT`

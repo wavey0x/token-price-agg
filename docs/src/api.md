@@ -97,9 +97,10 @@ Returns known token metadata without calling downstream price/quote providers.
 
 Behavior:
 
-- Uses local cache, synced logo source state, and best-effort onchain ERC20 metadata.
+- Uses local cache and best-effort onchain ERC20 metadata.
 - Does not fan out to downstream provider APIs.
-- `logo_url` may be `null` on a cold cache while background verification runs.
+- `logo_url` is the deterministic first-party logo resource for every known identity. It does not
+  assert that bytes currently exist.
 
 Example:
 
@@ -115,7 +116,7 @@ Key fields:
 
 - `token`: known metadata for the requested token
 - `token.address`: checksummed token address
-- `token.logo_url`: verified known logo URL when available, else `null`
+- `token.logo_url`: stable `prices.wavey.info/token-logos/...` resource identifier
 
 ### Example: Token Metadata
 
@@ -128,10 +129,25 @@ Key fields:
     "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     "symbol": "USDC",
     "decimals": 6,
-    "logo_url": "https://assets.example.com/usdc.png"
+    "logo_url": "https://prices.wavey.info/token-logos/1/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   }
 }
 ```
+
+## Token Logos
+
+`GET /token-logos/{chain_id}/{address}` is outside the API-key-throttled `/v1` namespace. It reads
+owned bytes from SQLite and never fetches an upstream or mutates acquisition state.
+
+- `200`: validated PNG, JPEG, or WebP bytes, quoted SHA-256 `ETag`, and
+  `Cache-Control: public, max-age=86400`.
+- `304`: returned for matching `If-None-Match`, including weak/list/wildcard matching, with the same
+  ETag and cache/security/CORS headers.
+- `404`: a well-formed identity has no owned bytes; cached publicly for five minutes.
+- `400`: malformed chain ID or address; `Cache-Control: no-store`.
+
+Every `200`, `304`, and well-formed `404` carries `X-Content-Type-Options: nosniff`,
+`Cross-Origin-Resource-Policy: cross-origin`, and `Access-Control-Allow-Origin: *`.
 
 ## Price
 
@@ -210,7 +226,7 @@ Key fields:
     "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     "symbol": "USDC",
     "decimals": 6,
-    "logo_url": "https://assets.smold.app/api/token/1/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo-128.png"
+    "logo_url": "https://prices.wavey.info/token-logos/1/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   },
   "provider_order": ["defillama", "curve"],
   "price_data": {
@@ -264,7 +280,7 @@ Key fields:
     "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
     "symbol": "CRV",
     "decimals": 18,
-    "logo_url": null
+    "logo_url": "https://prices.wavey.info/token-logos/1/0xd533a949740bb3306d119cc777fa900ba034cd52"
   },
   "provider_order": ["curve", "defillama"],
   "price_data": {
@@ -417,14 +433,14 @@ Key fields:
     "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
     "symbol": "CRV",
     "decimals": 18,
-    "logo_url": null
+    "logo_url": "https://prices.wavey.info/token-logos/1/0xd533a949740bb3306d119cc777fa900ba034cd52"
   },
   "token_out": {
     "chain_id": 1,
     "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     "symbol": "USDC",
     "decimals": 6,
-    "logo_url": null
+    "logo_url": "https://prices.wavey.info/token-logos/1/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   },
   "provider_order": ["curve"],
   "quote": {
@@ -473,8 +489,8 @@ Key fields:
 {
   "request_id": "a1b2c3d4e5f67890",
   "chain_id": 1,
-  "token_in": { "chain_id": 1, "address": "0xD533a949740bb3306d119CC777fa900bA034cd52", "symbol": "CRV", "decimals": 18, "logo_url": null },
-  "token_out": { "chain_id": 1, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "symbol": "USDC", "decimals": 6, "logo_url": null },
+  "token_in": { "chain_id": 1, "address": "0xD533a949740bb3306d119CC777fa900bA034cd52", "symbol": "CRV", "decimals": 18, "logo_url": "https://prices.wavey.info/token-logos/1/0xd533a949740bb3306d119cc777fa900ba034cd52" },
+  "token_out": { "chain_id": 1, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "symbol": "USDC", "decimals": 6, "logo_url": "https://prices.wavey.info/token-logos/1/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" },
   "provider_order": ["curve", "lifi"],
   "quote": {
     "provider": "curve",

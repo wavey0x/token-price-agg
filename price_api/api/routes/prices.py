@@ -123,6 +123,10 @@ async def _handle_price_request(
             token_metadata[original_token.address] = canonical_meta.model_copy(
                 update={"address": original_token.address}
             )
+        await token_metadata_resolver.observe_identities(
+            chain_id=payload.chain_id,
+            addresses=[original_token.address],
+        )
 
     providers_payload: dict[str, PriceProviderEntry] = {}
     for provider_id in provider_order:

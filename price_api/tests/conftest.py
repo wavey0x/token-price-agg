@@ -14,6 +14,7 @@ from price_api.app.dependencies import (
     get_token_metadata_resolver,
     get_vault_resolver,
 )
+from price_api.token_metadata.logo_service import TokenLogoService
 
 
 @pytest.fixture(autouse=True)
@@ -43,11 +44,18 @@ def _set_default_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("API_KEY_UNAUTH_MIN_INTERVAL_SECONDS", "1")
     monkeypatch.setenv("API_KEY_DB_PATH", str(tmp_path / "api_keys.sqlite3"))
     monkeypatch.setenv("TOKEN_METADATA_DB_PATH", str(tmp_path / "token_metadata.sqlite3"))
-    monkeypatch.setenv("TOKEN_LOGO_REFRESH_ON_STARTUP", "false")
     monkeypatch.setenv("PROVIDERS_ENABLED", "defillama,curve,lifi,enso")
     # Explicitly override .env values so tests can assert missing-key behavior.
     monkeypatch.setenv("LIFI_API_KEY", "")
     monkeypatch.setenv("ENSO_API_KEY", "")
+
+
+@pytest.fixture(autouse=True)
+def _disable_background_logo_maintenance(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _no_start(self: TokenLogoService, *, chain_ids: list[int]) -> None:
+        del self, chain_ids
+
+    monkeypatch.setattr(TokenLogoService, "start", _no_start)
 
 
 @pytest.fixture(autouse=True)

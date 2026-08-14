@@ -21,6 +21,7 @@ from price_api.observability.metrics import (
     record_all_failed_response,
     record_partial_response,
 )
+from price_api.token_metadata.logo_urls import token_logo_url
 
 SummaryModel = AggregatePriceSummary | AggregateQuoteSummary
 ResultModel = PriceResult | QuoteResult
@@ -58,7 +59,7 @@ def metadata_for_address(
             address=token.address,
             symbol=token.symbol,
             decimals=token.decimals,
-            logo_url=token.logo_url,
+            logo_url=token_logo_url(chain_id=token.chain_id, address=token.address),
             source="fallback",
         )
 
@@ -67,7 +68,7 @@ def metadata_for_address(
         address=value.address,
         symbol=value.symbol,
         decimals=value.decimals,
-        logo_url=value.logo_url,
+        logo_url=token_logo_url(chain_id=value.chain_id, address=value.address),
     )
 
 

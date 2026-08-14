@@ -70,6 +70,63 @@ curl -sS http://127.0.0.1:18743/v1/ready
 sudo journalctl -u price-api -n 100 --no-pager
 ```
 
+## Token Logo Clean-Schema Cutover
+
+The token-logo ownership release intentionally rejects the legacy token metadata cache. Use this
+one-time cutover instead of the normal restart procedure. Keep Nginx live; the image route needs no
+proxy-specific configuration.
+
+1. Record the deployed revision and health/readiness. Export only deduplicated identities—never old
+   image URLs or verification state—from both operational databases:
+
+```bash
+cd /home/wavey/price-api
+git rev-parse HEAD
+curl -fsS http://127.0.0.1:18743/v1/health
+{
+  sqlite3 data/token_metadata.sqlite3 \
+    "SELECT chain_id || ',' || address FROM token_metadata;"
+  sqlite3 /home/wavey/auctionscan/backend/data/auctionscan.sqlite3 \
+    "SELECT chain_id || ',' || token_address FROM tokens;"
+} | sort -u > data/token-logo-identities.csv
+```
+
+2. Deploy the committed code and locked environment. Stop the service, validate and archive the old
+   cache, then enroll while the service remains stopped:
+
+```bash
+sudo systemctl stop price-api
+sqlite3 data/token_metadata.sqlite3 'PRAGMA quick_check;'
+archive="data/token_metadata.sqlite3.pre-token-logos.$(date -u +%Y%m%dT%H%M%SZ)"
+mv data/token_metadata.sqlite3 "$archive"
+venv/bin/token-logo-prewarm --db-path data/token_metadata.sqlite3 enroll \
+  --input data/token-logo-identities.csv --confirm-service-stopped
+```
+
+Record `enrollment_started_at_ms` from the JSON output. Start the service, verify health/readiness,
+then wait read-only for one bounded pass:
+
+```bash
+sudo systemctl start price-api
+curl -fsS http://127.0.0.1:18743/v1/health
+sleep 6
+curl -fsS http://127.0.0.1:18743/v1/ready
+venv/bin/token-logo-prewarm --db-path data/token_metadata.sqlite3 wait \
+  --input data/token-logo-identities.csv \
+  --started-at-ms <enrollment_started_at_ms> \
+  --deadline-seconds 1800
+```
+
+3. Verify a present image (`200`, exact raster MIME/body, ETag, one-day cache and security/CORS
+   headers), conditional `304`, a well-formed missing image (`404` with five-minute cache), and
+   malformed input (`400` with `no-store`). Verify token, price, and quote responses contain only
+   `https://prices.wavey.info/token-logos/...` URLs. Delete the temporary identity file after the
+   prewarm record is captured; retain the archived cache through the observation window.
+
+Rollback is coordinated: stop `price-api`, restore the previous code revision and locked
+environment, replace the new cache with the archived legacy cache, then start and verify. Never run
+new-schema code against the legacy cache or old code against the new cache.
+
 If `API_KEY_AUTH_ENABLED=true` and unauthenticated access is disabled, include a valid API key:
 
 ```bash

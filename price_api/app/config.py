@@ -263,20 +263,6 @@ class Settings(BaseSettings):
             AliasPath("token_metadata", "db_path"),
         ),
     )
-    token_logo_max_pending_verifications: int = Field(
-        default=64,
-        validation_alias=AliasChoices(
-            "token_logo_max_pending_verifications",
-            AliasPath("token_metadata", "max_pending_verifications"),
-        ),
-    )
-    token_logo_refresh_on_startup: bool = Field(
-        default=False,
-        validation_alias=AliasChoices(
-            "token_logo_refresh_on_startup",
-            AliasPath("token_metadata", "refresh_on_startup"),
-        ),
-    )
     api_key_auth_enabled: bool = Field(
         default=True,
         validation_alias=AliasChoices(
@@ -489,10 +475,6 @@ class Settings(BaseSettings):
                 ("VAULT_NEGATIVE_CACHE_TTL_S", self.vault_negative_cache_ttl_s),
                 ("VAULT_CACHE_MAX_ENTRIES", self.vault_cache_max_entries),
                 ("RPC_REQUEST_TIMEOUT_MS", self.rpc_request_timeout_ms),
-                (
-                    "TOKEN_LOGO_MAX_PENDING_VERIFICATIONS",
-                    self.token_logo_max_pending_verifications,
-                ),
                 ("PROVIDER_FANOUT_PER_REQUEST", self.provider_fanout_per_request),
                 ("PROVIDER_GLOBAL_LIMIT", self.provider_global_limit),
                 ("PROVIDER_PER_PROVIDER_UNITS", self.provider_per_provider_units),

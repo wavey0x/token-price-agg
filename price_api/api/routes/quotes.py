@@ -143,6 +143,14 @@ async def _handle_quote_request(
                 token_metadata[original.address] = canonical_meta.model_copy(
                     update={"address": original.address}
                 )
+    original_addresses = [
+        original.address for original in (original_in, original_out) if original is not None
+    ]
+    if original_addresses:
+        await token_metadata_resolver.observe_identities(
+            chain_id=payload.chain_id,
+            addresses=original_addresses,
+        )
 
     providers_payload: dict[str, QuoteProviderEntry] = {}
     for provider_id in provider_order:

@@ -183,24 +183,12 @@ class TokenMetadata(BaseModel):
     symbol: str | None = None
     decimals: int | None = None
     logo_url: str | None = None
-    logo_status: str = "unknown"
-    logo_source: str | None = None
-    logo_checked_at: int | None = None
-    logo_http_status: int | None = None
     source: str | None = None
 
     @field_validator("address")
     @classmethod
     def _normalize_address(cls, value: str) -> str:
         return AddressValidator.normalize_address(value)
-
-    @field_validator("logo_status", mode="after")
-    @classmethod
-    def _validate_logo_status(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in {"unknown", "valid", "invalid"}:
-            raise ValueError("logo_status must be one of: unknown, valid, invalid")
-        return normalized
 
 
 class AggregatePriceSummary(BaseModel):

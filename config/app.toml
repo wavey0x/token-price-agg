@@ -60,8 +60,6 @@ deny_exchanges = ["fly"]
 
 [token_metadata]
 db_path = "data/token_metadata.sqlite3"
-max_pending_verifications = 64
-refresh_on_startup = false
 
 [security]
 api_key_auth_enabled = true

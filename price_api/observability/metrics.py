@@ -10,6 +10,7 @@ _KNOWN_ENDPOINTS = {
     "/v1/providers",
     "/v1/token",
     "/metrics",
+    "/token-logos/{chain_id}/{address}",
 }
 _KNOWN_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 
@@ -131,6 +132,34 @@ PROCESS_CLOSE_WAIT_SOCKETS = Gauge(
     "CLOSE-WAIT sockets owned by this process",
 )
 
+TOKEN_LOGO_PUBLIC_TOTAL = Counter(
+    "price_api_token_logo_public_total",
+    "Public token-logo reads",
+    labelnames=("result",),
+)
+
+TOKEN_LOGO_ACQUISITION_TOTAL = Counter(
+    "price_api_token_logo_acquisition_total",
+    "Token-logo acquisition outcomes",
+    labelnames=("outcome", "source"),
+)
+
+TOKEN_LOGO_DUE = Gauge(
+    "price_api_token_logo_due",
+    "Token-logo identities currently due for acquisition",
+)
+
+TOKEN_LOGO_ACQUISITION_ACTIVE = Gauge(
+    "price_api_token_logo_acquisition_active",
+    "Active token-logo acquisitions",
+)
+
+TOKEN_LOGO_SOURCE_REFRESH_AGE_SECONDS = Gauge(
+    "price_api_token_logo_source_refresh_age_seconds",
+    "Age of the latest successful token-logo source refresh",
+    labelnames=("source", "chain_id"),
+)
+
 
 def observe_http_request(
     *,
@@ -232,7 +261,32 @@ def set_process_close_wait_sockets(count: int) -> None:
     PROCESS_CLOSE_WAIT_SOCKETS.set(count)
 
 
+def record_logo_public_read(*, result: str) -> None:
+    TOKEN_LOGO_PUBLIC_TOTAL.labels(result=result).inc()
+
+
+def record_logo_acquisition(*, outcome: str, source: str) -> None:
+    TOKEN_LOGO_ACQUISITION_TOTAL.labels(outcome=outcome, source=source).inc()
+
+
+def set_logo_due_count(count: int) -> None:
+    TOKEN_LOGO_DUE.set(count)
+
+
+def set_logo_acquisition_active(count: int) -> None:
+    TOKEN_LOGO_ACQUISITION_ACTIVE.set(count)
+
+
+def set_logo_source_refresh_age(*, source: str, chain_id: int, age_seconds: float) -> None:
+    TOKEN_LOGO_SOURCE_REFRESH_AGE_SECONDS.labels(
+        source=source,
+        chain_id=str(chain_id),
+    ).set(age_seconds)
+
+
 def normalize_endpoint(endpoint: str) -> str:
+    if endpoint.startswith("/token-logos/"):
+        return "/token-logos/{chain_id}/{address}"
     return endpoint if endpoint in _KNOWN_ENDPOINTS else "/unknown"
 
 

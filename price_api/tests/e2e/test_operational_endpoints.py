@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from price_api.app.main import app
 from price_api.tests.e2e.helpers import token_lower
-from price_api.token_metadata.resolver import TokenMetadataResolver
+from price_api.token_metadata.logo_service import TokenLogoService
 
 QueryParamValue: TypeAlias = str | int
 RequestParams: TypeAlias = dict[str, QueryParamValue]
@@ -152,18 +152,21 @@ def test_readiness_endpoint_default_ok() -> None:
     assert payload["checks"]["provider_registry"] is True
 
 
-def test_logo_source_refresh_is_not_on_default_startup_path(
+def test_logo_maintenance_is_lifespan_managed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _unexpected_refresh(self: TokenMetadataResolver, *, force: bool = False) -> object:
-        del self, force
-        raise AssertionError("startup refresh should be disabled by default")
+    starts: list[list[int]] = []
 
-    monkeypatch.setattr(TokenMetadataResolver, "refresh_logo_sources", _unexpected_refresh)
+    async def _record_start(self: TokenLogoService, *, chain_ids: list[int]) -> None:
+        del self
+        starts.append(chain_ids)
+
+    monkeypatch.setattr(TokenLogoService, "start", _record_start)
     with TestClient(app) as client:
         response = client.get("/v1/health")
 
     assert response.status_code == 200
+    assert starts == [[1]]
 
 
 def test_readiness_endpoint_strict_returns_503_without_available_providers(

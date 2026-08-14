@@ -168,7 +168,7 @@ Notes:
     "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
     "symbol": "CRV",
     "decimals": 18,
-    "logo_url": "https://assets.smold.app/api/token/1/0xD533a949740bb3306d119CC777fa900bA034cd52/logo-128.png"
+    "logo_url": "https://prices.wavey.info/token-logos/1/0xd533a949740bb3306d119cc777fa900ba034cd52"
   },
   "provider_order": ["curve", "defillama"],
   "price_data": {

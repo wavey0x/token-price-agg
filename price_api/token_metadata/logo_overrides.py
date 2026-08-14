@@ -1,0 +1,37 @@
+# ruff: noqa: E501
+
+from __future__ import annotations
+
+import base64
+from dataclasses import dataclass
+
+from price_api.core.validator import AddressValidator
+
+
+@dataclass(frozen=True)
+class LogoOverride:
+    source: str
+    image_bytes: bytes
+
+
+# Reviewed acquisition seeds for assets that must remain reproducibly available.
+# The service validates these bytes with the same decoder and bounds as remote bodies
+# before committing them to SQLite; they are not served from the package directly.
+_OVERRIDES_B64: dict[tuple[int, str], str] = {
+    (
+        1,
+        "0x853d955aCEf822Db058eb8505911ED77F175b99e",
+    ): "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAgVBMVEUAAAD///////////////////////////////////////////////////////////////////////////////////////8gICDf398AAACAgIBgYGBAQEDv7+9/f38QEBCfn5+QkJBwcHAwMDBQUFCvr6+goKBfX1+wsLDPz89vb2+KtlOtAAAAFnRSTlMA3yBAv+8QkM+fgGBQoH+vcNAwsI9fgVk+7wAABLpJREFUeF7tm2tz4joMhuX4kkCg0HZXzp1rb+f//8Cz7UyHgoNkFVxmZ/b5XPl9a8nCcRz4FtlsmU+MUviBKswiX+oH+BFcmRcWR7Emn2VpxXWukKGYaEiEnliMwk5mcHWyO4sC1OS6udAGxSx0YnkeVSaW51H68twbvIgLa8Hd4cXcXZJ8hQTJ8+B+IUH6Scju8WqoDMT8tnhFbAlCyOpLnwY3wauzcGnTz1Nk0foKk6Cy9Pq8g/T6vANe/5YO3D0mpXBAs8DETMT950c7UokhTYMS+NjfRAHaEf26FjngY+35QlSj+gIHZCxfiHej+mIHfOwvGEWP68sd8LGaTkCozzuQxSpHJ+CgTzio1k27795pm6c3WSxOISAj9AMH1aZb1UesuueKjz0QroQ5o39w0G+6epTuuWdiDxiyAg/6oYO+WdVn8W1FxB6huQoc6pAmkA/wzah+PTBTUCLGONj6msW3vH44BQopB3J4fTREBfAO5Pr0FDwi4SCRPhqqB/AO5PpEL5ij3IFcn2iHCgkHyfTRfurPkGBIpo+o6QzwDvy+/UO3o/X5DarFbzhYbZ/6z4D+qV3x+iHWHZoARRvK+02Px6x9qL9FBn3IAEUw9Groo3Lle6TJ4Z2C3ducsKtwlCpw2iCNCrpQzLAvPZ7j5XSquClwwSIMaSWFNQinoASAHEl6f/L/I8lLMAVsERgkWZ/UFdL0J01hgyQF3wW6+ogKGarjjtAhiQV4YMYLCoCjETnOQEsy4JGn95IczGApycAzRrCR5GDJLYKjjK4whl4Sk8MjUrzVX2kxiq2gCCbMKnw9MvCKUbwK0magEJR0j1H0gmaoQMX34R1G4uPzpkCwCDqMZP81ao8knAGuBvl56/5mA/8M8OV0eelKlqHHSHaSZahu24gKphWvL2vFfJCBuWA/sv1GDdZvSPEo+zmOy4Ho51i2IdlgBGvZhmQm2d74Hnm8ZBOlIRNtSptrb0ofhNvyFb8tr4XbcigkOah3PZsASQZMxKPZqj6iFT1J+ohHs1L4dN5I/rhFmhkAOMEumxm0b0/0PVcyGfxBCaaAHLbaCc+IsIB3csGzFpGGkZN8H/ceV/MPGgH++VR+4+uANu6Qylk+BSGr9usx3fZQKIK+ZYODSlI/ZNe1f9j7+ixN1EGlFuhLabhF+IEl9ZM5UPDJlNJP52ACn2QJ9EMH1MtLQ+gnc/AIBzShn8yBhi8YQj+RA8XfHQhpPS/m/4tzUMIRJkZ/QBwCC+FJ/hDjQHEvr4dRfcSq9aQ8EUtfojCMg8MY/frc6/tNz8WGPYDoBcP5Map1eIFhUxGxRA8g2uFAjvH21LTdO/u2WVeyWJxCiFOUgwFpZLEq9hrPINCXxGoYJR9zINfnY6cwjitGHIj1+Vglusw2CPX5WJvJrvMNMn0+tgSCKSZnCiRzTMwCaFyBSbl3t77We/uLzbe/2n37y+08WZGk/jKIxi3w6swdSJgm7j88ZcKPXGSlmD796dOQu7/gU690kzB1cAnZHC/CUNlPnwej4RqUKrE8j14kl+drQZQJO83g6szmNlI94cfX8wIZVK4dpCSb5cbiKLbISwc/woNe5gtTKPxAKTPJl9/88P5/XK54hUT9YN8AAAAASUVORK5CYII=",
+    (
+        1,
+        "0x7fE24F1A024D33506966CB7CA48Bab8c65fB632d",
+    ): "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",
+}
+
+
+def get_logo_override(*, chain_id: int, address: str) -> LogoOverride | None:
+    normalized = AddressValidator.normalize_address(address)
+    encoded = _OVERRIDES_B64.get((chain_id, normalized))
+    if encoded is None:
+        return None
+    return LogoOverride(source="override", image_bytes=base64.b64decode(encoded, validate=True))
