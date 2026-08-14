@@ -418,7 +418,7 @@ uv run token-logo-prewarm --db-path data/token_metadata.sqlite3 wait \
 Use `enroll --force-existing` only for selected successful identities that must be explicitly
 reacquired. The CLI accepts `chain_id,address` identities, never image URLs. `wait` and `status` are
 read-only and report whether every identity is already a terminal success or received one attempt
-at or after the enrollment checkpoint.
+after the enrollment checkpoint.
 
 ### Adding a logo source
 

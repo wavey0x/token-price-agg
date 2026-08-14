@@ -161,6 +161,27 @@ def test_wait_exits_nonzero_when_an_identity_was_never_attempted(
     assert json.loads(capsys.readouterr().out)["pending"] == 1
 
 
+def test_attempt_at_enrollment_checkpoint_is_still_pending(tmp_path: Path) -> None:
+    db_path = tmp_path / "metadata.sqlite3"
+    cache = TokenMetadataCache(db_path=str(db_path))
+    cache.enroll_observed(chain_id=1, addresses=[USDC])
+    cache.record_logo_failure(
+        chain_id=1,
+        address=USDC,
+        outcome="unavailable",
+        attempted_at=100,
+        next_attempt_at=999,
+        failure_count=0,
+        http_status=404,
+        error_code="http_404",
+    )
+
+    payload = token_logo_prewarm._status_payload(str(db_path), [(1, USDC)], 100)
+
+    assert payload["pending"] == 1
+    assert payload["attempted"] == 0
+
+
 def test_terminal_success_is_complete_unless_force_existing_requeues_it(
     tmp_path: Path,
 ) -> None:

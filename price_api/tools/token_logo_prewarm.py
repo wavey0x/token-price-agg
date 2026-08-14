@@ -152,7 +152,7 @@ def _completed_for_checkpoint(
         return status.last_attempt_at is not None
     if status.has_image and status.next_attempt_at is None:
         return True
-    return status.last_attempt_at is not None and status.last_attempt_at >= started_at_ms
+    return status.last_attempt_at is not None and status.last_attempt_at > started_at_ms
 
 
 def _service_is_active(service_name: str) -> bool:
