@@ -209,21 +209,37 @@ class TokenLogoAcquirer:
                     http_status=status,
                     error_code="success",
                 )
-        except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+        except httpx.TimeoutException:
             return _CandidateResult(
                 outcome="transient",
                 asset=None,
                 source=candidate.source,
                 http_status=None,
-                error_code=type(exc).__name__[:64],
+                error_code="network_timeout",
             )
-        except httpx.HTTPError as exc:
+        except httpx.RemoteProtocolError:
             return _CandidateResult(
                 outcome="transient",
                 asset=None,
                 source=candidate.source,
                 http_status=None,
-                error_code=type(exc).__name__[:64],
+                error_code="remote_protocol_error",
+            )
+        except httpx.NetworkError:
+            return _CandidateResult(
+                outcome="transient",
+                asset=None,
+                source=candidate.source,
+                http_status=None,
+                error_code="network_error",
+            )
+        except httpx.HTTPError:
+            return _CandidateResult(
+                outcome="transient",
+                asset=None,
+                source=candidate.source,
+                http_status=None,
+                error_code="http_client_error",
             )
 
 

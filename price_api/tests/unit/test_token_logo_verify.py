@@ -174,6 +174,26 @@ async def test_candidate_aggregation_prefers_success_after_transient(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_network_failure_uses_application_owned_error_code(tmp_path: Path) -> None:
+    source = FixedSource("remote", "https://logos.example/timeout.png")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("timeout", request=request)
+
+    cache = TokenMetadataCache(db_path=str(tmp_path / "metadata.sqlite3"))
+    manager = TokenLogoSourceManager(cache=cache, sources=(source,))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    acquirer = TokenLogoAcquirer(source_manager=manager, client=client)
+    try:
+        result = await acquirer.acquire(chain_id=1, address=USDC)
+    finally:
+        await client.aclose()
+
+    assert result.outcome == "transient"
+    assert result.error_code == "network_timeout"
+
+
+@pytest.mark.asyncio
 async def test_any_transient_takes_precedence_over_conclusive_failures(tmp_path: Path) -> None:
     first = FixedSource("first", "https://logos.example/503.png")
     second = FixedSource("second", "https://logos.example/invalid.png")
