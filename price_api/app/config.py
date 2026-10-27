@@ -21,6 +21,8 @@ from pydantic_settings import (
     TomlConfigSettingsSource,
 )
 
+from price_api.chains import CHAINS
+
 MIN_REQUEST_TIMEOUT_MS = 200
 MAX_REQUEST_TIMEOUT_MS = 10000
 
@@ -37,13 +39,15 @@ class Settings(BaseSettings):
     enable_readiness_strict: bool = False
 
     chain_ids: Annotated[list[int], NoDecode] = Field(
-        default_factory=lambda: [1],
+        default_factory=lambda: list(CHAINS),
         validation_alias=AliasChoices("chain_ids", AliasPath("chains", "ids")),
     )
-    rpc_urls: Annotated[list[str], NoDecode] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("rpc_urls", AliasPath("rpc", "urls")),
-    )
+    ethereum_rpc_url: str | None = None
+    optimism_rpc_url: str | None = None
+    gnosis_rpc_url: str | None = None
+    polygon_rpc_url: str | None = None
+    arbitrum_rpc_url: str | None = None
+    avalanche_rpc_url: str | None = None
     rpc_request_timeout_ms: int = Field(
         default=1500,
         validation_alias=AliasChoices(
@@ -364,19 +368,20 @@ class Settings(BaseSettings):
             return [value]
         return value
 
-    @field_validator("rpc_urls", mode="before")
+    @field_validator("chain_ids")
     @classmethod
-    def _parse_rpc_urls(cls, value: object) -> object:
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return []
-            if stripped.startswith("["):
-                loaded = json.loads(stripped)
-                if isinstance(loaded, list):
-                    return [str(item).strip() for item in loaded if str(item).strip()]
-            return [part.strip() for part in value.split(",") if part.strip()]
-        return value
+    def _validate_chain_ids(cls, value: list[int]) -> list[int]:
+        if not value or set(value) - CHAINS.keys():
+            raise ValueError(f"CHAIN_IDS must select from {list(CHAINS)}")
+        return list(dict.fromkeys(value))
+
+    @property
+    def rpc_urls_by_chain(self) -> dict[int, str]:
+        return {
+            chain_id: url.strip()
+            for chain_id in self.chain_ids
+            if (url := getattr(self, CHAINS[chain_id].rpc_env.lower())) and url.strip()
+        }
 
     @field_validator("providers_enabled", mode="before")
     @classmethod

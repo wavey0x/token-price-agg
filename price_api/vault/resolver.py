@@ -30,7 +30,7 @@ class VaultResolver:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._rpc_client = AsyncRpcClient(
-            rpc_urls=settings.rpc_urls,
+            rpc_urls=settings.rpc_urls_by_chain,
             request_timeout_s=settings.rpc_request_timeout_ms / 1000,
         )
         self._erc4626 = Erc4626Adapter(self._rpc_client)
@@ -48,13 +48,15 @@ class VaultResolver:
         req: ProviderPriceRequest,
     ) -> tuple[ProviderPriceRequest, VaultContext]:
         started = time.perf_counter()
-        if not self._rpc_client.configured():
+        if not self._rpc_client.configured(req.chain_id):
             record_vault_resolution(
                 result="rpc_not_configured",
                 vault_type="unknown",
                 duration_seconds=time.perf_counter() - started,
             )
-            raise InvalidRequestError("RPC_NOT_CONFIGURED", "Vault resolution requires RPC_URLS")
+            raise InvalidRequestError(
+                "RPC_NOT_CONFIGURED", "Vault resolution requires the requested chain RPC"
+            )
 
         try:
             vault = await self._detect_vault(req.token.address, req.chain_id)
@@ -76,7 +78,7 @@ class VaultResolver:
         underlying = _underlying_token_ref(req.token, vault.underlying_token)
         converted = ProviderPriceRequest(chain_id=req.chain_id, token=underlying)
         try:
-            context = _vault_context(vault, await self._rpc_client.block_number())
+            context = _vault_context(vault, await self._rpc_client.block_number(req.chain_id))
         except Exception:
             record_vault_resolution(
                 result="failed",
@@ -96,13 +98,15 @@ class VaultResolver:
         req: ProviderQuoteRequest,
     ) -> tuple[ProviderQuoteRequest, QuoteVaultResolution | None]:
         started = time.perf_counter()
-        if not self._rpc_client.configured():
+        if not self._rpc_client.configured(req.chain_id):
             record_vault_resolution(
                 result="rpc_not_configured",
                 vault_type="unknown",
                 duration_seconds=time.perf_counter() - started,
             )
-            raise InvalidRequestError("RPC_NOT_CONFIGURED", "Vault resolution requires RPC_URLS")
+            raise InvalidRequestError(
+                "RPC_NOT_CONFIGURED", "Vault resolution requires the requested chain RPC"
+            )
 
         token_in = req.token_in
         token_out = req.token_out
@@ -144,7 +148,7 @@ class VaultResolver:
             amount_in=amount_in,
         )
         try:
-            block_number = await self._rpc_client.block_number()
+            block_number = await self._rpc_client.block_number(req.chain_id)
         except Exception:
             record_vault_resolution(
                 result="failed",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import ClassVar
 
+from price_api.chains import CHAINS
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
@@ -17,7 +18,7 @@ class ProviderPlugin(ABC):
     id: ClassVar[str]
     supports_price: ClassVar[bool] = False
     supports_quote: ClassVar[bool] = False
-    supported_chains: ClassVar[list[int]] = [1]
+    supported_chains: ClassVar[list[int]] = list(CHAINS)
     requires_api_key: ClassVar[bool] = False
 
     def __init__(
@@ -28,6 +29,7 @@ class ProviderPlugin(ABC):
     ) -> None:
         self._available = available
         self._unavailable_reason = unavailable_reason
+        self.enabled_chains = list(self.supported_chains)
 
     @property
     def available(self) -> bool:
@@ -42,7 +44,7 @@ class ProviderPlugin(ABC):
             id=self.id,
             supports_price=self.supports_price,
             supports_quote=self.supports_quote,
-            supported_chains=list(self.supported_chains),
+            supported_chains=list(self.enabled_chains),
             requires_api_key=self.requires_api_key,
             available=self.available,
             unavailable_reason=self.unavailable_reason,

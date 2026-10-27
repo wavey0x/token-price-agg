@@ -1,6 +1,12 @@
 # price-api
 
-Ethereum token metadata, price, and quote API with plugin-style providers.
+EVM token metadata, price, and same-chain quote API with plugin-style providers.
+
+Supported networks: Ethereum (`1`), Optimism (`10`), Gnosis (`100`), Polygon (`137`),
+Arbitrum (`42161`), and Avalanche (`43114`). Pass `chain_id` on each request; omitted means
+Ethereum. Quotes compare providers on that network; they do not bridge between networks.
+`GET /v1/providers` advertises the enabled chain IDs for each provider. Individual tokens and
+pairs may still return provider-level `no_route` results.
 
 ## Production Server Install (systemd)
 
@@ -34,19 +40,12 @@ UV_PROJECT_ENVIRONMENT=venv uv sync --frozen
 
 ### 4) Configure environment
 
-Use TOML for non-secret runtime config (timeouts, providers, RPC URLs, auth/rate limits).
+Use TOML for non-secret runtime config (timeouts, providers, enabled chains, auth/rate limits).
 
 Review and edit:
 
 ```bash
 $EDITOR config/app.toml
-```
-
-Example RPC configuration in TOML:
-
-```toml
-[rpc]
-urls = ["https://mainnet.example-rpc"]
 ```
 
 Create runtime env file for secrets and optional overrides:
@@ -58,6 +57,15 @@ cp .env.example .env
 Minimum fields to review in `.env`:
 
 - `LIFI_API_KEY` and `ENSO_API_KEY` (optional, required only if enabling those providers)
+- Chain-specific RPC endpoints: `ETHEREUM_RPC_URL`, `OPTIMISM_RPC_URL`, `GNOSIS_RPC_URL`,
+  `POLYGON_RPC_URL`, `ARBITRUM_RPC_URL`, `AVALANCHE_RPC_URL`. Keep their values private.
+  Each endpoint is checked against the requested chain ID before contract reads. RPCs are
+  required for vault resolution and used for best-effort token metadata; ordinary provider
+  quotes do not require them. There is no RPC fallback across networks.
+
+The former `RPC_URLS` list is removed. Migrate to the named environment variables before
+upgrading. Leave a variable empty to disable RPC reads for that network; vault resolution
+then fails closed. The service has no dependency on a workstation's RPC configuration tools.
 
 Notes:
 - `APP_VERSION` is optional (default is `0.1.0`).
@@ -236,9 +244,8 @@ Primary config file:
 
 Key sections:
 - `[chains]`
-  - `ids = [1]`
+  - `ids = [1, 10, 100, 137, 42161, 43114]` (or a nonempty subset)
 - `[rpc]`
-  - `urls = [...]` (required for `use_underlying=true` resolution)
   - `request_timeout_ms` (explicit timeout for each RPC request)
 - `[timeouts]`
   - `provider_request_timeout_ms`
@@ -358,7 +365,10 @@ Notes:
 - For vault tokens on `/v1/price`, returned `price` is vault-share USD price:
   underlying USD price multiplied by `price_per_share`
   (`pricePerShare / 10**decimals` for Yearn v2, `convertToAssets(10**decimals) / 10**decimals` for ERC-4626).
-- Vault detection/rate reads use Multicall3 when available, with per-call fallback.
+- Vault detection/rate reads use the requested chain's RPC and Multicall3, with per-call fallback.
+- `use_underlying=true` estimates underlying value and is not a promise of instant vault
+  redemption. For asynchronous vaults such as Arbitrum sUSDai, use `false` to ask providers
+  for a direct market route; use `true` for a share-value estimate through USDai.
 - `value_usd` has been removed.
 
 ## Provider Selection

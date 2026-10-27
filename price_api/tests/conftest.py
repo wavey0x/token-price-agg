@@ -14,6 +14,7 @@ from price_api.app.dependencies import (
     get_token_metadata_resolver,
     get_vault_resolver,
 )
+from price_api.chains import CHAINS
 from price_api.token_metadata.logo_service import TokenLogoService
 
 
@@ -33,7 +34,8 @@ def _set_default_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CHAIN_IDS", "1")
     monkeypatch.setenv("PROVIDER_REQUEST_TIMEOUT_MS", "500")
     monkeypatch.setenv("PROVIDER_MAX_RETRIES", "0")
-    monkeypatch.setenv("RPC_URLS", "")
+    for chain in CHAINS.values():
+        monkeypatch.setenv(chain.rpc_env, "")
     monkeypatch.setenv("APP_VERSION", "test")
     monkeypatch.setenv("LOG_FORMAT", "json")
     monkeypatch.setenv("METRICS_ENABLED", "true")

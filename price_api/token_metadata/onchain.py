@@ -5,14 +5,12 @@ from typing import Any
 
 from web3 import Web3
 
+from price_api.chains import MULTICALL3_BY_CHAIN
 from price_api.core.models import TokenMetadata
 from price_api.web3.client import AsyncRpcClient
 
 _WEB3 = Web3()
 
-_MULTICALL3_BY_CHAIN = {
-    1: Web3.to_checksum_address("0xcA11bde05977b3631167028862bE2a173976CA11"),
-}
 
 _MULTICALL3_ABI: list[dict[str, Any]] = [
     {
@@ -53,10 +51,10 @@ async def fetch_onchain_metadata(
     addresses: list[str],
     rpc_client: AsyncRpcClient,
 ) -> dict[str, TokenMetadata]:
-    if not addresses or not rpc_client.configured():
+    if not addresses or not rpc_client.configured(chain_id):
         return {}
 
-    multicall_address = _MULTICALL3_BY_CHAIN.get(chain_id)
+    multicall_address = MULTICALL3_BY_CHAIN.get(chain_id)
     if multicall_address is None:
         return {}
 
@@ -70,6 +68,7 @@ async def fetch_onchain_metadata(
         call_index.append((address, "symbol"))
 
     raw = await rpc_client.call(
+        chain_id=chain_id,
         address=multicall_address,
         abi=_MULTICALL3_ABI,
         fn_name="aggregate3",

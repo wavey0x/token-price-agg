@@ -182,12 +182,13 @@ def test_price_endpoint_use_underlying_fails_closed_without_rpc() -> None:
 def test_price_endpoint_use_underlying_continues_after_empty_vault_probes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RPC_URLS", "http://rpc.invalid")
+    monkeypatch.setenv("ETHEREUM_RPC_URL", "http://rpc.invalid")
     rpc_calls: list[str] = []
 
     async def _empty_vault_probe(
         self: AsyncRpcClient,
         *,
+        chain_id: int,
         address: str,
         abi: list[dict[str, object]],
         fn_name: str,
@@ -225,12 +226,13 @@ def test_price_endpoint_use_underlying_continues_after_empty_vault_probes(
 def test_price_endpoint_use_underlying_continues_after_self_referential_probe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RPC_URLS", "http://rpc.invalid")
+    monkeypatch.setenv("ETHEREUM_RPC_URL", "http://rpc.invalid")
     rpc_calls: list[str] = []
 
     async def _self_referential_vault_probe(
         self: AsyncRpcClient,
         *,
+        chain_id: int,
         address: str,
         abi: list[dict[str, object]],
         fn_name: str,

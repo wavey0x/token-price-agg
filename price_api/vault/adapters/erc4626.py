@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from web3 import Web3
 
+from price_api.chains import MULTICALL3_BY_CHAIN
 from price_api.core.errors import InvalidRequestError
 from price_api.vault.adapters.common import (
     decode_token_decimals,
@@ -15,9 +16,6 @@ from price_api.web3.client import AsyncRpcClient
 _ERC20_ABI = load_abi("erc20.json")
 _ERC4626_ABI = load_abi("erc4626.json")
 _MULTICALL3_ABI = load_abi("multicall3.json")
-_MULTICALL3_BY_CHAIN: dict[int, str] = {
-    1: Web3.to_checksum_address("0xcA11bde05977b3631167028862bE2a173976CA11"),
-}
 
 _ERC4626_ASSET_SELECTOR = bytes.fromhex("38d52e0f")
 _ERC20_DECIMALS_SELECTOR = bytes.fromhex("313ce567")
@@ -52,18 +50,21 @@ class Erc4626Adapter:
             raise
         except _MulticallUnavailable:
             try:
-                return await self._detect_with_calls(vault_address=vault_address)
+                return await self._detect_with_calls(vault_address=vault_address, chain_id=chain_id)
             except _VaultInterfaceNotSupported:
                 return None
         except Exception as multicall_exc:
             try:
-                return await self._detect_with_calls(vault_address=vault_address)
+                return await self._detect_with_calls(vault_address=vault_address, chain_id=chain_id)
             except _VaultInterfaceNotSupported as interface_exc:
                 raise multicall_exc from interface_exc
 
-    async def _detect_with_calls(self, *, vault_address: str) -> Erc4626VaultInfo | None:
+    async def _detect_with_calls(
+        self, *, vault_address: str, chain_id: int
+    ) -> Erc4626VaultInfo | None:
         try:
             underlying_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=vault_address,
                 abi=_ERC4626_ABI,
                 fn_name="asset",
@@ -80,6 +81,7 @@ class Erc4626Adapter:
 
         try:
             share_decimals_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=vault_address,
                 abi=_ERC4626_ABI,
                 fn_name="decimals",
@@ -92,6 +94,7 @@ class Erc4626Adapter:
                     "ERC-4626 vault returned invalid share decimals",
                 )
             underlying_decimals_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=str(underlying),
                 abi=_ERC20_ABI,
                 fn_name="decimals",
@@ -100,6 +103,7 @@ class Erc4626Adapter:
             one_share = 10**share_decimals
             try:
                 assets_per_share = await self._rpc_client.call(
+                    chain_id=chain_id,
                     address=vault_address,
                     abi=_ERC4626_ABI,
                     fn_name="convertToAssets",
@@ -107,6 +111,7 @@ class Erc4626Adapter:
                 )
             except Exception:
                 assets_per_share = await self._rpc_client.call(
+                    chain_id=chain_id,
                     address=vault_address,
                     abi=_ERC4626_ABI,
                     fn_name="previewRedeem",
@@ -138,7 +143,7 @@ class Erc4626Adapter:
     async def _detect_with_multicall(
         self, *, vault_address: str, chain_id: int
     ) -> Erc4626VaultInfo | None:
-        multicall_address = _MULTICALL3_BY_CHAIN.get(chain_id)
+        multicall_address = MULTICALL3_BY_CHAIN.get(chain_id)
         if multicall_address is None:
             raise _MulticallUnavailable
 
@@ -148,6 +153,7 @@ class Erc4626Adapter:
             (checksum, True, _ERC20_DECIMALS_SELECTOR),
         ]
         raw = await self._rpc_client.call(
+            chain_id=chain_id,
             address=multicall_address,
             abi=_MULTICALL3_ABI,
             fn_name="aggregate3",
@@ -182,6 +188,7 @@ class Erc4626Adapter:
         convert_data = _ERC4626_CONVERT_TO_ASSETS_SELECTOR + one_share.to_bytes(32, "big")
         fallback_data = _ERC4626_PREVIEW_REDEEM_SELECTOR + one_share.to_bytes(32, "big")
         conversion_raw = await self._rpc_client.call(
+            chain_id=chain_id,
             address=multicall_address,
             abi=_MULTICALL3_ABI,
             fn_name="aggregate3",

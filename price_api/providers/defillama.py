@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from price_api.chains import CHAINS
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import PriceResult, ProviderPriceRequest
 from price_api.providers.base import ProviderPlugin
@@ -28,7 +29,7 @@ class DefiLlamaProvider(ProviderPlugin):
         return f"https://coins.llama.fi/prices/current/{coin}"
 
     async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
-        coin = f"ethereum:{req.token.address}"
+        coin = f"{CHAINS[req.chain_id].defillama_name}:{req.token.address}"
 
         call = await timed_get(
             client=self._client,

@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from price_api.app.config import Settings
+from price_api.core.errors import InvalidRequestError
 from price_api.core.models import PriceResult, QuoteResult, TokenMetadata, TokenRef
 from price_api.core.validator import AddressValidator
 from price_api.token_metadata.cache import TokenMetadataCache
@@ -21,7 +22,7 @@ class TokenMetadataResolver:
         self._settings = settings
         self._cache = TokenMetadataCache(db_path=settings.token_metadata_db_path)
         self._rpc = AsyncRpcClient(
-            rpc_urls=settings.rpc_urls,
+            rpc_urls=settings.rpc_urls_by_chain,
             request_timeout_s=settings.rpc_request_timeout_ms / 1000,
         )
         self._logo_sources = TokenLogoSourceManager(cache=self._cache)
@@ -108,6 +109,8 @@ class TokenMetadataResolver:
         refs: list[TokenRef],
         source: str,
     ) -> dict[str, TokenMetadata]:
+        if chain_id not in self._settings.chain_ids:
+            raise InvalidRequestError("UNSUPPORTED_CHAIN", f"Chain {chain_id} is not enabled")
         unique_addresses = list(
             dict.fromkeys(AddressValidator.normalize_address(ref.address) for ref in refs)
         )

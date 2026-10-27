@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "price-api"
 version = "0.1.0"
-description = "Ethereum token price/quote aggregator"
+description = "EVM token price/quote aggregator"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

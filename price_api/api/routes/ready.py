@@ -20,9 +20,9 @@ async def ready(
     aggregator: AggregatorService = Depends(get_aggregator_service),
     settings: Settings = Depends(get_settings),
 ) -> ReadyResponse | JSONResponse:
-    available_count = registry.available_provider_count(chain_id=1)
-    price_providers = set(registry.available_provider_ids(operation=Operation.PRICE, chain_id=1))
-    quote_providers = set(registry.available_provider_ids(operation=Operation.QUOTE, chain_id=1))
+    available_count = registry.available_provider_count()
+    price_providers = set(registry.available_provider_ids(operation=Operation.PRICE))
+    quote_providers = set(registry.available_provider_ids(operation=Operation.QUOTE))
     circuit_open = aggregator.circuit_open_providers()
     ready_price_providers = sorted(price_providers - circuit_open)
     ready_quote_providers = sorted(quote_providers - circuit_open)
@@ -38,6 +38,8 @@ async def ready(
 
     checks: dict[str, bool | int | str] = {
         "provider_registry": True,
+        "enabled_chains": len(settings.chain_ids),
+        "configured_rpc_chains": len(settings.rpc_urls_by_chain),
         "available_providers": available_count,
         "ready_price_providers": len(ready_price_providers),
         "ready_quote_providers": len(ready_quote_providers),

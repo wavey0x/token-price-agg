@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from price_api.chains import CHAINS
 from price_api.core.models import TokenMetadata, TokenRef
 from price_api.core.validator import AddressValidator
 from price_api.token_metadata.logo_urls import token_logo_url
@@ -43,7 +44,7 @@ def merge_metadata(
     symbol = _pick_first(
         cached.symbol if cached is not None else None,
         hint.symbol if hint is not None else None,
-        "ETH" if native and chain_id == 1 else None,
+        CHAINS[chain_id].native_symbol if native and chain_id in CHAINS else None,
     )
     decimals = _pick_first(
         cached.decimals if cached is not None else None,

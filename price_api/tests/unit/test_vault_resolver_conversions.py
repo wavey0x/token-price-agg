@@ -77,7 +77,7 @@ async def test_vault_resolver_reuses_positive_detection_cache(
     monkeypatch.setattr(cast(Any, resolver_module).time, "monotonic", lambda: now)
     resolver = VaultResolver(
         Settings(
-            rpc_urls=["https://rpc.example"],
+            ethereum_rpc_url="https://rpc.example",
             vault_positive_cache_ttl_s=30,
             vault_negative_cache_ttl_s=300,
         )
@@ -118,7 +118,7 @@ async def test_vault_resolver_reuses_negative_detection_cache_until_expiry(
     monkeypatch.setattr(cast(Any, resolver_module).time, "monotonic", lambda: now)
     resolver = VaultResolver(
         Settings(
-            rpc_urls=["https://rpc.example"],
+            ethereum_rpc_url="https://rpc.example",
             vault_positive_cache_ttl_s=30,
             vault_negative_cache_ttl_s=10,
         )
@@ -153,7 +153,7 @@ async def test_vault_resolver_reuses_negative_detection_cache_until_expiry(
 async def test_vault_resolver_bounds_detection_caches() -> None:
     resolver = VaultResolver(
         Settings(
-            rpc_urls=["https://rpc.example"],
+            ethereum_rpc_url="https://rpc.example",
             vault_cache_max_entries=2,
         )
     )
@@ -172,7 +172,7 @@ async def test_vault_resolver_bounds_detection_caches() -> None:
 def test_vault_resolver_prunes_expired_entries(monkeypatch: pytest.MonkeyPatch) -> None:
     now = 1000.0
     monkeypatch.setattr(cast(Any, resolver_module).time, "monotonic", lambda: now)
-    resolver = VaultResolver(Settings(rpc_urls=["https://rpc.example"]))
+    resolver = VaultResolver(Settings(ethereum_rpc_url="https://rpc.example"))
     key = (1, "0x0000000000000000000000000000000000000001")
     resolver._store_negative(key, now + 1)
 
@@ -186,7 +186,7 @@ def test_vault_resolver_throttles_full_pruning_but_expires_requested_key(
 ) -> None:
     now = 1000.0
     monkeypatch.setattr(cast(Any, resolver_module).time, "monotonic", lambda: now)
-    resolver = VaultResolver(Settings(rpc_urls=["https://rpc.example"]))
+    resolver = VaultResolver(Settings(ethereum_rpc_url="https://rpc.example"))
     live_key = (1, "0x0000000000000000000000000000000000000001")
     expiring_key = (1, "0x0000000000000000000000000000000000000002")
     resolver._store_negative(live_key, 2000.0)

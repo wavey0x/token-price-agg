@@ -266,8 +266,19 @@ Secrets and host-specific overrides belong in `.env` on `electro`.
 Important env vars:
 
 - `PRICE_API_CONFIG_FILE` (absolute path to the required TOML file when explicitly set)
-- `CHAIN_IDS` (default: `1`)
-- `RPC_URLS` (required for `use_underlying=true`; resolution failures fail closed per provider)
+- `CHAIN_IDS` (default: `1,10,100,137,42161,43114`; nonempty supported subset)
+- `ETHEREUM_RPC_URL`, `OPTIMISM_RPC_URL`, `GNOSIS_RPC_URL`, `POLYGON_RPC_URL`,
+  `ARBITRUM_RPC_URL`, `AVALANCHE_RPC_URL` (private, one endpoint per chain; required for
+  `use_underlying=true` on that chain; ordinary provider quotes can work without RPC)
+
+`RPC_URLS` is removed. Before upgrading an existing deployment, install the named variables
+in its private `.env`, remove `RPC_URLS`, and remove any old `CHAIN_IDS=1` override to enable
+all six networks. Keep `.env` owner-readable only (`chmod 600 .env`). From the deployment host,
+check each endpoint's `eth_chainId`, `eth_blockNumber`, and Multicall3 `eth_getCode` before
+restarting. The client rejects an endpoint serving the wrong chain and never tries another
+network's endpoint. Do not include endpoint values in logs or version control.
+
+Additional provider settings:
 - `LIFI_API_KEY` (required to enable `lifi`)
 - `ENSO_API_KEY` (required to enable `enso`)
 - `PROVIDERS_ENABLED` (default: `defillama,curve,lifi,enso`)

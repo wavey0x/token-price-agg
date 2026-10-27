@@ -4,10 +4,13 @@ import sqlite3
 from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
+from web3 import Web3
 
 from price_api.app.config import Settings
+from price_api.chains import CHAINS
 from price_api.core.errors import ProviderStatus
 from price_api.core.models import PriceResult, QuoteResult, TokenMetadata, TokenRef
 from price_api.core.validator import NATIVE_TOKEN_ALIAS
@@ -18,10 +21,60 @@ USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 DAI = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
 
 
+@pytest.mark.asyncio
+async def test_onchain_metadata_and_cache_are_isolated_by_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for chain in CHAINS.values():
+        monkeypatch.setenv(chain.rpc_env, "https://rpc.example")
+    config = Settings(
+        chain_ids=list(CHAINS),
+        token_metadata_db_path=str(tmp_path / "multichain.sqlite3"),
+    )
+    resolver = TokenMetadataResolver(config)
+    call = AsyncMock()
+    monkeypatch.setattr(resolver._rpc, "call", call)
+    try:
+        for chain_id in CHAINS:
+            call.return_value = [
+                (True, Web3().codec.encode(["uint256"], [6])),
+                (True, Web3().codec.encode(["string"], [f"TOKEN{chain_id}"])),
+            ]
+            metadata = await resolver.resolve_token(
+                chain_id=chain_id, request_token=TokenRef(chain_id=chain_id, address=USDC)
+            )
+            assert metadata[USDC].symbol == f"TOKEN{chain_id}"
+            assert call.call_args.kwargs["chain_id"] == chain_id
+        assert call.call_count == len(CHAINS)
+        for chain_id in CHAINS:
+            metadata = await resolver.resolve_token(
+                chain_id=chain_id, request_token=TokenRef(chain_id=chain_id, address=USDC)
+            )
+            assert metadata[USDC].symbol == f"TOKEN{chain_id}"
+        assert call.call_count == len(CHAINS)  # All second reads came from the correct cache entry.
+    finally:
+        await resolver.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chain_id", CHAINS)
+async def test_native_symbol_matches_chain(chain_id: int, tmp_path: Path) -> None:
+    resolver = TokenMetadataResolver(
+        Settings(chain_ids=[chain_id], token_metadata_db_path=str(tmp_path / "native.sqlite3"))
+    )
+    try:
+        metadata = await resolver.resolve_token(
+            chain_id=chain_id, request_token=TokenRef(chain_id=chain_id, address=NATIVE_TOKEN_ALIAS)
+        )
+        assert metadata[NATIVE_TOKEN_ALIAS].symbol == CHAINS[chain_id].native_symbol
+        assert metadata[NATIVE_TOKEN_ALIAS].decimals == 18
+    finally:
+        await resolver.aclose()
+
+
 def settings(tmp_path: Path) -> Settings:
     return Settings(
         token_metadata_db_path=str(tmp_path / "metadata.sqlite3"),
-        rpc_urls=[],
     )
 
 

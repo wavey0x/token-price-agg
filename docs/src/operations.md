@@ -7,8 +7,7 @@ Set `PRICE_API_CONFIG_FILE` to an absolute path when the service may use another
 
 Common TOML keys:
 
-- `[chains].ids` (default `[1]`)
-- `[rpc].urls` (required for `use_underlying=true`; resolution failures fail closed per provider)
+- `[chains].ids` (default `[1, 10, 100, 137, 42161, 43114]`, or a nonempty subset)
 - `[rpc].request_timeout_ms` (default `1500`)
 - `[timeouts].provider_request_timeout_ms`
 - `[timeouts].provider_max_retries`
@@ -28,12 +27,19 @@ Use `.env` for secrets and occasional overrides:
 
 - `LIFI_API_KEY`
 - `ENSO_API_KEY`
+- `ETHEREUM_RPC_URL`, `OPTIMISM_RPC_URL`, `GNOSIS_RPC_URL`, `POLYGON_RPC_URL`,
+  `ARBITRUM_RPC_URL`, `AVALANCHE_RPC_URL`
+
+RPC endpoints are selected by chain ID and verified before contract reads. Missing or incorrect
+RPC settings fail vault resolution closed; provider quotes without vault resolution still work.
+The old global `RPC_URLS` setting is removed. Install named endpoints before upgrading, remove
+an old `CHAIN_IDS=1` override to enable all six chains, and protect `.env` with mode `600`.
 
 Optional env overrides:
 
 - `APP_ENV`
 - `APP_VERSION` (optional; default `0.1.0`)
-- any TOML-backed setting via its env name (for example `RPC_URLS`)
+- any TOML-backed setting via its env name (for example `CHAIN_IDS`)
 
 Observability:
 

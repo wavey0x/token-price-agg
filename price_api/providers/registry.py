@@ -30,6 +30,10 @@ class ProviderRegistry:
         self._credit_task: asyncio.Task[None] | None = None
         self._http_clients: dict[str, HttpClient] = {}
         self._plugins = self._build_plugins()
+        for plugin in self._plugins.values():
+            plugin.enabled_chains = [
+                chain_id for chain_id in plugin.supported_chains if chain_id in settings.chain_ids
+            ]
         self._warn_invalid_priority_entries()
         self._sync_provider_availability_metrics()
 
@@ -110,7 +114,7 @@ class ProviderRegistry:
         for plugin in self._plugins.values():
             if not plugin.available:
                 continue
-            if chain_id is not None and chain_id not in plugin.supported_chains:
+            if chain_id is not None and chain_id not in plugin.enabled_chains:
                 continue
             count += 1
         return count
@@ -122,12 +126,14 @@ class ProviderRegistry:
         operation: Operation,
         chain_id: int,
     ) -> list[ProviderPlugin]:
+        if chain_id not in self._settings.chain_ids:
+            raise InvalidRequestError("UNSUPPORTED_CHAIN", f"Chain {chain_id} is not enabled")
         if provider_ids is None:
             selected = [
                 plugin
                 for plugin in self._plugins.values()
                 if plugin.available
-                and chain_id in plugin.supported_chains
+                and chain_id in plugin.enabled_chains
                 and self._supports(plugin, operation)
             ]
             return sorted(selected, key=lambda plugin: plugin.id)
@@ -137,7 +143,7 @@ class ProviderRegistry:
             plugin = self._plugins.get(provider_id)
             if plugin is None:
                 raise InvalidRequestError("UNKNOWN_PROVIDER", f"Unknown provider: {provider_id}")
-            if chain_id not in plugin.supported_chains:
+            if chain_id not in plugin.enabled_chains:
                 raise InvalidRequestError(
                     "UNSUPPORTED_CHAIN", f"Provider {provider_id} does not support chain {chain_id}"
                 )
@@ -188,7 +194,7 @@ class ProviderRegistry:
         for plugin in self._plugins.values():
             if not plugin.available:
                 continue
-            if chain_id is not None and chain_id not in plugin.supported_chains:
+            if chain_id is not None and chain_id not in plugin.enabled_chains:
                 continue
             if not self._supports(plugin, operation):
                 continue

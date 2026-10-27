@@ -1,6 +1,12 @@
 # Price API
 
-Ethereum token metadata, price, and quote API with plugin-style providers.
+EVM token metadata, price, and same-chain quote API with plugin-style providers.
+
+Supported networks: Ethereum (`1`), Optimism (`10`), Gnosis (`100`), Polygon (`137`),
+Arbitrum (`42161`), and Avalanche (`43114`). Pass `chain_id` on each request; omitted means
+Ethereum. Quotes compare providers on that network; they do not bridge between networks.
+`GET /v1/providers` advertises the enabled chain IDs for each provider. Individual tokens and
+pairs may still return provider-level `no_route` results.
 
 ## Endpoints
 

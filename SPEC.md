@@ -1,11 +1,11 @@
-# Ethereum Price API - SPEC
+# EVM Price API - SPEC
 
 Status: Draft v1
 Last Updated: 2026-03-04
 Target Stack: Python 3.12+, FastAPI, httpx, pydantic v2, web3.py
 
 ## 1. Objective
-Build a simple, fast, and highly reliable Ethereum token price and quote aggregator with a plugin architecture.
+Build a simple, fast, and highly reliable EVM token price and quote aggregator with a plugin architecture.
 
 The service must:
 - Query multiple providers with different schemas and normalize outputs.
@@ -42,7 +42,7 @@ The service must:
 ## 3. Non-goals (MVP)
 - Best-price execution engine.
 - Transaction building or on-chain execution.
-- Cross-chain routing (initially Ethereum mainnet only).
+- Cross-chain routing. Same-chain pricing and quotes support Ethereum, Optimism, Gnosis, Polygon, Arbitrum, and Avalanche.
 - Historical OHLC/time-series storage.
 
 ## 4. Key Design Principles
@@ -590,7 +590,7 @@ Mitigations:
 2. For `use_underlying=true`, should conversion apply to both `token_in` and `token_out` automatically, or only for the specific token field explicitly marked by caller?
 3. Should quote responses include provider route details by default, or only behind a debug flag to keep payloads small?
 4. Do you want strict fail behavior (`HTTP 4xx/5xx`) when all providers fail, or always `200` with per-provider failures?
-5. Is Ethereum mainnet-only sufficient for MVP, or should we make chain support pluggable now even if only `chain_id=1` is enabled?
+5. Resolved: enable Ethereum, Optimism, Gnosis, Polygon, Arbitrum, and Avalanche with explicit chain-specific RPCs.
 6. For Yearn v2 share conversion, do you want us to enforce a curated allowlist of known vaults initially for safety?
 
 ## 21. Recommended Defaults (if you defer)

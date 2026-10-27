@@ -6,6 +6,7 @@ import pytest
 from pytest import MonkeyPatch
 
 from price_api.app.config import Settings
+from price_api.chains import CHAINS
 
 
 def test_settings_loads_toml_when_env_overrides_absent(
@@ -69,7 +70,6 @@ def test_settings_loads_toml_when_env_overrides_absent(
                 "ids = [1, 10]",
                 "",
                 "[rpc]",
-                'urls = ["https://rpc.1.example", "https://rpc.10.example"]',
                 "request_timeout_ms = 975",
                 "",
                 "[security]",
@@ -161,7 +161,7 @@ def test_settings_loads_toml_when_env_overrides_absent(
     assert settings.vault_cache_max_entries == 1234
     assert settings.close_wait_ready_threshold == 12
     assert settings.chain_ids == [1, 10]
-    assert settings.rpc_urls == ["https://rpc.1.example", "https://rpc.10.example"]
+    assert settings.rpc_urls_by_chain == {}
     assert settings.rpc_request_timeout_ms == 975
     assert settings.providers_enabled == ["curve", "defillama"]
     assert settings.price_provider_priority == ["curve"]
@@ -179,6 +179,27 @@ def test_settings_loads_toml_when_env_overrides_absent(
 def test_providers_enabled_can_be_overridden_directly() -> None:
     settings = Settings(providers_enabled=["curve"])
     assert settings.providers_enabled == ["curve"]
+
+
+def test_chain_rpc_environment_is_explicit_and_respects_enabled_chains(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ETHEREUM_RPC_URL", "https://ethereum.example")
+    monkeypatch.setenv("ARBITRUM_RPC_URL", "https://arbitrum.example")
+    settings = Settings(chain_ids=[1, 42161])
+    assert settings.rpc_urls_by_chain == {
+        1: "https://ethereum.example",
+        42161: "https://arbitrum.example",
+    }
+    assert Settings(chain_ids=[1]).rpc_urls_by_chain == {1: "https://ethereum.example"}
+    monkeypatch.setenv("ARBITRUM_RPC_URL", "")
+    assert Settings(chain_ids=[42161]).rpc_urls_by_chain == {}
+
+
+def test_only_supported_chains_can_be_enabled() -> None:
+    assert Settings(chain_ids=list(CHAINS)).chain_ids == list(CHAINS)
+    with pytest.raises(ValueError, match="CHAIN_IDS must select"):
+        Settings(chain_ids=[999])
 
 
 def test_provider_http_trust_env_defaults_false() -> None:

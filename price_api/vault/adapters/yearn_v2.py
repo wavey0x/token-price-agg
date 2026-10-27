@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from web3 import Web3
 
+from price_api.chains import MULTICALL3_BY_CHAIN
 from price_api.core.errors import InvalidRequestError
 from price_api.vault.adapters.common import (
     decode_token_decimals,
@@ -15,9 +16,6 @@ from price_api.web3.client import AsyncRpcClient
 _ERC20_ABI = load_abi("erc20.json")
 _YEARN_V2_ABI = load_abi("yearn_v2_vault.json")
 _MULTICALL3_ABI = load_abi("multicall3.json")
-_MULTICALL3_BY_CHAIN: dict[int, str] = {
-    1: Web3.to_checksum_address("0xcA11bde05977b3631167028862bE2a173976CA11"),
-}
 
 _YEARN_TOKEN_SELECTOR = bytes.fromhex("fc0c546a")
 _ERC20_DECIMALS_SELECTOR = bytes.fromhex("313ce567")
@@ -51,18 +49,21 @@ class YearnV2Adapter:
             raise
         except _MulticallUnavailable:
             try:
-                return await self._detect_with_calls(vault_address=vault_address)
+                return await self._detect_with_calls(vault_address=vault_address, chain_id=chain_id)
             except _VaultInterfaceNotSupported:
                 return None
         except Exception as multicall_exc:
             try:
-                return await self._detect_with_calls(vault_address=vault_address)
+                return await self._detect_with_calls(vault_address=vault_address, chain_id=chain_id)
             except _VaultInterfaceNotSupported as interface_exc:
                 raise multicall_exc from interface_exc
 
-    async def _detect_with_calls(self, *, vault_address: str) -> YearnV2VaultInfo | None:
+    async def _detect_with_calls(
+        self, *, vault_address: str, chain_id: int
+    ) -> YearnV2VaultInfo | None:
         try:
             underlying_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=vault_address,
                 abi=_YEARN_V2_ABI,
                 fn_name="token",
@@ -79,18 +80,21 @@ class YearnV2Adapter:
 
         try:
             share_decimals_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=vault_address,
                 abi=_YEARN_V2_ABI,
                 fn_name="decimals",
                 args=[],
             )
             underlying_decimals_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=str(underlying),
                 abi=_ERC20_ABI,
                 fn_name="decimals",
                 args=[],
             )
             pps_raw = await self._rpc_client.call(
+                chain_id=chain_id,
                 address=vault_address,
                 abi=_YEARN_V2_ABI,
                 fn_name="pricePerShare",
@@ -122,7 +126,7 @@ class YearnV2Adapter:
     async def _detect_with_multicall(
         self, *, vault_address: str, chain_id: int
     ) -> YearnV2VaultInfo | None:
-        multicall_address = _MULTICALL3_BY_CHAIN.get(chain_id)
+        multicall_address = MULTICALL3_BY_CHAIN.get(chain_id)
         if multicall_address is None:
             raise _MulticallUnavailable
 
@@ -133,6 +137,7 @@ class YearnV2Adapter:
             (checksum, True, _YEARN_PRICE_PER_SHARE_SELECTOR),
         ]
         raw = await self._rpc_client.call(
+            chain_id=chain_id,
             address=multicall_address,
             abi=_MULTICALL3_ABI,
             fn_name="aggregate3",
@@ -151,12 +156,7 @@ class YearnV2Adapter:
 
         decimals_success, decimals_data = decoded[1]
         pps_success, pps_data = decoded[2]
-        if (
-            not decimals_success
-            or not pps_success
-            or decimals_data is None
-            or pps_data is None
-        ):
+        if not decimals_success or not pps_success or decimals_data is None or pps_data is None:
             raise InvalidRequestError(
                 "INVALID_VAULT_DATA",
                 "Yearn v2 vault returned incomplete metadata",
@@ -164,17 +164,14 @@ class YearnV2Adapter:
 
         share_decimals = decode_token_decimals(decimals_data)
         price_per_share = _decode_uint256(pps_data)
-        if (
-            share_decimals is None
-            or price_per_share is None
-            or price_per_share <= 0
-        ):
+        if share_decimals is None or price_per_share is None or price_per_share <= 0:
             raise InvalidRequestError(
                 "INVALID_VAULT_DATA",
                 "Yearn v2 vault returned malformed metadata",
             )
 
         underlying_decimals_raw = await self._rpc_client.call(
+            chain_id=chain_id,
             address=multicall_address,
             abi=_MULTICALL3_ABI,
             fn_name="aggregate3",

@@ -92,7 +92,7 @@ Returns known token metadata without calling downstream price/quote providers.
 
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `chain_id` | integer | no | `1` | EVM chain id. Must be `> 0`. |
+| `chain_id` | integer | no | `1` | Enabled EVM chain ID: `1`, `10`, `100`, `137`, `42161`, or `43114`. Disabled/unknown chains return `400 UNSUPPORTED_CHAIN`. |
 | `token` | string | yes | none | Token address to resolve. Case-insensitive input; output is checksummed (EIP-55). |
 
 Behavior:
@@ -159,7 +159,7 @@ Every `200`, `304`, and well-formed `404` carries `X-Content-Type-Options: nosni
 
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `chain_id` | integer | no | `1` | EVM chain id. Must be `> 0`. |
+| `chain_id` | integer | no | `1` | Enabled EVM chain ID: `1`, `10`, `100`, `137`, `42161`, or `43114`. Disabled/unknown chains return `400 UNSUPPORTED_CHAIN`. |
 | `token` | string | yes | none | Token address to price. Case-insensitive input; output is checksummed (EIP-55). |
 | `providers` | list[string] | no | all available for price | Provider filter/priority for selection. Accepts repeated params and csv. Values are normalized to lowercase and deduplicated in first-seen order. |
 | `use_underlying` | boolean | no | `false` | Strict vault handling. Supported vaults are priced via underlying value; confirmed non-vault tokens proceed unchanged. Resolution failures skip provider calls and return provider-level `VAULT_RESOLUTION_FAILED` errors. |
@@ -362,7 +362,7 @@ curl -s \
 
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `chain_id` | integer | no | `1` | EVM chain id. Must be `> 0`. |
+| `chain_id` | integer | no | `1` | Enabled EVM chain ID: `1`, `10`, `100`, `137`, `42161`, or `43114`. Disabled/unknown chains return `400 UNSUPPORTED_CHAIN`. |
 | `token_in` | string | yes | none | Input token address. Case-insensitive input; output is checksummed (EIP-55). |
 | `token_out` | string | yes | none | Output token address. Case-insensitive input; output is checksummed (EIP-55). |
 | `amount_in` | string (integer) | yes | none | Positive base-unit amount (for example wei). Must parse as positive integer. |
@@ -370,6 +370,11 @@ curl -s \
 | `include_route` | boolean | no | `false` | If `true`, provider route payload is included when provider supports it. If `false`, route is omitted (`null`) in response. |
 | `use_underlying` | boolean | no | `false` | Strict vault handling on both legs. Supported vault legs are converted before provider calls and output vault amounts are converted back to share units. Confirmed non-vault tokens proceed unchanged; resolution failures return provider-level `VAULT_RESOLUTION_FAILED` errors. |
 | `timeout_ms` | integer | no | server default | Per-request timeout override in milliseconds. Min 200, max 10000. |
+
+`use_underlying=true` returns an underlying-value estimate, not a guarantee of immediate vault
+redemption or an executable share-token swap. For asynchronous vaults (including Arbitrum
+sUSDai), request `false` for a direct market route and `true` for underlying share valuation.
+Both legs always use the requested chain; cross-chain bridging is not supported.
 
 `use_underlying` for quote:
 - Applies to both `token_in` and `token_out` if either is a supported vault.

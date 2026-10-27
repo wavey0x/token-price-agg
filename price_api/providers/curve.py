@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from price_api.chains import CHAINS
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
@@ -39,7 +40,10 @@ class CurveProvider(ProviderPlugin):
     async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
         call = await timed_get(
             client=self._client,
-            url=f"https://prices.curve.finance/v1/usd_price/ethereum/{req.token.address}",
+            url=(
+                f"https://prices.curve.finance/v1/usd_price/"
+                f"{CHAINS[req.chain_id].curve_name}/{req.token.address}"
+            ),
             timeout_ms=req.timeout_ms,
             provider_id=self.id,
             operation="price",

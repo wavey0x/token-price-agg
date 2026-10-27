@@ -1,9 +1,8 @@
 [chains]
-ids = [1]
+ids = [1, 10, 100, 137, 42161, 43114]
 
 [rpc]
-# Required for `use_underlying=true`; resolution failures fail closed per provider.
-urls = []
+# Endpoints use <CHAIN>_RPC_URL in the environment; never mix networks in a fallback list.
 request_timeout_ms = 1500
 
 [timeouts]
