@@ -1,0 +1,60 @@
+{
+  "apiVersion": 1,
+  "groups": [{
+    "orgId": 1,
+    "name": "enso-credits",
+    "folder": "Prices API",
+    "interval": "1m",
+    "rules": [{
+      "uid": "price-api-enso-credits-low",
+      "title": "Enso credits at or below 5% remaining",
+      "condition": "E",
+      "for": "1m",
+      "noDataState": "OK",
+      "execErrState": "Error",
+      "data": [
+        {"refId": "A", "datasourceUid": "cdrrdzbheqoe8b", "relativeTimeRange": {"from": 600, "to": 0},
+         "model": {"refId": "A", "expr": "100 * price_api_enso_credits_remaining{job=\"token-price-agg\"} / price_api_enso_credits_limit{job=\"token-price-agg\"}", "instant": true, "range": false}},
+        {"refId": "B", "datasourceUid": "cdrrdzbheqoe8b", "relativeTimeRange": {"from": 600, "to": 0},
+         "model": {"refId": "B", "expr": "price_api_enso_credits_used{job=\"token-price-agg\"}", "instant": true, "range": false}},
+        {"refId": "C", "datasourceUid": "cdrrdzbheqoe8b", "relativeTimeRange": {"from": 600, "to": 0},
+         "model": {"refId": "C", "expr": "price_api_enso_credits_limit{job=\"token-price-agg\"}", "instant": true, "range": false}},
+        {"refId": "D", "datasourceUid": "cdrrdzbheqoe8b", "relativeTimeRange": {"from": 600, "to": 0},
+         "model": {"refId": "D", "expr": "price_api_enso_credits_remaining{job=\"token-price-agg\"}", "instant": true, "range": false}},
+        {"refId": "E", "datasourceUid": "__expr__", "relativeTimeRange": {"from": 0, "to": 0},
+         "model": {"refId": "E", "type": "math", "expression": "$A <= 5"}}
+      ],
+      "annotations": {
+        "summary": "Enso has {{ printf \"%.2f\" $values.A.Value }}% of its credit allowance remaining.",
+        "description": "Used {{ printf \"%.0f\" $values.B.Value }} / {{ printf \"%.0f\" $values.C.Value }} credits; {{ printf \"%.0f\" $values.D.Value }} remaining. Replenish credits at https://developers.enso.build."
+      },
+      "labels": {"service": "price-api", "severity": "warning"},
+      "notification_settings": {
+        "receiver": "wavey-alerts", "group_by": ["grafana_folder", "alertname"],
+        "group_wait": "30s", "group_interval": "5m", "repeat_interval": "24h"
+      }
+    }, {
+      "uid": "price-api-enso-credits-stale",
+      "title": "Enso credit monitoring unavailable",
+      "condition": "B",
+      "for": "5m",
+      "noDataState": "Alerting",
+      "execErrState": "Alerting",
+      "data": [
+        {"refId": "A", "datasourceUid": "cdrrdzbheqoe8b", "relativeTimeRange": {"from": 600, "to": 0},
+         "model": {"refId": "A", "expr": "(max(time() - price_api_enso_credits_updated_timestamp_seconds{job=\"token-price-agg\"}) > bool 3600) or vector(1)", "instant": true, "range": false}},
+        {"refId": "B", "datasourceUid": "__expr__", "relativeTimeRange": {"from": 0, "to": 0},
+         "model": {"refId": "B", "type": "math", "expression": "$A > 0"}}
+      ],
+      "annotations": {
+        "summary": "Enso credit usage is missing or more than one hour old.",
+        "description": "Check price-api on electro and ENSO_API_KEY validity. Missing data does not establish that credits are available."
+      },
+      "labels": {"service": "price-api", "severity": "warning"},
+      "notification_settings": {
+        "receiver": "wavey-alerts", "group_by": ["grafana_folder", "alertname"],
+        "group_wait": "30s", "group_interval": "5m", "repeat_interval": "24h"
+      }
+    }]
+  }]
+}

@@ -73,6 +73,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     registry = get_provider_registry()
     vault_resolver = get_vault_resolver()
     await resolver.start()
+    registry.start()
     try:
         yield
     finally:

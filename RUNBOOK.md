@@ -70,6 +70,41 @@ curl -sS http://127.0.0.1:18743/v1/ready
 sudo journalctl -u price-api -n 100 --no-pager
 ```
 
+## Enso credit alerts on electro
+
+The existing price-api process records Enso's `x-enso-credits-used` and
+`x-enso-credits-limit` headers on price and quote responses, including exhausted
+quota responses. It also checks `/api/v1/account/accountId` at startup and when
+no valid credit observation has arrived for 15 minutes (checked once a minute).
+No separate service or timer is needed. A key change requires restarting price-api.
+
+`/metrics` exposes `price_api_enso_credits_used`, `price_api_enso_credits_limit`,
+`price_api_enso_credits_remaining`, and
+`price_api_enso_credits_updated_timestamp_seconds`. Missing/invalid balances do
+not update freshness. The allowance comes from Enso, so neither its size nor
+its reset schedule is assumed; this also covers the `free-lifetime` plan.
+
+Install the tracked Grafana provisioning file on electro:
+
+```bash
+sudo install -o root -g grafana -m 640 \
+  deploy/monitoring/alerts/enso-credits.grafana.json \
+  /etc/grafana/provisioning/alerting/enso-credits.json
+sudo systemctl restart grafana-server
+```
+
+This file uses electro's existing Prometheus datasource UID `cdrrdzbheqoe8b`,
+scrape job `token-price-agg`, and Telegram contact point `wavey-alerts`. It owns
+only two rules in the Prices API folder: remaining credits <=5% (pending for
+one minute), and missing or hour-old usage data (pending for five minutes).
+Alerts include the balance and Enso portal link, with reminders at most daily.
+Grafana retains delivery/alert state across restarts. No keys or Telegram
+credentials belong in metrics or the provisioning file.
+
+Verify a fresh balance at `/metrics`, the Prometheus scrape, and both Grafana
+rules' evaluation health. Test delivery through the existing contact point;
+never alter live credit metrics to manufacture a low-credit event.
+
 ## Token Logo Clean-Schema Cutover
 
 The token-logo ownership release intentionally rejects the legacy token metadata cache. Use this

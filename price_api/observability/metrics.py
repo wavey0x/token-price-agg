@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from prometheus_client import Counter, Gauge, Histogram
 
+ENSO_CREDITS_USED = Gauge("price_api_enso_credits_used", "Enso credits used")
+ENSO_CREDITS_LIMIT = Gauge("price_api_enso_credits_limit", "Enso credit allowance")
+ENSO_CREDITS_REMAINING = Gauge("price_api_enso_credits_remaining", "Enso credits remaining")
+ENSO_CREDITS_UPDATED = Gauge(
+    "price_api_enso_credits_updated_timestamp_seconds", "Last valid Enso credit observation"
+)
+for _credit_gauge in (ENSO_CREDITS_USED, ENSO_CREDITS_LIMIT, ENSO_CREDITS_REMAINING):
+    _credit_gauge.set(float("nan"))
+
 _KNOWN_ENDPOINTS = {
     "/v1/price",
     "/v1/quote",

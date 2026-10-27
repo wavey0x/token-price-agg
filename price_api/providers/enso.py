@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import math
+import time
 from decimal import Decimal
 
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
@@ -9,8 +13,14 @@ from price_api.core.models import (
     ProviderQuoteRequest,
     QuoteResult,
 )
+from price_api.observability.metrics import (
+    ENSO_CREDITS_LIMIT,
+    ENSO_CREDITS_REMAINING,
+    ENSO_CREDITS_UPDATED,
+    ENSO_CREDITS_USED,
+)
 from price_api.providers.base import ProviderPlugin
-from price_api.providers.clients.http import HttpClient
+from price_api.providers.clients.http import HttpClient, HttpResponse
 from price_api.providers.common import first_nested_dict, payload_data_or_root
 from price_api.providers.http_helpers import json_transport_outcome, timed_get
 from price_api.providers.parsing import (
@@ -26,6 +36,7 @@ from price_api.providers.parsing import (
 )
 
 _ENSO_QUERY_ADDRESS = "0x1111111111111111111111111111111111111111"
+_LOGGER = logging.getLogger(__name__)
 
 
 class EnsoProvider(ProviderPlugin):
@@ -45,11 +56,49 @@ class EnsoProvider(ProviderPlugin):
         super().__init__(available=available, unavailable_reason=unavailable_reason)
         self._client = client
         self._api_key = api_key
+        self._credits_updated_at: float | None = None
 
     def _headers(self) -> dict[str, str]:
         if not self._api_key:
             return {}
         return {"Authorization": f"Bearer {self._api_key}"}
+
+    def _record_credits(self, response: HttpResponse | None) -> None:
+        if response is None:
+            return
+        try:
+            used = float(response.headers["x-enso-credits-used"])
+            limit = float(response.headers["x-enso-credits-limit"])
+        except (KeyError, ValueError):
+            return
+        if not (math.isfinite(used) and math.isfinite(limit) and used >= 0 and limit > 0):
+            return
+        ENSO_CREDITS_USED.set(used)
+        ENSO_CREDITS_LIMIT.set(limit)
+        ENSO_CREDITS_REMAINING.set(max(limit - used, 0))
+        ENSO_CREDITS_UPDATED.set(time.time())
+        self._credits_updated_at = time.monotonic()
+
+    async def monitor_credits(self) -> None:
+        """Refresh at startup and after 15 minutes without usable response headers."""
+        while True:
+            if (
+                self._credits_updated_at is None
+                or time.monotonic() - self._credits_updated_at >= 900
+            ):
+                try:
+                    call = await timed_get(
+                        client=self._client,
+                        url="https://api.enso.build/api/v1/account/accountId",
+                        headers=self._headers(),
+                        timeout_ms=5000,
+                        provider_id=self.id,
+                        operation="credits",
+                    )
+                    self._record_credits(call.response)
+                except Exception:  # A monitoring failure must not interrupt quotes.
+                    _LOGGER.warning("enso_credit_check_failed")
+            await asyncio.sleep(60)
 
     async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
         call = await timed_get(
@@ -60,6 +109,7 @@ class EnsoProvider(ProviderPlugin):
             provider_id=self.id,
             operation="price",
         )
+        self._record_credits(call.response)
         transport = json_transport_outcome(call=call, provider_name="Enso")
         if transport.failure is not None:
             return PriceResult(
@@ -112,6 +162,7 @@ class EnsoProvider(ProviderPlugin):
             provider_id=self.id,
             operation="quote",
         )
+        self._record_credits(call.response)
         transport = json_transport_outcome(call=call, provider_name="Enso")
         if transport.failure is not None:
             return QuoteResult(

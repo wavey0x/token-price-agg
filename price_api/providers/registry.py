@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 from enum import Enum
 
 from price_api.app.config import Settings
@@ -25,6 +27,7 @@ class Operation(str, Enum):
 class ProviderRegistry:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        self._credit_task: asyncio.Task[None] | None = None
         self._http_clients: dict[str, HttpClient] = {}
         self._plugins = self._build_plugins()
         self._warn_invalid_priority_entries()
@@ -149,8 +152,23 @@ class ProviderRegistry:
         return plugin.supports_quote
 
     async def aclose(self) -> None:
+        if self._credit_task is not None:
+            self._credit_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._credit_task
+            self._credit_task = None
         for client in self._http_clients.values():
             await client.close()
+
+    def start(self) -> None:
+        enso = self._plugins.get("enso")
+        if (
+            isinstance(enso, EnsoProvider)
+            and enso.available
+            and self._settings.metrics_enabled
+            and self._credit_task is None
+        ):
+            self._credit_task = asyncio.create_task(enso.monitor_credits())
 
     def available_operation_count(
         self,

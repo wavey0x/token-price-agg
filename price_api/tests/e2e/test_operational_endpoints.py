@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TypeAlias
 
 import pytest
+import respx
 from fastapi.testclient import TestClient
 
 from price_api.app.main import app
@@ -140,6 +141,42 @@ def test_metrics_endpoint_exposes_prometheus_payload() -> None:
     assert "price_api_http_request_latency_seconds" in response.text
     assert "price_api_provider_calls_total" in response.text
     assert 'endpoint="/v1/price",method="GET"' in response.text
+
+
+def test_enso_credit_monitor_and_quote_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENSO_API_KEY", "fixture")
+    headers = {"X-Enso-Credits-Used": "95000", "X-Enso-Credits-Limit": "100000"}
+    with respx.mock as router:
+        account = router.get("https://api.enso.build/api/v1/account/accountId").respond(
+            200,
+            json="fixture-account",
+            headers=headers,
+        )
+        router.get("https://api.enso.build/api/v1/shortcuts/route").respond(
+            200,
+            json={"amountOut": "1000000"},
+            headers=headers,
+        )
+        with TestClient(app) as client:
+            assert client.get("/v1/health").status_code == 200
+            quote = client.get(
+                "/v1/quote",
+                params={
+                    "chain_id": 1,
+                    "token_in": token_lower("CRV"),
+                    "token_out": token_lower("USDC"),
+                    "amount_in": "1000000000000000000",
+                    "providers": "enso",
+                },
+            )
+            assert quote.status_code == 200
+            assert quote.json()["providers"]["enso"]["status"] == "ok"
+            metrics = client.get("/metrics")
+        assert account.call_count == 1
+    assert "price_api_enso_credits_used 95000.0" in metrics.text
+    assert "price_api_enso_credits_limit 100000.0" in metrics.text
+    assert "price_api_enso_credits_remaining 5000.0" in metrics.text
+    assert "fixture" not in metrics.text
 
 
 def test_readiness_endpoint_default_ok() -> None:
