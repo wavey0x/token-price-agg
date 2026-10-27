@@ -259,6 +259,45 @@ uv run python price_api/tests/manual/smoke_get_live.py \
 
 ## Configuration
 
+### Multichain acceptance (2026-10-27)
+
+Deployment `8cff111` passed live `/v1/token`, `/v1/price`, `/v1/quote`, and non-vault
+`use_underlying=true` checks on all six networks. The quote control was 100 USDC to the
+network's WETH (WETH.e on Avalanche), using the default provider selection and timeouts.
+
+| Network | Chain ID | Successful price providers | Successful quote providers |
+| --- | ---: | ---: | ---: |
+| Ethereum | 1 | 4 | 3 |
+| Optimism | 10 | 4 | 2 |
+| Gnosis | 100 | 4 | 2 |
+| Polygon | 137 | 4 | 1 |
+| Arbitrum | 42161 | 4 | 3 |
+| Avalanche | 43114 | 3 | 3 |
+
+Polygon demonstrated live fallback: LI.FI supplied a quote while Curve timed out and Enso
+returned a rate limit. Avalanche's Curve price was unavailable for the control token; the
+other price providers answered. These are point-in-time checks, not guarantees of token coverage.
+
+The public API also returned direct Arbitrum sUSDai -> USDC quotes from Curve and LI.FI;
+Enso reported no route for that pair. `use_underlying=true` resolved sUSDai to USDai using
+Arbitrum RPC and returned underlying-value quotes from all three quoters. Ethereum sDAI
+underlying pricing passed as a regression check. Vault-value estimates do not establish
+immediate redeemability of asynchronous vaults.
+
+Repeat the direct sUSDai route check with a consumer key (100 shares, raw units):
+
+```bash
+curl -sS -G 'https://prices.wavey.info/v1/quote' \
+  -H "Authorization: Bearer ${WAVEY_PRICES_KEY}" \
+  --data-urlencode 'chain_id=42161' \
+  --data-urlencode 'token_in=0x0B2b2B2076d95dda7817e785989fE353fe955ef9' \
+  --data-urlencode 'token_out=0xaf88d065e77c8cC2239327C5EDb3A432268e5831' \
+  --data-urlencode 'amount_in=100000000000000000000' \
+  --data-urlencode 'use_underlying=false'
+```
+
+### Runtime settings
+
 Non-secret config belongs in `config/app.toml`.
 
 Secrets and host-specific overrides belong in `.env` on `electro`.
