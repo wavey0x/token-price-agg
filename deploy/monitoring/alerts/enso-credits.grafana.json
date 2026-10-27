@@ -25,7 +25,7 @@
          "model": {"refId": "E", "type": "math", "expression": "$A <= 5"}}
       ],
       "annotations": {
-        "summary": "Enso has {{ printf \"%.2f\" $values.A.Value }}% of its credit allowance remaining.",
+        "summary": "Enso credits: {{ printf \"%.0f\" $values.B.Value }} / {{ printf \"%.0f\" $values.C.Value }} used; {{ printf \"%.0f\" $values.D.Value }} remaining ({{ printf \"%.2f\" $values.A.Value }}%). Replenish at https://developers.enso.build.",
         "description": "Used {{ printf \"%.0f\" $values.B.Value }} / {{ printf \"%.0f\" $values.C.Value }} credits; {{ printf \"%.0f\" $values.D.Value }} remaining. Replenish credits at https://developers.enso.build."
       },
       "labels": {"service": "price-api", "severity": "warning"},
@@ -47,7 +47,7 @@
          "model": {"refId": "B", "type": "math", "expression": "$A > 0"}}
       ],
       "annotations": {
-        "summary": "Enso credit usage is missing or more than one hour old.",
+        "summary": "Enso credit usage is missing or more than one hour old. Check price-api and the Enso key on electro.",
         "description": "Check price-api on electro and ENSO_API_KEY validity. Missing data does not establish that credits are available."
       },
       "labels": {"service": "price-api", "severity": "warning"},
