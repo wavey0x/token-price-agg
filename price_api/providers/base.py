@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC
 from typing import ClassVar
 
-from price_api.chains import CHAINS
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
@@ -18,7 +17,7 @@ class ProviderPlugin(ABC):
     id: ClassVar[str]
     supports_price: ClassVar[bool] = False
     supports_quote: ClassVar[bool] = False
-    supported_chains: ClassVar[list[int]] = list(CHAINS)
+    supported_chains: ClassVar[tuple[int, ...]] = ()
     requires_api_key: ClassVar[bool] = False
 
     def __init__(

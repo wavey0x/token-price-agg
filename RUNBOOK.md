@@ -77,6 +77,8 @@ The existing price-api process records Enso's `x-enso-credits-used` and
 quota responses. It also checks `/api/v1/account/accountId` at startup and when
 no valid credit observation has arrived for 15 minutes (checked once a minute).
 No separate service or timer is needed. A key change requires restarting price-api.
+Polling uses its own single-connection client with a five-second timeout, so a polling
+failure cannot mark the serving transport unhealthy or consume quote connection capacity.
 
 `/metrics` exposes `price_api_enso_credits_used`, `price_api_enso_credits_limit`,
 `price_api_enso_credits_remaining`, and

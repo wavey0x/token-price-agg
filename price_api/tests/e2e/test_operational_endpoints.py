@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
+import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -187,6 +188,37 @@ def test_readiness_endpoint_default_ok() -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["checks"]["provider_registry"] is True
+
+
+@pytest.mark.parametrize("error", [httpx.PoolTimeout, httpx.ReadTimeout])
+def test_enso_credit_poll_failure_does_not_change_serving_readiness(
+    monkeypatch: pytest.MonkeyPatch, error: type[httpx.TimeoutException]
+) -> None:
+    monkeypatch.setenv("ENSO_API_KEY", "fixture")
+    with respx.mock as router:
+        account = router.get("https://api.enso.build/api/v1/account/accountId").mock(
+            side_effect=error("credit polling failed")
+        )
+        router.get("https://api.enso.build/api/v1/shortcuts/route").respond(
+            200, json={"amountOut": "1000000"}
+        )
+        with TestClient(app) as client:
+            assert client.get("/v1/health").status_code == 200
+            quote = client.get(
+                "/v1/quote",
+                params={
+                    "token_in": token_lower("CRV"),
+                    "token_out": token_lower("USDC"),
+                    "amount_in": "1000000000000000000",
+                    "providers": "enso",
+                },
+            )
+            assert quote.status_code == 200
+            assert quote.json()["quote"]["provider"] == "enso"
+            ready = client.get("/v1/ready")
+            assert ready.status_code == 200
+            assert ready.json()["checks"]["provider_transport_unhealthy"] is False
+        assert account.call_count == 1
 
 
 def test_logo_maintenance_is_lifespan_managed(

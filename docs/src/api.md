@@ -69,6 +69,7 @@ When `status` is not `ok`, the `error` object provides machine-readable detail:
 | `INVALID_VAULT_CONVERSION` | `error` | Failed to convert vault share/asset amounts |
 | `NO_ROUTE` | `no_route` | No route found or token not supported by this provider |
 | `UNSUPPORTED_OPERATION` | `bad_request` | Provider does not support this operation type (e.g. quote-only provider asked for price) |
+| `UNSUPPORTED_CHAIN` | `bad_request` | Selected provider does not support this enabled chain; other providers continue |
 | `PROVIDER_UNAVAILABLE` | `bad_request` | Provider is disabled (e.g. missing API key) |
 
 `error.code` is present only when a non-success upstream HTTP response caused the provider failure,
@@ -375,6 +376,10 @@ curl -s \
 redemption or an executable share-token swap. For asynchronous vaults (including Arbitrum
 sUSDai), request `false` for a direct market route and `true` for underlying share valuation.
 Both legs always use the requested chain; cross-chain bridging is not supported.
+
+An explicitly selected provider that does not support the requested chain returns a
+provider-level `UNSUPPORTED_CHAIN` result. Other selected providers still run. A chain disabled
+for the service itself continues to return HTTP `400 UNSUPPORTED_CHAIN`.
 
 `use_underlying` for quote:
 - Applies to both `token_in` and `token_out` if either is a supported vault.

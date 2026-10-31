@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from price_api.app.config import Settings
-from price_api.core.circuit import CircuitBreaker
+from price_api.core.circuit import CircuitBreaker, CircuitScope
 from price_api.core.errors import (
     AdmissionRejectedError,
     ErrorInfo,
@@ -142,7 +142,7 @@ class ProviderOperationRunner:
         immediate_results: list[TResult] = []
         runnable: list[_RunnableProvider] = []
         provider_reservations: list[LimitReservation] = []
-        circuit_allowed_provider_ids: set[str] = set()
+        circuit_scopes: set[CircuitScope] = set()
         global_reservation: LimitReservation | None = None
         tasks: dict[asyncio.Task[TResult], str] = {}
 
@@ -151,15 +151,18 @@ class ProviderOperationRunner:
                 assert isinstance(plugin, ProviderPlugin)
                 provider_id = plugin.id
 
-                static_reason = self._static_rejection_reason(plugin=plugin, operation=operation)
+                static_reason = self._static_rejection_reason(
+                    plugin=plugin, operation=operation, chain_id=req.chain_id
+                )
                 if static_reason is not None:
                     immediate_results.append(static_result(plugin, req, static_reason))
                     continue
 
-                if not self._circuit.allow(provider_id):
+                scope = CircuitScope(provider_id, req.chain_id, operation)
+                if not self._circuit.allow(scope):
                     immediate_results.append(static_result(plugin, req, "circuit_open"))
                     continue
-                circuit_allowed_provider_ids.add(provider_id)
+                circuit_scopes.add(scope)
 
                 provider_reservation = await self._capacity.provider_limiter(
                     provider_id
@@ -206,9 +209,11 @@ class ProviderOperationRunner:
                 deadline_result=deadline_result,
                 internal_task_failure_result=internal_task_failure_result,
             )
-            results.extend(immediate_results)
             for result in results:
-                self._circuit.record_result(result)
+                scope = CircuitScope(result.provider, req.chain_id, operation)
+                self._circuit.record_result(scope, result)
+                circuit_scopes.discard(scope)
+            results.extend(immediate_results)
             return results
         finally:
             pending_tasks = [task for task in tasks if not task.done()]
@@ -216,7 +221,8 @@ class ProviderOperationRunner:
                 task.cancel()
             if pending_tasks:
                 await asyncio.gather(*pending_tasks, return_exceptions=True)
-            self._release_circuit_probes(circuit_allowed_provider_ids)
+            for scope in circuit_scopes:
+                self._circuit.release_probe(scope)
             await _release_all(
                 [
                     *(provider_reservations or []),
@@ -366,10 +372,12 @@ class ProviderOperationRunner:
                 dec_provider_inflight_call(provider=plugin.id, operation="quote")
 
     @staticmethod
-    def _static_rejection_reason(*, plugin: object, operation: str) -> str | None:
+    def _static_rejection_reason(*, plugin: object, operation: str, chain_id: int) -> str | None:
         from price_api.providers.base import ProviderPlugin
 
         assert isinstance(plugin, ProviderPlugin)
+        if chain_id not in plugin.enabled_chains:
+            return "unsupported_chain"
         if operation == "price" and not plugin.supports_price:
             return "unsupported_operation"
         if operation == "quote" and not plugin.supports_quote:
@@ -518,12 +526,8 @@ class ProviderOperationRunner:
             units=self._capacity.provider_used_units(),
         )
 
-    def circuit_open_providers(self) -> set[str]:
-        return self._circuit.circuit_open_providers()
-
-    def _release_circuit_probes(self, provider_ids: set[str]) -> None:
-        for provider_id in provider_ids:
-            self._circuit.release_probe(provider_id)
+    def circuit_open_providers(self, *, chain_id: int, operation: str) -> set[str]:
+        return self._circuit.circuit_open_providers(chain_id=chain_id, operation=operation)
 
     @staticmethod
     def _record_price_result(*, result: PriceResult, latency_ms: int) -> None:
@@ -554,6 +558,11 @@ def _static_error(*, plugin: object, reason: str) -> tuple[ProviderStatus, Error
     from price_api.providers.base import ProviderPlugin
 
     assert isinstance(plugin, ProviderPlugin)
+    if reason == "unsupported_chain":
+        return (
+            ProviderStatus.BAD_REQUEST,
+            ErrorInfo(type=ErrorType.UNSUPPORTED_CHAIN, message="Provider does not support chain"),
+        )
     if reason == "unsupported_operation":
         return (
             ProviderStatus.BAD_REQUEST,

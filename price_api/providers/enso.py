@@ -6,6 +6,8 @@ import math
 import time
 from decimal import Decimal
 
+import httpx
+
 from price_api.core.errors import ErrorInfo, ErrorType, ProviderStatus
 from price_api.core.models import (
     PriceResult,
@@ -41,6 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class EnsoProvider(ProviderPlugin):
     id = "enso"
+    supported_chains = (1, 10, 100, 137, 42161, 43114)
     supports_price = True
     supports_quote = True
     requires_api_key = True
@@ -81,24 +84,32 @@ class EnsoProvider(ProviderPlugin):
 
     async def monitor_credits(self) -> None:
         """Refresh at startup and after 15 minutes without usable response headers."""
-        while True:
-            if (
-                self._credits_updated_at is None
-                or time.monotonic() - self._credits_updated_at >= 900
-            ):
-                try:
-                    call = await timed_get(
-                        client=self._client,
-                        url="https://api.enso.build/api/v1/account/accountId",
-                        headers=self._headers(),
-                        timeout_ms=5000,
-                        provider_id=self.id,
-                        operation="credits",
-                    )
-                    self._record_credits(call.response)
-                except Exception:  # A monitoring failure must not interrupt quotes.
-                    _LOGGER.warning("enso_credit_check_failed")
-            await asyncio.sleep(60)
+        # Polling must not consume serving capacity or change serving transport health.
+        async with httpx.AsyncClient(
+            timeout=5,
+            trust_env=self._client.trust_env,
+            limits=httpx.Limits(max_connections=1, max_keepalive_connections=0),
+        ) as client:
+            while True:
+                if (
+                    self._credits_updated_at is None
+                    or time.monotonic() - self._credits_updated_at >= 900
+                ):
+                    try:
+                        response = await client.get(
+                            "https://api.enso.build/api/v1/account/accountId",
+                            headers=self._headers(),
+                        )
+                        self._record_credits(
+                            HttpResponse(
+                                status_code=response.status_code,
+                                json_data=None,
+                                headers=dict(response.headers),
+                            )
+                        )
+                    except Exception:  # A monitoring failure must not interrupt quotes.
+                        _LOGGER.warning("enso_credit_check_failed")
+                await asyncio.sleep(60)
 
     async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
         call = await timed_get(

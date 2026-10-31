@@ -112,7 +112,7 @@ class ProviderRegistry:
     def available_provider_count(self, *, chain_id: int | None = None) -> int:
         count = 0
         for plugin in self._plugins.values():
-            if not plugin.available:
+            if not plugin.available or not plugin.enabled_chains:
                 continue
             if chain_id is not None and chain_id not in plugin.enabled_chains:
                 continue
@@ -143,10 +143,6 @@ class ProviderRegistry:
             plugin = self._plugins.get(provider_id)
             if plugin is None:
                 raise InvalidRequestError("UNKNOWN_PROVIDER", f"Unknown provider: {provider_id}")
-            if chain_id not in plugin.enabled_chains:
-                raise InvalidRequestError(
-                    "UNSUPPORTED_CHAIN", f"Provider {provider_id} does not support chain {chain_id}"
-                )
             selected_plugins.append(plugin)
 
         return selected_plugins
@@ -192,7 +188,7 @@ class ProviderRegistry:
     ) -> list[str]:
         provider_ids: list[str] = []
         for plugin in self._plugins.values():
-            if not plugin.available:
+            if not plugin.available or not plugin.enabled_chains:
                 continue
             if chain_id is not None and chain_id not in plugin.enabled_chains:
                 continue

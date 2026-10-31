@@ -28,6 +28,7 @@ _LIFI_DUMMY_ADDRESS = "0x0000000000000000000000000000000000000001"
 
 class LiFiProvider(ProviderPlugin):
     id = "lifi"
+    supported_chains = (1, 10, 100, 137, 42161, 43114)
     supports_price = True
     supports_quote = True
     requires_api_key = True

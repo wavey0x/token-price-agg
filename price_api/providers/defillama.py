@@ -18,6 +18,7 @@ from price_api.providers.parsing import (
 
 class DefiLlamaProvider(ProviderPlugin):
     id = "defillama"
+    supported_chains = (1, 10, 100, 137, 42161, 43114)
     supports_price = True
     supports_quote = False
 

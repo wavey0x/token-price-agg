@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from price_api.app.config import Settings
-from price_api.providers.registry import ProviderRegistry
+from price_api.providers.base import ProviderPlugin
+from price_api.providers.registry import Operation, ProviderRegistry
 
 
 def test_missing_api_keys_mark_providers_unavailable() -> None:
@@ -75,3 +76,16 @@ def test_each_provider_gets_an_isolated_http_client() -> None:
 
     assert set(registry._http_clients) == {"curve", "defillama"}
     assert registry._http_clients["curve"] is not registry._http_clients["defillama"]
+
+
+def test_provider_chain_support_requires_an_explicit_declaration() -> None:
+    assert ProviderPlugin().enabled_chains == []
+
+
+def test_disabled_provider_chain_is_not_advertised_or_selected_by_default() -> None:
+    registry = ProviderRegistry(Settings(chain_ids=[1], providers_enabled=["curve"]))
+    registry._plugins["curve"].enabled_chains = []
+    assert registry.available_provider_count() == 0
+    assert registry.available_provider_ids(operation=Operation.PRICE) == []
+    assert registry.resolve(provider_ids=None, operation=Operation.PRICE, chain_id=1) == []
+    assert registry.resolve(provider_ids=["curve"], operation=Operation.PRICE, chain_id=1)

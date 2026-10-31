@@ -30,6 +30,7 @@ from price_api.providers.parsing import (
 
 class CurveProvider(ProviderPlugin):
     id = "curve"
+    supported_chains = (1, 10, 100, 137, 42161, 43114)
     supports_price = True
     supports_quote = True
 

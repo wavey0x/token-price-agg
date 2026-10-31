@@ -24,6 +24,7 @@ async def test_provider_runner_cancels_child_tasks_when_parent_is_cancelled() ->
     class SlowPlugin(ProviderPlugin):
         id: ClassVar[str] = "slow"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             events.append("started")
@@ -64,6 +65,7 @@ async def test_provider_runner_releases_partial_admission_when_cancelled() -> No
     class ProviderA(ProviderPlugin):
         id: ClassVar[str] = "provider-a"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             return PriceResult(
@@ -77,6 +79,7 @@ async def test_provider_runner_releases_partial_admission_when_cancelled() -> No
     class ProviderB(ProviderPlugin):
         id: ClassVar[str] = "provider-b"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             blocker_started.set()
@@ -126,6 +129,7 @@ async def test_provider_runner_rejects_success_for_wrong_token_identity() -> Non
     class WrongTokenPlugin(ProviderPlugin):
         id: ClassVar[str] = "wrong-token"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             return PriceResult(
@@ -154,6 +158,7 @@ async def test_provider_runner_rejects_global_admission_when_capacity_is_full() 
     class SlowPlugin(ProviderPlugin):
         id: ClassVar[str] = "slow"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             started.set()
@@ -206,6 +211,7 @@ async def test_provider_runner_allows_concurrent_requests_when_capacity_is_avail
     class SlowPlugin(ProviderPlugin):
         id: ClassVar[str] = "slow"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             nonlocal started_count
@@ -260,6 +266,7 @@ async def test_provider_runner_returns_provider_failure_when_provider_lane_is_fu
     class SlowPlugin(ProviderPlugin):
         id: ClassVar[str] = "slow"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         async def get_price(self, req: ProviderPriceRequest) -> PriceResult:
             started.set()
@@ -309,6 +316,7 @@ async def test_provider_runner_opens_provider_circuit_after_retriable_failures()
     class FailingPlugin(ProviderPlugin):
         id: ClassVar[str] = "failing"
         supports_price: ClassVar[bool] = True
+        supported_chains = (1,)
 
         def __init__(self) -> None:
             super().__init__()

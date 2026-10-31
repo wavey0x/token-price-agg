@@ -76,7 +76,7 @@ class DummyPlugin(ProviderPlugin):
     id: ClassVar[str] = "dummy"
     supports_price: ClassVar[bool] = True
     supports_quote: ClassVar[bool] = True
-    supported_chains: ClassVar[list[int]] = [1]
+    supported_chains: ClassVar[tuple[int, ...]] = (1,)
 
     def __init__(
         self,

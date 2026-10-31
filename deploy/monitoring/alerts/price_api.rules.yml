@@ -107,7 +107,10 @@ groups:
           service: price-api
         annotations:
           summary: "price-api provider circuit is open"
-          description: "Provider {{ $labels.provider }} circuit has remained open for 5 minutes."
+          description: >-
+            Provider {{ $labels.provider }} circuit for chain {{ $labels.chain_id }},
+            operation {{ $labels.operation }} has remained open for 5 minutes
+            (chain 0 / all denotes shared quota).
 
       - alert: PriceApiReadinessFailures
         expr: |

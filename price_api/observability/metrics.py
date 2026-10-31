@@ -127,13 +127,13 @@ PROVIDER_TRANSPORT_RECYCLES_TOTAL = Counter(
 PROVIDER_CIRCUIT_STATE = Gauge(
     "price_api_provider_circuit_state",
     "Provider circuit state gauge (0=closed, 1=half_open, 2=open)",
-    labelnames=("provider",),
+    labelnames=("provider", "chain_id", "operation"),
 )
 
 PROVIDER_CIRCUIT_TRANSITIONS_TOTAL = Counter(
     "price_api_provider_circuit_transitions_total",
     "Provider circuit state transitions",
-    labelnames=("provider", "state"),
+    labelnames=("provider", "chain_id", "operation", "state"),
 )
 
 PROCESS_CLOSE_WAIT_SOCKETS = Gauge(
@@ -257,13 +257,19 @@ def record_provider_transport_recycle(*, provider: str, reason: str) -> None:
     PROVIDER_TRANSPORT_RECYCLES_TOTAL.labels(provider=provider, reason=reason).inc()
 
 
-def set_provider_circuit_state(*, provider: str, state: str) -> None:
+def set_provider_circuit_state(*, provider: str, chain_id: int, operation: str, state: str) -> None:
     state_value = {"closed": 0, "half_open": 1, "open": 2}.get(state, 0)
-    PROVIDER_CIRCUIT_STATE.labels(provider=provider).set(state_value)
+    PROVIDER_CIRCUIT_STATE.labels(
+        provider=provider, chain_id=str(chain_id), operation=operation
+    ).set(state_value)
 
 
-def record_provider_circuit_transition(*, provider: str, state: str) -> None:
-    PROVIDER_CIRCUIT_TRANSITIONS_TOTAL.labels(provider=provider, state=state).inc()
+def record_provider_circuit_transition(
+    *, provider: str, chain_id: int, operation: str, state: str
+) -> None:
+    PROVIDER_CIRCUIT_TRANSITIONS_TOTAL.labels(
+        provider=provider, chain_id=str(chain_id), operation=operation, state=state
+    ).inc()
 
 
 def set_process_close_wait_sockets(count: int) -> None:

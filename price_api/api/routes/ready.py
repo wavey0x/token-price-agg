@@ -23,9 +23,18 @@ async def ready(
     available_count = registry.available_provider_count()
     price_providers = set(registry.available_provider_ids(operation=Operation.PRICE))
     quote_providers = set(registry.available_provider_ids(operation=Operation.QUOTE))
-    circuit_open = aggregator.circuit_open_providers()
-    ready_price_providers = sorted(price_providers - circuit_open)
-    ready_quote_providers = sorted(quote_providers - circuit_open)
+    circuit_open: set[str] = set()
+    ready_providers: dict[Operation, set[str]] = {operation: set() for operation in Operation}
+    for chain_id in settings.chain_ids:
+        for operation in Operation:
+            available = set(registry.available_provider_ids(operation=operation, chain_id=chain_id))
+            blocked = aggregator.circuit_open_providers(
+                chain_id=chain_id, operation=operation.value
+            )
+            circuit_open.update(available & blocked)
+            ready_providers[operation].update(available - blocked)
+    ready_price_providers = ready_providers[Operation.PRICE]
+    ready_quote_providers = ready_providers[Operation.QUOTE]
     close_wait_count = count_process_close_wait_sockets()
     if close_wait_count is not None:
         set_process_close_wait_sockets(close_wait_count)

@@ -102,8 +102,8 @@ class AggregatorService:
         partial = summary.failed_providers > 0
         return ordered, summary, partial
 
-    def circuit_open_providers(self) -> set[str]:
-        return self._runner.circuit_open_providers()
+    def circuit_open_providers(self, *, chain_id: int, operation: str) -> set[str]:
+        return self._runner.circuit_open_providers(chain_id=chain_id, operation=operation)
 
     async def aggregate_quotes(
         self,

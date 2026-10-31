@@ -58,6 +58,21 @@ Auth behavior (when enabled):
 
 ## Runtime Checks
 
+Provider availability circuits are scoped by provider, chain, and operation, so a failing
+network or quote endpoint does not disable healthy prices elsewhere. A rate-limit response
+starts a provider-wide cooldown across chains and operations, using `Retry-After` when present
+or the configured circuit open duration otherwise. Ordinary successes do not clear that cooldown.
+
+`price_api_provider_circuit_state` and `price_api_provider_circuit_transitions_total` include
+`chain_id` and `operation` labels. Shared quota cooldowns use `chain_id="0", operation="all"`.
+`/v1/ready` counts each provider as ready for an operation if it has at least one enabled,
+unblocked chain. `circuit_open_providers` counts providers blocked on any enabled operation/chain;
+a partially degraded provider can therefore appear in both counts.
+
+Enso credit polling uses a separate single-connection client with a five-second timeout.
+Polling failures leave serving transport health and readiness unchanged; the existing Enso
+credit freshness alert reports missing observations.
+
 ```bash
 curl -s -H "Authorization: Bearer ${API_KEY}" http://localhost:8000/v1/health
 curl -s -H "Authorization: Bearer ${API_KEY}" http://localhost:8000/v1/ready
