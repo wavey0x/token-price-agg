@@ -11,10 +11,9 @@ ExecStart=/home/wavey/price-api/venv/bin/python -m uvicorn price_api.app.main:ap
 # Authorization: Bearer <api-key> for /v1/* endpoints.
 Restart=always
 RestartSec=3
-User=wavey
-Group=wavey
-SupplementaryGroups=tokenagg
-UMask=0002
+User=svc-prices
+Group=svc-prices
+UMask=0077
 StandardOutput=journal
 StandardError=journal
 

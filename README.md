@@ -94,12 +94,16 @@ If needed, edit these fields in the unit file:
 - `WorkingDirectory=/home/wavey/price-api`
 - `EnvironmentFile=/home/wavey/price-api/.env`
 - `ExecStart=/home/wavey/price-api/venv/bin/python -m uvicorn ... --port 18743`
-- `User=wavey`, `Group=wavey`, and `SupplementaryGroups=tokenagg`
+- `User=svc-prices` and `Group=svc-prices`; the service needs no supplementary group
 
-Grant service user access to app files:
+On Electro, the non-login service account reads the `wavey`-owned code and
+runtime through scoped permissions. Its two databases are owned by `svc-prices`;
+the app-read `.env` is `root:svc-prices` mode `0640`. Verify those permissions
+before starting the unit. Do not change ownership of the whole checkout:
 
 ```bash
-sudo chown -R wavey:wavey /home/wavey/price-api
+sudo -u svc-prices test -r /home/wavey/price-api/price_api/app/main.py
+sudo -u svc-prices test -r /home/wavey/price-api/.env
 ```
 
 Enable and start:
