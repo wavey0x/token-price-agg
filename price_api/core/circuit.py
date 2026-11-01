@@ -16,6 +16,7 @@ _RETRIABLE_ERROR_TYPES = {
     ErrorType.UPSTREAM_HTTP.value,
     ErrorType.INTERNAL_TRANSPORT_TIMEOUT.value,
 }
+_MAX_RATE_LIMIT_BACKOFF_S = 300
 
 
 @dataclass(frozen=True)
@@ -40,17 +41,12 @@ class CircuitBreaker:
         self._half_open_probe_count = half_open_probe_count
         self._failures: dict[CircuitScope, deque[float]] = {}
         self._open_until: dict[CircuitScope, float] = {}
+        self._rate_limit_until: dict[CircuitScope, float] = {}
         self._half_open_inflight: dict[CircuitScope, int] = {}
         self._state: dict[CircuitScope, str] = {}
 
     def allow(self, scope: CircuitScope) -> bool:
         now = time.monotonic()
-        quota_scope = CircuitScope(scope.provider, 0, "all")
-        quota_until = self._open_until.get(quota_scope)
-        if quota_until is not None:
-            if now < quota_until:
-                return False
-            self._close(quota_scope)
         open_until = self._open_until.get(scope)
         if open_until is None:
             self._set_state(scope, "closed")
@@ -69,10 +65,12 @@ class CircuitBreaker:
 
     def record_result(self, scope: CircuitScope, result: PriceResult | QuoteResult) -> None:
         if result.error is not None and result.error.type == ErrorType.RATE_LIMITED:
-            self.release_probe(scope)
-            quota_scope = CircuitScope(scope.provider, 0, "all")
-            delay_s = (result.error.retry_after_ms or self._open_duration_s * 1000) / 1000
-            self._open(quota_scope, now=time.monotonic(), delay_s=delay_s)
+            retry_after_s = (result.error.retry_after_ms or self._open_duration_s * 1000) / 1000
+            delay_s = min(retry_after_s, max(self._open_duration_s, _MAX_RATE_LIMIT_BACKOFF_S))
+            self._open(scope, now=time.monotonic(), delay_s=delay_s)
+            self._rate_limit_until[scope] = self._open_until[scope]
+            return
+        if time.monotonic() < self._rate_limit_until.get(scope, 0):
             return
         is_failure = _is_circuit_failure(result)
 
@@ -118,15 +116,13 @@ class CircuitBreaker:
         return {
             scope.provider
             for scope, open_until in self._open_until.items()
-            if now < open_until
-            and (
-                scope.chain_id == 0 or (scope.chain_id == chain_id and scope.operation == operation)
-            )
+            if now < open_until and scope.chain_id == chain_id and scope.operation == operation
         }
 
     def _close(self, scope: CircuitScope) -> None:
         self._failures.pop(scope, None)
         self._open_until.pop(scope, None)
+        self._rate_limit_until.pop(scope, None)
         self._half_open_inflight.pop(scope, None)
         self._set_state(scope, "closed")
 

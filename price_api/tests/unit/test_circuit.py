@@ -118,9 +118,12 @@ def test_circuit_failures_and_recovery_are_scoped_to_chain_and_operation(
     assert circuit.allow(failed)
 
 
-@pytest.mark.parametrize("retry_after_ms", [None, 30000])
-def test_rate_limit_blocks_all_chains_and_operations_until_cooldown_expires(
-    monkeypatch: pytest.MonkeyPatch, retry_after_ms: int | None
+@pytest.mark.parametrize(
+    ("retry_after_ms", "expected_backoff_s"),
+    [(None, 10), (30000, 30), (3_600_000, 300)],
+)
+def test_rate_limit_cools_only_its_scope_with_bounded_retry_after(
+    monkeypatch: pytest.MonkeyPatch, retry_after_ms: int | None, expected_backoff_s: int
 ) -> None:
     now = 1000.0
     monkeypatch.setattr("price_api.core.circuit.time.monotonic", lambda: now)
@@ -138,20 +141,30 @@ def test_rate_limit_blocks_all_chains_and_operations_until_cooldown_expires(
             ),
         ),
     )
-    other = CircuitScope(SCOPE.provider, 42161, "quote")
+    other_chain = CircuitScope(SCOPE.provider, 42161, "price")
+    other_operation = CircuitScope(SCOPE.provider, 1, "quote")
     assert not circuit.allow(SCOPE)
-    assert not circuit.allow(other)
+    assert circuit.allow(other_chain)
+    assert circuit.allow(other_operation)
     assert circuit.allow(CircuitScope("curve", 42161, "quote"))
-    assert circuit.circuit_open_providers(chain_id=42161, operation="quote") == {SCOPE.provider}
+    assert circuit.circuit_open_providers(chain_id=1, operation="price") == {SCOPE.provider}
+    assert circuit.circuit_open_providers(chain_id=42161, operation="price") == set()
+    assert circuit.circuit_open_providers(chain_id=1, operation="quote") == set()
     circuit.record_result(
-        other,
+        other_chain,
         PriceResult(
             provider=SCOPE.provider, status=ProviderStatus.OK, latency_ms=1, price_usd=Decimal(1)
         ),
     )
-    assert not circuit.allow(SCOPE)  # An already in-flight success must not clear quota backoff.
-    now += (retry_after_ms or 10000) / 1000 - 0.1
-    assert not circuit.allow(other)
+    assert not circuit.allow(SCOPE)  # Success on another chain must not clear this cooldown.
+    circuit.record_result(
+        SCOPE,
+        PriceResult(
+            provider=SCOPE.provider, status=ProviderStatus.OK, latency_ms=1, price_usd=Decimal(1)
+        ),
+    )
+    assert not circuit.allow(SCOPE)  # An already in-flight success cannot clear it either.
+    now += expected_backoff_s - 0.1
+    assert not circuit.allow(SCOPE)
     now += 0.2
-    assert circuit.allow(other)
     assert circuit.allow(SCOPE)

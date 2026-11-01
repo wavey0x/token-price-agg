@@ -60,11 +60,14 @@ Auth behavior (when enabled):
 
 Provider availability circuits are scoped by provider, chain, and operation, so a failing
 network or quote endpoint does not disable healthy prices elsewhere. A rate-limit response
-starts a provider-wide cooldown across chains and operations, using `Retry-After` when present
-or the configured circuit open duration otherwise. Ordinary successes do not clear that cooldown.
+opens only that chain and operation's circuit. It uses `Retry-After` when present,
+capped at five minutes (or the configured circuit open duration if longer), and
+otherwise uses the configured circuit open duration. Success on another chain or
+operation, or from a request already in flight, does not clear the cooldown.
+Provider-wide cooldowns require evidence of a shared quota; none are configured.
 
 `price_api_provider_circuit_state` and `price_api_provider_circuit_transitions_total` include
-`chain_id` and `operation` labels. Shared quota cooldowns use `chain_id="0", operation="all"`.
+`chain_id` and `operation` labels.
 `/v1/ready` counts each provider as ready for an operation if it has at least one enabled,
 unblocked chain. `circuit_open_providers` counts providers blocked on any enabled operation/chain;
 a partially degraded provider can therefore appear in both counts.

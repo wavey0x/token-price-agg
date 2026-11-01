@@ -139,7 +139,7 @@ def test_chain_and_operation_circuits_are_isolated_in_one_app(
     with respx.mock(assert_all_called=True) as router:
         arbitrum = router.get(
             f"https://prices.curve.finance/v1/usd_price/arbitrum/{token('USDC')}"
-        ).respond(503)
+        ).respond(429, headers={"Retry-After": "3600"})
         ethereum = router.get(
             f"https://prices.curve.finance/v1/usd_price/ethereum/{token('USDC')}"
         ).respond(200, json={"price": "1"})
@@ -149,11 +149,11 @@ def test_chain_and_operation_circuits_are_isolated_in_one_app(
         with TestClient(app) as client:
             assert client.get("/v1/health").status_code == 200
             params = {"chain_id": 42161, "token": token("USDC"), "providers": "curve"}
-            for _ in range(3):
+            for _ in range(2):
                 failed = client.get("/v1/price", params=params)
                 assert failed.status_code == 200
                 assert failed.json()["price_data"] is None
-            assert arbitrum.call_count == 2
+            assert arbitrum.call_count == 1
             assert failed.json()["providers"]["curve"]["error"]["message"] == (
                 "Provider circuit is open"
             )
